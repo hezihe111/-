@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>山海宗门录</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <section id="startScreen" class="start-screen">
+      <form id="startPanel" class="start-panel">
+        <button id="startCollapseBtn" class="start-collapse" type="button">收起选址</button>
+        <div class="start-hero">
+          <span>开局菜单</span>
+          <h2>山海宗门录</h2>
+          <p>先选择单机或联机模式，再进入大世界地图选择山门所在地。</p>
+        </div>
+        <label for="sectNameInput">宗门名</label>
+        <div class="name-row">
+          <input id="sectNameInput" maxlength="12" placeholder="例如：问道宗" autocomplete="off" />
+          <button id="randomNameBtn" type="button" title="随机宗门名">换名</button>
+        </div>
+        <label>宗门印记</label>
+        <div class="icon-picker" id="iconPicker">
+          <button type="button" data-icon="峰" class="is-active">峰</button>
+          <button type="button" data-icon="剑">剑</button>
+          <button type="button" data-icon="鼎">鼎</button>
+          <button type="button" data-icon="莲">莲</button>
+          <button type="button" data-icon="星">星</button>
+        </div>
+        <input id="multiplayerToggle" type="checkbox" hidden />
+        <div id="roomPanel" class="room-panel">
+          <label for="roomCodeInput">联机房间</label>
+          <div class="name-row">
+            <input id="roomCodeInput" maxlength="16" placeholder="例如：ZIHE01" autocomplete="off" />
+            <button id="roomConnectBtn" type="button">连接</button>
+          </div>
+          <p id="roomStatus" class="room-status">联机时输入同一个房间号，点击“联机模式”后进入正式游戏。</p>
+          <p id="roomCount" class="room-count">房间人数：0</p>
+        </div>
+        <div class="mode-select" aria-label="选择游戏模式">
+          <button type="button" class="mode-card is-active" data-mode="solo">
+            <strong>单机模式</strong>
+            <span>AI 宗门自动发展，进入地图后选择山门所在地。</span>
+          </button>
+          <button type="button" class="mode-card" data-mode="multi">
+            <strong>联机模式</strong>
+            <span>连接同房间玩家，同回合操作，全员完成后进入下一年。</span>
+          </button>
+        </div>
+        <p class="author-note">作者声明：本作品为个人网页游戏原型，用于玩法测试与学习交流。by:zihe</p>
+      </form>
+    </section>
+
+    <main id="appShell" class="app-shell is-hidden">
+      <section class="world-pane">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">山海宗门录</p>
+            <h1>2D 大世界宗门模拟器</h1>
+          </div>
+          <div id="roomSummary" class="room-summary" hidden>房间人数：0</div>
+          <div class="season-box">
+            <span id="season">开局择址</span>
+            <strong id="year">太初 1 年</strong>
+          </div>
+        </header>
+
+        <div class="map-wrap">
+          <div id="mapTabs" class="map-tabs" aria-label="地图切换">
+            <button type="button" data-map="forbidden">禁地</button>
+            <button type="button" data-map="central" class="is-active">中心仙盟</button>
+            <button type="button" data-map="frontier">边境</button>
+            <button type="button" data-map="overseas">海外</button>
+          </div>
+          <canvas id="worldMap" width="1040" height="680" aria-label="山海大世界地图"></canvas>
+          <div id="mapHint" class="map-hint">
+            输入宗门名后，在地图上选择宗门所在地。山脉灵气高，河谷资源稳，边境更容易爆发冲突。
+          </div>
+          <button id="guideBtn" class="guide-btn" type="button">?</button>
+          <div id="mapActionBubble" class="map-action-bubble" hidden></div>
+          <div id="floatTip" class="float-tip" hidden></div>
+        </div>
+
+        <div class="action-bar">
+          <button id="nextYearBtn">进入下一年</button>
+          <button id="recruitBtn">开山收徒</button>
+          <button id="raidBtn">掠夺近邻</button>
+          <button id="allyBtn">缔结盟约</button>
+          <button id="tournamentBtn">宗门大比</button>
+          <button id="buildBtn">宗门建设</button>
+          <button id="researchBtn">参悟功法</button>
+          <button id="marketBtn">山门市集</button>
+          <button id="saveBtn">保存</button>
+          <button id="loadBtn">读档</button>
+          <button id="newGameBtn">重开一局</button>
+        </div>
+      </section>
+
+      <aside class="side-pane">
+        <section class="panel sect-card">
+          <div class="panel-title">
+            <span>本宗</span>
+            <strong id="sectName">未立山门</strong>
+          </div>
+          <div class="stats-grid">
+            <div><span>灵石</span><strong id="spiritStones">0</strong></div>
+            <div><span>粮草</span><strong id="grain">0</strong></div>
+            <div><span>声望</span><strong id="prestige">0</strong></div>
+            <div><span>战力</span><strong id="power">0</strong></div>
+            <div><span>行动</span><strong id="actionPoints">0/0</strong></div>
+            <div><span>模式</span><strong id="turnMode">单机</strong></div>
+            <div><span>丹材</span><strong id="alchemyMats">0</strong></div>
+            <div><span>器材</span><strong id="forgingMats">0</strong></div>
+            <div><span>阵材</span><strong id="arrayMats">0</strong></div>
+            <div><span>道统</span><strong id="daoPath">未定</strong></div>
+            <div><span>参悟</span><strong id="insight">0</strong></div>
+          </div>
+          <div class="meter">
+            <span>护山大阵</span>
+            <div><i id="barrierBar"></i></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">
+            <span>当前目标</span>
+            <strong id="questTitle">开山立宗</strong>
+          </div>
+          <div id="questDetail" class="target-detail">先在地图选择宗门所在地，再选择年度天命。</div>
+        </section>
+
+        <section class="panel recruit-panel">
+          <div class="panel-title">
+            <span>年度招募</span>
+            <strong id="refreshStatus">未开山</strong>
+          </div>
+          <div id="recruitmentPool" class="recruitment-pool">
+            <div class="target-detail">立下山门后，每年会随机刷新候选弟子。玩家可选择一名弟子收入门下，并拥有一次刷新机会。</div>
+          </div>
+          <div class="target-actions">
+            <button id="refreshRecruitBtn">刷新候选</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">
+            <span>弟子名册</span>
+            <strong id="discipleCount">0 人</strong>
+          </div>
+          <div id="disciples" class="disciple-list"></div>
+        </section>
+
+        <section class="panel disciple-detail-panel">
+          <div class="panel-title">
+            <span>弟子详情</span>
+            <strong id="discipleDetailTitle">未选择</strong>
+          </div>
+          <div id="discipleDetail" class="disciple-detail target-detail">点击弟子名册中的弟子，查看资质、修为、词条与可用培养操作。</div>
+          <div id="equipmentSlots" class="equipment-slots"></div>
+          <div id="discipleActions" class="target-actions"></div>
+        </section>
+
+        <section class="panel inventory-panel">
+          <div class="panel-title">
+            <span>宗门仓库</span>
+            <strong id="inventoryCount">0 件</strong>
+          </div>
+          <div id="inventory" class="inventory-list">
+            <div class="target-detail">丹药、灵材和探索所得会存入仓库，可用于培养选中的弟子。</div>
+          </div>
+        </section>
+
+        <section class="panel workshop-panel">
+          <div class="panel-title">
+            <span>炼丹炼器</span>
+            <strong id="workshopStatus">未开炉</strong>
+          </div>
+          <div id="workshopDetail" class="target-detail">选择弟子后，可安排其炼丹或炼器。修为、资质和词条会影响品质，优秀弟子有概率越阶产出。</div>
+          <div id="workshopActions" class="target-actions"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">
+            <span>选中目标</span>
+            <strong id="targetTitle">无</strong>
+          </div>
+          <div id="targetDetail" class="target-detail">点击地图上的宗门、矿脉、秘境或事件点查看可执行动作。</div>
+          <div id="targetActions" class="target-actions"></div>
+        </section>
+
+        <section class="panel log-panel">
+          <div class="panel-title">
+            <span>山门纪事</span>
+            <strong id="logCount">0</strong>
+          </div>
+          <div id="log" class="log"></div>
+        </section>
+      </aside>
+    </main>
+
+    <div id="eventModal" class="modal-backdrop" hidden>
+      <section class="event-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-head">
+          <div>
+            <span id="modalKicker">事件</span>
+            <h2 id="modalTitle">山门传讯</h2>
+          </div>
+          <span id="modalProgress" class="modal-progress" hidden>0/0</span>
+          <button id="modalCloseBtn" class="icon-btn" title="关闭">×</button>
+        </div>
+        <div id="modalBody" class="modal-body"></div>
+        <div id="modalActions" class="modal-actions"></div>
+      </section>
+    </div>
+
+    <div id="waitingOverlay" class="waiting-overlay" hidden>
+      <section class="waiting-card" aria-live="polite">
+        <div class="waiting-ring"></div>
+        <div>
+          <span>回合已提交</span>
+          <h2>等待其他玩家完成操作</h2>
+          <p id="waitingText">你的宗门已准备进入下一年，正在等待其他宗门确认。</p>
+        </div>
+        <div class="ready-list">
+          <div><i class="ready"></i> 本宗 已完成</div>
+          <div><i id="otherReadyDot"></i> 其他玩家 等待中</div>
+          <div><i class="ready"></i> AI 宗门 自动完成</div>
+        </div>
+      </section>
+    </div>
+
+    <div id="feedbackToast" class="feedback-toast" aria-live="polite" hidden></div>
+
+    <script src="./config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

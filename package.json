@@ -1,11 +1,12 @@
 {
-  "name": "cultivation-sect-sim-root",
+  "name": "cultivation-sect-sim",
   "version": "1.0.0",
   "private": true,
-  "description": "Root Render entry for the cultivation sect simulator.",
+  "description": "2D cultivation sect simulator with WebSocket room multiplayer.",
+  "main": "server.js",
   "scripts": {
-    "start": "node cultivation-sect-sim/server.js",
-    "check": "node --check cultivation-sect-sim/app.js && node --check cultivation-sect-sim/server.js"
+    "start": "node server.js",
+    "check": "node --check app.js && node --check server.js"
   },
   "engines": {
     "node": ">=18"
