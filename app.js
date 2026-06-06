@@ -1695,7 +1695,10 @@ function runActionWithFeedback(label, handler) {
 const net = {
   ws: null,
   reconnectTimer: null,
+  reconnectAttempts: 0,
+  reconnecting: false,
   manualClose: false,
+  lastPlayers: [],
 };
 
 localStorage.setItem("cultivation-sect-client-id", state.clientId);
@@ -1726,14 +1729,36 @@ function updateRoomPopulation(players = []) {
     ? Array.from(new Map(players.map((player, index) => [player.id || player.name || `player-${index}`, player])).values())
     : [];
   const founded = uniquePlayers.filter((player) => player.founded).length;
+  const suffix = net.reconnecting && uniquePlayers.length ? " · 重连中" : "";
   const connectedText = uniquePlayers.length
     ? `房间人数：${uniquePlayers.length}（已立宗 ${founded}）`
     : `房间人数：${state.roomConnected ? 1 : 0}`;
-  if (els.roomCount) els.roomCount.textContent = connectedText;
+  if (els.roomCount) els.roomCount.textContent = `${connectedText}${suffix}`;
   if (els.roomSummary) {
-    els.roomSummary.textContent = `${connectedText}${state.roomHost ? " · 房主" : ""}`;
+    els.roomSummary.textContent = `${connectedText}${state.roomHost ? " · 房主" : ""}${suffix}`;
     els.roomSummary.hidden = !(state.multiplayer || state.roomConnected);
   }
+}
+
+function roomPopulationSnapshot() {
+  const self = getPublicPlayerState();
+  return [
+    self,
+    ...(Array.isArray(state.remotePlayers) ? state.remotePlayers : []),
+  ].filter((player) => player && player.id);
+}
+
+function scheduleRoomReconnect(reason = "连接断开") {
+  if (!state.multiplayer || net.manualClose || !state.roomCode) return;
+  clearTimeout(net.reconnectTimer);
+  net.reconnecting = true;
+  net.reconnectAttempts = Math.min(net.reconnectAttempts + 1, 8);
+  const delay = Math.min(1200 + net.reconnectAttempts * 900, 8000);
+  updateRoomStatus(`${reason}，${Math.round(delay / 1000)} 秒后自动重连房间 ${state.roomCode}...`, "warn");
+  updateRoomPopulation(net.lastPlayers.length ? net.lastPlayers : roomPopulationSnapshot());
+  net.reconnectTimer = setTimeout(() => {
+    connectMultiplayerRoom(state.roomCode);
+  }, delay);
 }
 
 function configuredBackendUrl() {
@@ -1754,6 +1779,10 @@ function enterGameMode(mode = "solo") {
     els.hint.textContent = "联机模式已进入大世界。请选择宗门所在地；全员完成操作后才会推进到下一年。";
     flashFeedback("已进入联机模式，正在同步房间人数", "good");
   } else {
+    clearTimeout(net.reconnectTimer);
+    net.reconnectAttempts = 0;
+    net.reconnecting = false;
+    net.lastPlayers = [];
     if (net.ws) {
       net.manualClose = true;
       net.ws.close();
@@ -1806,36 +1835,51 @@ function connectMultiplayerRoom(roomCode = roomCodeValue()) {
     return;
   }
   try {
+    clearTimeout(net.reconnectTimer);
     net.manualClose = false;
-    net.ws?.close();
-    net.ws = new WebSocket(wsUrlForRoom(roomCode));
+    const oldSocket = net.ws;
+    if (oldSocket && oldSocket.readyState < WebSocket.CLOSING) oldSocket.close();
+    const ws = new WebSocket(wsUrlForRoom(roomCode));
+    net.ws = ws;
     updateRoomStatus(`正在连接房间 ${roomCode}...`);
-    net.ws.addEventListener("open", () => {
+    ws.addEventListener("open", () => {
+      if (net.ws !== ws) return;
+      const wasReconnecting = net.reconnecting || net.reconnectAttempts > 0;
       state.multiplayer = true;
       state.roomConnected = true;
+      net.reconnectAttempts = 0;
+      net.reconnecting = false;
       if (els.multiplayerToggle) els.multiplayerToggle.checked = true;
       if (els.roomPanel) els.roomPanel.hidden = false;
       updateRoomStatus(`已连接房间 ${roomCode}`, "online");
-      updateRoomPopulation([getPublicPlayerState()]);
+      net.lastPlayers = [getPublicPlayerState()];
+      updateRoomPopulation(net.lastPlayers);
       sendNet("join", { player: getPublicPlayerState() });
-      flashFeedback(`联机房间 ${roomCode} 已连接`, "good");
+      flashFeedback(wasReconnecting ? `联机房间 ${roomCode} 已重连` : `联机房间 ${roomCode} 已连接`, "good");
       render();
     });
-    net.ws.addEventListener("message", (evt) => {
+    ws.addEventListener("message", (evt) => {
+      if (net.ws !== ws) return;
       try {
         handleNetMessage(JSON.parse(evt.data));
       } catch (err) {
         console.warn("bad room message", err);
       }
     });
-    net.ws.addEventListener("close", () => {
+    ws.addEventListener("close", () => {
+      if (net.ws !== ws) return;
       state.roomConnected = false;
       state.roomHost = false;
-      updateRoomStatus(net.manualClose ? "已断开房间" : "房间连接断开，请检查服务器。", "warn");
-      updateRoomPopulation([]);
+      if (net.manualClose) {
+        updateRoomStatus("已断开房间", "warn");
+        updateRoomPopulation([]);
+      } else {
+        scheduleRoomReconnect("房间连接短暂断开");
+      }
       render();
     });
-    net.ws.addEventListener("error", () => {
+    ws.addEventListener("error", () => {
+      if (net.ws !== ws) return;
       updateRoomStatus("联机连接失败：请确认 server.js 正在运行。", "warn");
     });
   } catch (err) {
@@ -1870,15 +1914,21 @@ function getPublicPlayerState() {
 
 function handleNetMessage(msg) {
   state.multiplayer = true;
+  if (msg.type === "heartbeat") {
+    sendNet("pong", { t: msg.t });
+    return;
+  }
   if (msg.type === "welcome") {
     state.roomHost = Boolean(msg.host);
     updateRoomStatus(`已进入房间 ${state.roomCode}${state.roomHost ? "（房主）" : ""}`, "online");
-    updateRoomPopulation([getPublicPlayerState()]);
+    net.lastPlayers = net.lastPlayers.length ? net.lastPlayers : [getPublicPlayerState()];
+    updateRoomPopulation(net.lastPlayers);
   }
   if (msg.type === "room_state") {
+    net.lastPlayers = msg.players || [];
     state.remotePlayers = (msg.players || []).filter((p) => p.id !== state.clientId).map((p) => ({ ...p, type: "remotePlayer" }));
     state.readyPlayers = (msg.players || []).filter((p) => p.ready).map((p) => p.id);
-    updateRoomPopulation(msg.players || []);
+    updateRoomPopulation(net.lastPlayers);
     updateForbiddenRoomBlock(msg.players || []);
     updateMultiplayerWaitingText(msg.players || []);
     render();
@@ -1887,6 +1937,7 @@ function handleNetMessage(msg) {
     log(msg.text, msg.tone || "");
   }
   if (msg.type === "all_ready") {
+    if (Array.isArray(msg.players)) net.lastPlayers = msg.players;
     onRoomAllReady(msg);
   }
   if (msg.type === "pvp_report") {

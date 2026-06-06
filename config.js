@@ -1,5 +1,3 @@
-// Optional multiplayer backend override.
-// Leave empty for local/server.js hosting. For Netlify static hosting, set this
-// to a persistent Node WebSocket backend, for example:
-// window.SECT_BACKEND_URL = "https://your-render-service.onrender.com";
-window.SECT_BACKEND_URL = window.SECT_BACKEND_URL || "";
+// Multiplayer backend.
+// Netlify hosts the static frontend; Render hosts the WebSocket room server.
+window.SECT_BACKEND_URL = "https://hzh11.onrender.com";

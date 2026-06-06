@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const root = __dirname;
 const port = Number(process.env.PORT || process.argv.find((arg) => arg.startsWith("--port="))?.split("=")[1] || 8097);
 const rooms = new Map();
+const DISCONNECT_GRACE_MS = 60000;
 
 const mime = {
   ".html": "text/html; charset=utf-8",
@@ -148,7 +149,13 @@ function encodeFrame(text) {
 }
 
 function send(socket, payload) {
-  if (!socket.destroyed) socket.write(encodeFrame(payload));
+  if (socket && !socket.destroyed) {
+    try {
+      socket.write(encodeFrame(payload));
+    } catch {
+      socket.destroy();
+    }
+  }
 }
 
 function broadcast(room, payload) {
@@ -159,9 +166,24 @@ function publicPlayers(room) {
   return [...room.players.values()].map((player) => ({
     ...player.publicState,
     id: player.id,
+    connected: Boolean(player.connected),
     ready: Boolean(player.ready),
     forbiddenFloor: player.forbiddenFloor || player.publicState?.forbiddenFloor || 0,
   }));
+}
+
+function maybeAdvanceRoom(room, roomCode) {
+  const players = [...room.players.values()];
+  if (players.length && players.every((item) => item.ready)) {
+    room.year += 1;
+    broadcast(room, { type: "all_ready", roomCode, year: room.year, players: publicPlayers(room) });
+    for (const item of players) {
+      item.ready = false;
+      item.forbiddenFloor = 0;
+      item.publicState = { ...item.publicState, ready: false, forbiddenFloor: 0, year: room.year };
+    }
+    setTimeout(() => broadcastRoomState(room), 120);
+  }
 }
 
 function handleMessage(client, msg) {
@@ -170,17 +192,21 @@ function handleMessage(client, msg) {
   if (msg.type === "join") {
     const id = String(msg.clientId || msg.player?.id || crypto.randomUUID());
     const old = room.players.get(id);
-    if (old && old.socket !== client.socket) old.socket.destroy();
+    if (old?.socket && old.socket !== client.socket) old.socket.destroy();
+    if (old?.disconnectTimer) clearTimeout(old.disconnectTimer);
     client.id = id;
     client.roomCode = roomCode;
     const host = ![...room.players.values()].some((player) => player.id !== id);
     room.players.set(id, {
       id,
       socket: client.socket,
-      publicState: { ...(msg.player || {}), id },
-      ready: false,
-      forbiddenFloor: 0,
-      joinedAt: Date.now(),
+      publicState: { ...(old?.publicState || {}), ...(msg.player || {}), id },
+      ready: Boolean(old?.ready || msg.player?.ready),
+      forbiddenFloor: Number(old?.forbiddenFloor || msg.player?.forbiddenFloor || 0),
+      joinedAt: old?.joinedAt || Date.now(),
+      lastSeen: Date.now(),
+      connected: true,
+      disconnectTimer: null,
     });
     send(client.socket, { type: "welcome", clientId: id, roomCode, host });
     broadcast(room, { type: "player_event", text: `${msg.player?.name || "一名玩家"}进入联机房间。`, tone: "good" });
@@ -189,6 +215,8 @@ function handleMessage(client, msg) {
   }
   const player = room.players.get(client.id || msg.clientId);
   if (!player) return;
+  player.lastSeen = Date.now();
+  if (msg.type === "pong") return;
   if (msg.type === "public_state" && msg.player) {
     player.publicState = { ...player.publicState, ...msg.player, id: player.id };
     player.forbiddenFloor = msg.player.forbiddenFloor || 0;
@@ -203,17 +231,7 @@ function handleMessage(client, msg) {
     player.ready = true;
     player.publicState = { ...player.publicState, ...(msg.player || {}), id: player.id, ready: true };
     broadcastRoomState(room);
-    const players = [...room.players.values()];
-    if (players.length && players.every((item) => item.ready)) {
-      room.year += 1;
-      broadcast(room, { type: "all_ready", roomCode, year: room.year, players: publicPlayers(room) });
-      for (const item of players) {
-        item.ready = false;
-        item.forbiddenFloor = 0;
-        item.publicState = { ...item.publicState, ready: false, forbiddenFloor: 0, year: room.year };
-      }
-      setTimeout(() => broadcastRoomState(room), 120);
-    }
+    maybeAdvanceRoom(room, roomCode);
   }
   if (msg.type === "pvp_report" && msg.report) {
     broadcast(room, { type: "pvp_report", report: msg.report });
@@ -233,12 +251,31 @@ function removeClient(client) {
   if (!room) return;
   const player = room.players.get(client.id);
   if (player?.socket === client.socket) {
-    room.players.delete(client.id);
-    broadcast(room, { type: "player_event", text: `${player.publicState?.name || "一名玩家"}离开联机房间。`, tone: "warn" });
+    player.socket = null;
+    player.connected = false;
+    player.lastSeen = Date.now();
+    player.disconnectTimer = setTimeout(() => {
+      const current = room.players.get(client.id);
+      if (!current || current.connected) return;
+      room.players.delete(client.id);
+      broadcast(room, { type: "player_event", text: `${current.publicState?.name || "一名玩家"}离开联机房间。`, tone: "warn" });
+      broadcastRoomState(room);
+      maybeAdvanceRoom(room, client.roomCode);
+      if (room.players.size === 0) rooms.delete(client.roomCode);
+    }, DISCONNECT_GRACE_MS);
+    broadcast(room, { type: "player_event", text: `${player.publicState?.name || "一名玩家"}连接短暂中断，正在等待重连。`, tone: "warn" });
     broadcastRoomState(room);
   }
-  if (room.players.size === 0) rooms.delete(client.roomCode);
 }
+
+setInterval(() => {
+  const now = Date.now();
+  for (const room of rooms.values()) {
+    for (const player of room.players.values()) {
+      send(player.socket, { type: "heartbeat", t: now });
+    }
+  }
+}, 25000);
 
 server.listen(port, "0.0.0.0", () => {
   console.log(`Cultivation Sect Sim server running on 0.0.0.0:${port}`);
