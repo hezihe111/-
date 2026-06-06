@@ -1,0 +1,13 @@
+{
+  "name": "cultivation-sect-sim-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Root Render entry for the cultivation sect simulator.",
+  "scripts": {
+    "start": "node cultivation-sect-sim/server.js",
+    "check": "node --check cultivation-sect-sim/app.js && node --check cultivation-sect-sim/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

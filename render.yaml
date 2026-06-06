@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: cultivation-sect-sim
+    env: node
+    buildCommand: ""
+    startCommand: "npm start"
+    plan: free
