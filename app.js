@@ -699,6 +699,11 @@ const state = {
   remotePlayers: [],
   readyPlayers: [],
   roomBlockedByForbidden: null,
+  roomAlliances: {},
+  roomCouncil: null,
+  roomAuction: null,
+  roomTournament: null,
+  roomAdventureLobby: null,
   selectedSectIcon: "峰",
   currentMap: "central",
   tournamentOpen: false,
@@ -772,6 +777,11 @@ function initWorld() {
   state.remotePlayers = [];
   state.readyPlayers = [];
   state.roomBlockedByForbidden = null;
+  state.roomAlliances = {};
+  state.roomCouncil = null;
+  state.roomAuction = null;
+  state.roomTournament = null;
+  state.roomAdventureLobby = null;
   state.selectedSectIcon = "峰";
   state.currentMap = "central";
   state.lastTournamentYear = 0;
@@ -1327,6 +1337,11 @@ function ensureSectDefaults() {
   state.remotePlayers = Array.isArray(state.remotePlayers) ? state.remotePlayers : [];
   state.readyPlayers = Array.isArray(state.readyPlayers) ? state.readyPlayers : [];
   state.roomBlockedByForbidden = state.roomBlockedByForbidden || null;
+  state.roomAlliances = state.roomAlliances || {};
+  state.roomCouncil = state.roomCouncil || null;
+  state.roomAuction = state.roomAuction || null;
+  state.roomTournament = state.roomTournament || null;
+  state.roomAdventureLobby = state.roomAdventureLobby || null;
   state.completedMissions = Array.isArray(state.completedMissions) ? state.completedMissions : [];
   state.frontier = state.frontier || createFrontierState();
   state.forbidden = state.forbidden || createForbiddenState();
@@ -1893,6 +1908,317 @@ function sendNet(type, payload = {}) {
   return true;
 }
 
+function sendRoomFeature(action, payload = {}) {
+  return sendNet("room_feature", {
+    action,
+    sourceId: state.clientId,
+    sourceName: state.sect?.name || els.sectNameInput?.value?.trim() || "未立宗门",
+    payload,
+  });
+}
+
+function roomPlayers() {
+  return [
+    getPublicPlayerState(),
+    ...(Array.isArray(state.remotePlayers) ? state.remotePlayers : []),
+  ].filter((player) => player && player.id);
+}
+
+function foundedRoomPlayers() {
+  return roomPlayers().filter((player) => player.founded);
+}
+
+function allianceKey(a, b) {
+  return [a, b].sort().join("::");
+}
+
+function setRoomAlliance(a, b, value = true) {
+  if (!a || !b || a === b) return;
+  state.roomAlliances = state.roomAlliances || {};
+  state.roomAlliances[allianceKey(a, b)] = Boolean(value);
+}
+
+function arePlayersAllied(a, b) {
+  return Boolean(state.roomAlliances?.[allianceKey(a, b)]);
+}
+
+function alliedRemotePlayers() {
+  return (state.remotePlayers || []).filter((player) => arePlayersAllied(state.clientId, player.id));
+}
+
+function requestRemoteAlliance(target) {
+  if (!target?.id || !state.roomConnected) return;
+  if (arePlayersAllied(state.clientId, target.id)) {
+    log(`${target.name}已经是玩家盟友。`, "good");
+    return;
+  }
+  sendRoomFeature("alliance_request", { targetId: target.id });
+  log(`已向${target.name}发送玩家盟约邀请。`, "good");
+  flashFeedback("盟约邀请已发送", "good");
+}
+
+function tradeEscape(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char]));
+}
+
+function tradeableCatalogIds() {
+  const ids = [
+    ...alchemyMaterialIds,
+    ...forgingMaterialIds,
+    ...Object.keys(ascensionMaterials || {}),
+    "qiPill",
+    "minorHealPill",
+    "midHealPill",
+    "highHealPill",
+    "tribPill",
+    "marrowPill",
+    "heartLotus",
+    "swordManual",
+    "spiritBlade",
+    "thunderSpear",
+    "moonBlade",
+    "starBow",
+    "guardTalisman",
+    "arrayCompass",
+  ];
+  return [...new Set(ids)].filter((id) => itemCatalog[id]);
+}
+
+function tradeItemLabel(entry) {
+  if (!entry?.id) return "";
+  const item = itemCatalog[entry.id];
+  if (!item) return entry.id;
+  if (item.material) return item.name;
+  return `${qualityNames[entry.quality || 0]}${item.name}`;
+}
+
+function tradePartsText(parts) {
+  const lines = [];
+  const stones = Math.max(0, Math.floor(Number(parts?.stones || 0)));
+  if (stones) lines.push(`灵石 x${stones}`);
+  for (const item of parts?.items || []) {
+    if (!item?.id || !item.count) continue;
+    lines.push(`${tradeItemLabel(item)} x${Math.max(1, Math.floor(Number(item.count || 1)))}`);
+  }
+  return lines.length ? lines.join("、") : "无";
+}
+
+function pendingTradeEscrowList() {
+  return Object.entries(state.pendingTradeEscrows || {});
+}
+
+function escrowTradeParts(escrow) {
+  return escrow?.parts || escrow || {};
+}
+
+function refundPendingTrades() {
+  const pending = pendingTradeEscrowList();
+  if (!pending.length) {
+    flashFeedback("没有待取回的交易报价", "warn");
+    return;
+  }
+  for (const [tradeId, escrow] of pending) {
+    grantTradeParts(escrowTradeParts(escrow));
+    if (escrow?.targetId) sendRoomFeature("trade_cancel", { tradeId, targetId: escrow.targetId });
+    delete state.pendingTradeEscrows[tradeId];
+  }
+  log(`已取回 ${pending.length} 笔未完成交易的暂存报价。`, "good");
+  closeModal();
+  syncPublicState();
+  render();
+}
+
+function hasTradeParts(parts) {
+  if (!state.founded || !state.sect) return false;
+  const stones = Math.max(0, Math.floor(Number(parts?.stones || 0)));
+  if ((state.sect.stones || 0) < stones) return false;
+  for (const item of parts?.items || []) {
+    if (!item?.id || !item.count) continue;
+    const quality = Math.max(0, Math.min(qualityNames.length - 1, Math.floor(Number(item.quality || 0))));
+    const slot = state.sect.inventory.find((owned) => owned.id === item.id && (owned.quality || 0) === quality);
+    if (!slot || slot.count < item.count) return false;
+  }
+  return true;
+}
+
+function deductTradeParts(parts) {
+  if (!hasTradeParts(parts)) return false;
+  const stones = Math.max(0, Math.floor(Number(parts?.stones || 0)));
+  state.sect.stones -= stones;
+  for (const item of parts?.items || []) {
+    if (!item?.id || !item.count) continue;
+    const quality = Math.max(0, Math.min(qualityNames.length - 1, Math.floor(Number(item.quality || 0))));
+    const slot = state.sect.inventory.find((owned) => owned.id === item.id && (owned.quality || 0) === quality);
+    if (slot) slot.count -= Math.max(1, Math.floor(Number(item.count || 1)));
+  }
+  state.sect.inventory = state.sect.inventory.filter((item) => item.count > 0);
+  return true;
+}
+
+function grantTradeParts(parts) {
+  const stones = Math.max(0, Math.floor(Number(parts?.stones || 0)));
+  state.sect.stones += stones;
+  for (const item of parts?.items || []) {
+    if (!item?.id || !item.count || !itemCatalog[item.id]) continue;
+    const catalog = itemCatalog[item.id];
+    const quality = catalog.material ? 0 : Math.max(0, Math.min(qualityNames.length - 1, Math.floor(Number(item.quality || 0))));
+    addItem(item.id, Math.max(1, Math.floor(Number(item.count || 1))), quality);
+  }
+}
+
+function readTradeNumber(id, min = 0, max = 999999) {
+  const value = Number(document.getElementById(id)?.value || 0);
+  return Math.max(min, Math.min(max, Math.floor(Number.isFinite(value) ? value : 0)));
+}
+
+function requestRemoteTrade(target) {
+  if (!target?.id || !state.roomConnected || !state.founded) return;
+  const ownItems = (state.sect.inventory || []).filter((slot) => itemCatalog[slot.id] && slot.count > 0);
+  const pending = pendingTradeEscrowList().length;
+  const offerOptions = ownItems.map((slot, index) => `<option value="${index}">${tradeEscape(tradeItemLabel(slot))} x${slot.count}</option>`).join("");
+  const askOptions = tradeableCatalogIds().map((id) => `<option value="${tradeEscape(id)}">${tradeEscape(itemCatalog[id].name)}（${tradeEscape(itemCatalog[id].kind || "物品")}）</option>`).join("");
+  const qualityOptions = qualityNames.map((name, index) => `<option value="${index}">${tradeEscape(name)}</option>`).join("");
+  showModal({
+    kicker: "玩家交易",
+    title: `与${tradeEscape(target.name || "联机宗门")}议价`,
+    body: `
+      <div class="stat-list">
+        <span>对方灵石：${Math.round(target.stones || 0)}</span>
+        <span>对方战力：${Math.round(target.power || 0)}</span>
+      </div>
+      <p>可以用灵石、材料、丹药或装备组合出价。你发出的物品会暂存，若对方拒绝会退回。</p>
+      ${pending ? `<p>当前有 ${pending} 笔未完成报价，可先取回再重新议价。</p>` : ""}
+      <div class="modal-grid">
+        <label>我方灵石 <input id="tradeOfferStones" type="number" min="0" max="${Math.floor(state.sect.stones || 0)}" value="0"></label>
+        <label>我方物品 <select id="tradeOfferItem"><option value="">不加入物品</option>${offerOptions}</select></label>
+        <label>物品数量 <input id="tradeOfferQty" type="number" min="1" value="1"></label>
+        <label>索取灵石 <input id="tradeAskStones" type="number" min="0" value="0"></label>
+        <label>索取物品 <select id="tradeAskItem"><option value="">不索取物品</option>${askOptions}</select></label>
+        <label>索取品质 <select id="tradeAskQuality">${qualityOptions}</select></label>
+        <label>索取数量 <input id="tradeAskQty" type="number" min="1" value="1"></label>
+      </div>
+    `,
+    actions: [
+      { label: "发送交易", handler: () => sendTradeOffer(target, ownItems) },
+      { label: "取回报价", handler: refundPendingTrades, disabled: !pending },
+      { label: "取消", handler: closeModal },
+    ],
+  });
+}
+
+function sendTradeOffer(target, ownItems) {
+  const offer = { stones: readTradeNumber("tradeOfferStones", 0, Math.floor(state.sect.stones || 0)), items: [] };
+  const offerIndex = document.getElementById("tradeOfferItem")?.value;
+  if (offerIndex !== "") {
+    const slot = ownItems[Number(offerIndex)];
+    if (slot) offer.items.push({ id: slot.id, quality: slot.quality || 0, count: readTradeNumber("tradeOfferQty", 1, slot.count) });
+  }
+  const request = { stones: readTradeNumber("tradeAskStones", 0, 999999), items: [] };
+  const askId = document.getElementById("tradeAskItem")?.value;
+  if (askId && itemCatalog[askId]) {
+    const item = itemCatalog[askId];
+    request.items.push({ id: askId, quality: item.material ? 0 : readTradeNumber("tradeAskQuality", 0, qualityNames.length - 1), count: readTradeNumber("tradeAskQty", 1, 999) });
+  }
+  if (!offer.stones && !offer.items.length) {
+    flashFeedback("交易至少要给出一项资源", "warn");
+    return;
+  }
+  if (!request.stones && !request.items.length) {
+    flashFeedback("交易至少要索取一项资源", "warn");
+    return;
+  }
+  if (!deductTradeParts(offer)) {
+    flashFeedback("出价资源不足", "warn");
+    return;
+  }
+  state.pendingTradeEscrows = state.pendingTradeEscrows || {};
+  const trade = { id: uid(), sourceId: state.clientId, sourceName: state.sect.name, targetId: target.id, targetName: target.name, offer, request, year: state.year };
+  state.pendingTradeEscrows[trade.id] = { parts: offer, targetId: target.id, targetName: target.name };
+  sendRoomFeature("trade_request", { trade });
+  log(`已向${target.name || "联机宗门"}发起交易：给出 ${tradePartsText(offer)}，索取 ${tradePartsText(request)}。`, "good");
+  closeModal();
+  syncPublicState();
+  render();
+}
+
+function showTradeRequestModal(trade, sourceName) {
+  if (!trade || trade.targetId !== state.clientId) return;
+  const canAccept = hasTradeParts(trade.request);
+  showModal({
+    kicker: "玩家交易",
+    title: `${tradeEscape(sourceName || trade.sourceName || "联机宗门")}发来交易`,
+    body: `
+      <p>对方给出：<strong>${tradeEscape(tradePartsText(trade.offer))}</strong></p>
+      <p>对方索取：<strong>${tradeEscape(tradePartsText(trade.request))}</strong></p>
+      ${canAccept ? "<p>同意后会立即结算双方资源。</p>" : "<p>你的资源不足，暂时无法接受这笔交易。</p>"}
+    `,
+    actions: [
+      { label: "同意交易", handler: () => acceptRemoteTrade(trade), disabled: !canAccept },
+      { label: "拒绝", handler: () => rejectRemoteTrade(trade) },
+    ],
+  });
+}
+
+function acceptRemoteTrade(trade) {
+  if (state.cancelledIncomingTrades?.[trade.id]) {
+    flashFeedback("这笔交易已被对方取消", "warn");
+    return;
+  }
+  if (!deductTradeParts(trade.request)) {
+    flashFeedback("资源不足，无法接受交易", "warn");
+    return;
+  }
+  grantTradeParts(trade.offer);
+  sendRoomFeature("trade_accept", { trade });
+  log(`已接受${trade.sourceName || "联机宗门"}的交易，获得 ${tradePartsText(trade.offer)}。`, "good");
+  closeModal();
+  syncPublicState();
+  render();
+}
+
+function rejectRemoteTrade(trade) {
+  sendRoomFeature("trade_reject", { tradeId: trade.id, targetId: trade.sourceId });
+  log(`已拒绝${trade.sourceName || "联机宗门"}的交易。`);
+  closeModal();
+}
+
+function completeAcceptedTrade(trade) {
+  state.pendingTradeEscrows = state.pendingTradeEscrows || {};
+  if (state.pendingTradeEscrows[trade.id]) {
+    delete state.pendingTradeEscrows[trade.id];
+    grantTradeParts(trade.request);
+    log(`${trade.targetName || "联机宗门"}接受了交易，获得 ${tradePartsText(trade.request)}。`, "good");
+  } else if (hasTradeParts(trade.offer) && deductTradeParts(trade.offer)) {
+    grantTradeParts(trade.request);
+    log(`${trade.targetName || "联机宗门"}接受了交易，获得 ${tradePartsText(trade.request)}。`, "good");
+  } else {
+    log("交易已被接受，但本地暂存资源已失效，请重新发起交易。", "warn");
+  }
+  syncPublicState();
+  render();
+}
+
+function handleRejectedTrade(payload, sourceName) {
+  if (payload.targetId !== state.clientId) return;
+  const escrow = state.pendingTradeEscrows?.[payload.tradeId];
+  if (escrow) {
+    grantTradeParts(escrowTradeParts(escrow));
+    delete state.pendingTradeEscrows[payload.tradeId];
+    log(`${sourceName || "联机宗门"}拒绝了交易，暂存资源已退回。`, "warn");
+    syncPublicState();
+    render();
+  } else {
+    log(`${sourceName || "联机宗门"}拒绝了交易。`, "warn");
+  }
+}
+
+function handleCancelledTrade(payload, sourceName) {
+  if (payload.targetId !== state.clientId) return;
+  state.cancelledIncomingTrades = state.cancelledIncomingTrades || {};
+  state.cancelledIncomingTrades[payload.tradeId] = true;
+  log(`${sourceName || "联机宗门"}取消了一笔交易报价。`, "warn");
+}
+
 function getPublicPlayerState() {
   const sect = state.sect || {};
   return {
@@ -1909,6 +2235,7 @@ function getPublicPlayerState() {
     maxRealm: sect.disciples?.length ? Math.max(...sect.disciples.map((d) => d.realm)) : 0,
     ready: Boolean(state.waitingForPlayers),
     forbiddenFloor: state.forbiddenRun?.floor || 0,
+    allies: Object.keys(state.roomAlliances || {}).filter((key) => key.includes(state.clientId)),
   };
 }
 
@@ -1946,6 +2273,146 @@ function handleNetMessage(msg) {
   if (msg.type === "world_snapshot" && msg.sourceId !== state.clientId) {
     applySharedWorldSnapshot(msg.snapshot);
   }
+  if (msg.type === "room_feature" && msg.sourceId !== state.clientId) {
+    handleRoomFeatureMessage(msg);
+  }
+}
+
+function handleRoomFeatureMessage(msg) {
+  const action = msg.action;
+  const payload = msg.payload || {};
+  if (action === "trade_request" && payload.trade?.targetId === state.clientId) {
+    showTradeRequestModal(payload.trade, msg.sourceName);
+    return;
+  }
+  if (action === "trade_accept" && payload.trade?.sourceId === state.clientId) {
+    completeAcceptedTrade(payload.trade);
+    return;
+  }
+  if (action === "trade_reject") {
+    handleRejectedTrade(payload, msg.sourceName);
+    return;
+  }
+  if (action === "trade_cancel") {
+    handleCancelledTrade(payload, msg.sourceName);
+    return;
+  }
+  if (action === "alliance_request" && payload.targetId === state.clientId) {
+    showModal({
+      kicker: "玩家盟约",
+      title: `${msg.sourceName || "联机宗门"}请求结盟`,
+      body: `<p>结盟后，双方可在世界奇遇中共同探索，并能互相降低危险值。盟友之间会禁用快捷掠夺与抢徒。</p>`,
+      actions: [
+        { label: "同意结盟", handler: () => {
+          setRoomAlliance(state.clientId, msg.sourceId, true);
+          sendRoomFeature("alliance_accept", { targetId: msg.sourceId });
+          log(`已与${msg.sourceName || "联机宗门"}缔结玩家盟约。`, "good");
+          closeModal();
+          syncSharedWorld();
+          syncPublicState();
+          render();
+        } },
+        { label: "暂不结盟", handler: closeModal },
+      ],
+    });
+    return;
+  }
+  if (action === "alliance_accept" && payload.targetId === state.clientId) {
+    setRoomAlliance(state.clientId, msg.sourceId, true);
+    log(`${msg.sourceName || "联机宗门"}同意了玩家盟约。`, "good");
+    syncSharedWorld();
+    syncPublicState();
+    render();
+    return;
+  }
+  if (action === "auction_open") {
+    state.roomAuction = payload.auction;
+    if (state.roomAuction) showInteractiveAuctionRound();
+    return;
+  }
+  if (action === "auction_bid" && state.roomAuction) {
+    const bid = payload.bid || {};
+    state.roomAuction.currentPrice = Number(bid.price || state.roomAuction.currentPrice);
+    state.roomAuction.leaderName = bid.leaderName || msg.sourceName || state.roomAuction.leaderName;
+    state.roomAuction.leaderId = msg.sourceId;
+    state.roomAuction.round = Number(bid.round || state.roomAuction.round || 1);
+    state.roomAuction.history = state.roomAuction.history || [];
+    state.roomAuction.history.push({ id: msg.sourceId, name: state.roomAuction.leaderName, price: state.roomAuction.currentPrice });
+    showInteractiveAuctionRound();
+    return;
+  }
+  if (action === "auction_pass" && state.roomAuction) {
+    state.roomAuction.passed = state.roomAuction.passed || {};
+    state.roomAuction.passed[msg.sourceId] = true;
+    showInteractiveAuctionRound();
+    return;
+  }
+  if (action === "auction_result") {
+    const result = payload.result;
+    if (result?.winnerName) log(`联机拍卖落槌：${result.winnerName}取得${result.lot?.name || "拍品"}。`, result.winnerId === state.clientId ? "good" : "warn");
+    state.roomAuction = null;
+    closeModal();
+    render();
+    return;
+  }
+  if (action === "council_open") {
+    state.roomCouncil = payload.council;
+    if (state.roomCouncil) openCouncilMeeting(null);
+    return;
+  }
+  if (action === "council_vote") {
+    if (!state.roomCouncil) return;
+    state.roomCouncil.votes = state.roomCouncil.votes || {};
+    state.roomCouncil.votes[msg.sourceId] = payload.vote;
+    maybeFinalizeRoomCouncil();
+    return;
+  }
+  if (action === "council_result") {
+    const result = payload.result;
+    if (result?.edict) {
+      state.councilEdict = result.edict;
+      state.lastCouncilYear = result.year || state.year;
+      log(`联机仙盟会议统一通过《${result.edict.name}》：${result.edict.text}`, "good");
+      state.roomCouncil = null;
+      closeModal();
+      render();
+    }
+    return;
+  }
+  if (action === "tournament_result") {
+    const result = payload.result || {};
+    log(`联机宗门大比战报：冠军 ${result.champion || "未知"}。${result.text || ""}`, "good");
+    render();
+    return;
+  }
+  if (action === "adventure_help" && state.worldAdventure) {
+    const reduce = Number(payload.reduce || 4);
+    state.worldAdventure.danger = Math.max(0, state.worldAdventure.danger - reduce);
+    state.worldAdventure.history.push({ tone: "good", text: `${msg.sourceName || "盟友宗门"}护持队伍，危险值 -${reduce}。` });
+    renderWorldAdventureStep();
+    render();
+    return;
+  }
+  if (action === "adventure_progress") {
+    updateRoomAdventureParticipant(msg.sourceId, msg.sourceName, payload.status);
+  }
+}
+
+function updateRoomAdventureParticipant(playerId, playerName, status = {}) {
+  if (!state.worldAdventure || !playerId) return;
+  const list = state.worldAdventure.participants || [];
+  const existing = list.find((p) => p.id === playerId);
+  const next = {
+    id: playerId,
+    name: playerName || existing?.name || "盟友宗门",
+    disciple: status.disciple || existing?.disciple || "参战弟子",
+    danger: Number(status.danger || 0),
+    hp: Number(status.hp || 0),
+  };
+  if (existing) Object.assign(existing, next);
+  else list.push(next);
+  state.worldAdventure.participants = list;
+  render();
 }
 
 function updateMultiplayerWaitingText(players = []) {
@@ -1995,6 +2462,7 @@ function createSharedWorldSnapshot() {
     resources: state.resources,
     rivals: state.rivals,
     events: state.events,
+    market: state.market,
     frontier: state.frontier,
     worldCrisis: state.worldCrisis,
     councilEdict: state.councilEdict,
@@ -2002,6 +2470,7 @@ function createSharedWorldSnapshot() {
     lastCouncilYear: state.lastCouncilYear,
     lastTournamentYear: state.lastTournamentYear,
     nextWorldAdventureYear: state.nextWorldAdventureYear,
+    roomAlliances: state.roomAlliances || {},
   };
 }
 
@@ -2010,6 +2479,7 @@ function applySharedWorldSnapshot(snapshot) {
   if (Array.isArray(snapshot.resources)) state.resources = snapshot.resources;
   if (Array.isArray(snapshot.rivals)) state.rivals = snapshot.rivals;
   if (Array.isArray(snapshot.events)) state.events = snapshot.events;
+  if (snapshot.market) state.market = snapshot.market;
   if (snapshot.frontier) state.frontier = snapshot.frontier;
   if (Number(snapshot.year) > state.year) state.year = Number(snapshot.year);
   state.worldCrisis = snapshot.worldCrisis || state.worldCrisis;
@@ -2018,6 +2488,7 @@ function applySharedWorldSnapshot(snapshot) {
   state.lastCouncilYear = Number(snapshot.lastCouncilYear || state.lastCouncilYear || 0);
   state.lastTournamentYear = Number(snapshot.lastTournamentYear || state.lastTournamentYear || 0);
   state.nextWorldAdventureYear = Number(snapshot.nextWorldAdventureYear || state.nextWorldAdventureYear || 0);
+  state.roomAlliances = snapshot.roomAlliances || state.roomAlliances || {};
   log("已同步联机房间的大世界状态。", "good");
   render();
 }
@@ -2032,6 +2503,11 @@ function syncPublicState() {
 
 function remoteBattle(target, mode = "raid") {
   if (!state.founded || !target) return;
+  if (arePlayersAllied(state.clientId, target.id)) {
+    log("玩家盟友之间不能通过快捷按钮互相掠夺或抢徒。", "warn");
+    render();
+    return;
+  }
   if (!spendAction(1, mode === "steal" ? "联机抢徒" : "联机掠夺")) return;
   const our = expeditionPower(mode, mode === "steal" ? "ambush" : "assault");
   const enemy = (target.power || 0) * (mode === "steal" ? 0.96 : 1.06) + rand(120, 460);
@@ -2749,6 +3225,7 @@ function updateMarketPrices() {
     data.history = [...(data.history || []), next].slice(-12);
     state.market.goods[g.id] = data;
   }
+  syncSharedWorld();
 }
 
 function rollWorldCrisis() {
@@ -2858,6 +3335,8 @@ function marketBuy(id, qty = 1) {
   state.sect.marketPortfolio[id] = slot;
   state.marketTradesThisYear += 1;
   log(`市集买入 ${marketGoods.find((g) => g.id === id)?.name} x${qty}，总成本 ${totalCost} 灵石。本批买入只计 1 笔交易。`, "good");
+  if (state.multiplayer && state.roomConnected) sendNet("player_event", { text: `${state.sect.name}在共享市集中买入${marketGoods.find((g) => g.id === id)?.name} x${qty}。`, tone: "good" });
+  syncSharedWorld();
   closeModal();
   openMarketBoard();
   render();
@@ -2877,6 +3356,8 @@ function marketSell(id, qty = 1) {
   if (slot.qty <= 0) delete state.sect.marketPortfolio[id];
   state.marketTradesThisYear += 1;
   log(`市集卖出 ${marketGoods.find((g) => g.id === id)?.name} x${qty}，回笼 ${gain} 灵石，${profit >= 0 ? "盈利" : "亏损"} ${Math.abs(profit)}。本批卖出只计 1 笔交易。`, profit >= 0 ? "good" : "warn");
+  if (state.multiplayer && state.roomConnected) sendNet("player_event", { text: `${state.sect.name}在共享市集中卖出${marketGoods.find((g) => g.id === id)?.name} x${qty}。`, tone: profit >= 0 ? "good" : "warn" });
+  syncSharedWorld();
   closeModal();
   openMarketBoard();
   render();
@@ -3157,11 +3638,17 @@ function shouldOpenAuction(endingBoonKey = "") {
 
 function openCouncilMeeting(afterClose = null) {
   state.lastCouncilYear = state.year;
-  const topics = councilTopics
+  let topics = state.roomCouncil?.year === state.year && Array.isArray(state.roomCouncil.topics)
+    ? state.roomCouncil.topics
+    : councilTopics
     .map((topic) => ({ topic, roll: Math.random() }))
     .sort((a, b) => a.roll - b.roll)
     .slice(0, 3)
     .map((item) => item.topic);
+  if (state.multiplayer && state.roomConnected && !state.roomCouncil) {
+    state.roomCouncil = { year: state.year, topics, votes: {} };
+    if (state.roomHost) sendRoomFeature("council_open", { council: state.roomCouncil });
+  }
   const current = state.councilEdict ? `当前仙盟议题：${state.councilEdict.name}，剩余 ${state.councilEdict.ttl} 年。` : "当前没有持续中的仙盟议题。";
   showModal({
     kicker: "仙盟会议",
@@ -3181,7 +3668,23 @@ function openCouncilMeeting(afterClose = null) {
   els.modalCloseBtn.onclick = () => { closeModal(); afterClose?.(); render(); };
 }
 
-function resolveCouncilTopic(topic, afterClose = null, ballot = [topic]) {
+function resolveCouncilTopic(topic, afterClose = null, ballot = [topic], forceLocal = false) {
+  if (state.multiplayer && state.roomConnected && !forceLocal) {
+    state.roomCouncil = state.roomCouncil || { year: state.year, topics: ballot, votes: {} };
+    state.roomCouncil.votes = state.roomCouncil.votes || {};
+    state.roomCouncil.votes[state.clientId] = topic.key;
+    sendRoomFeature("council_vote", { vote: topic.key });
+    log(`已提交仙盟会议投票：支持《${topic.name}》。等待房间统一结算。`, "good");
+    maybeFinalizeRoomCouncil();
+    showModal({
+      kicker: "仙盟会议",
+      title: "等待房间投票",
+      body: `<p>你的投票已提交。房主会在已立宗玩家完成投票后统一结算，本次议题会同步到所有玩家。</p>`,
+      actions: [{ label: "知道了", handler: closeModal }],
+    });
+    render();
+    return;
+  }
   const voteCounts = Object.fromEntries(ballot.map((item) => [item.key, { topic: item, votes: 0, names: [] }]));
   const playerVotes = 2 + Math.floor((state.sect.diplomacy?.reputation || 0) / 35) + (state.selectedRoute === "orthodox" ? 1 : 0);
   voteCounts[topic.key].votes += playerVotes;
@@ -3235,6 +3738,22 @@ function resolveCouncilTopic(topic, afterClose = null, ballot = [topic]) {
   render();
 }
 
+function maybeFinalizeRoomCouncil() {
+  if (!state.roomHost || !state.roomCouncil || state.roomCouncil.year !== state.year) return;
+  const voters = foundedRoomPlayers().map((player) => player.id);
+  const votes = state.roomCouncil.votes || {};
+  if (voters.length && voters.some((id) => !votes[id])) return;
+  const topics = state.roomCouncil.topics || councilTopics.slice(0, 3);
+  const tally = topics.map((topic) => ({
+    topic,
+    votes: Object.values(votes).filter((key) => key === topic.key).length,
+  })).sort((a, b) => b.votes - a.votes || Math.random() - 0.5)[0];
+  const winner = tally?.topic || topics[0];
+  resolveCouncilTopic(winner, null, topics, true);
+  sendRoomFeature("council_result", { result: { year: state.year, edict: state.councilEdict } });
+  state.roomCouncil = null;
+}
+
 function showCouncilResultModal(topic, voteCounts, afterClose = null) {
   const rows = Object.values(voteCounts)
     .sort((a, b) => b.votes - a.votes)
@@ -3277,10 +3796,100 @@ function openAuction(afterClose = null, endingBoonKey = "") {
     actions: lots.map((lot) => ({
       label: `参与竞拍${lot.name} ${lot.price}`,
       disabled: state.sect.stones < lot.price,
-      handler: () => startAuctionBid(lot, afterClose),
+      handler: () => startInteractiveAuctionBid(lot, afterClose),
     })).concat([{ label: "空手离场", handler: () => { log("本宗没有在拍卖会上出价。"); closeModal(); afterClose?.(); render(); } }]),
   });
   els.modalCloseBtn.onclick = () => { closeModal(); afterClose?.(); render(); };
+}
+
+function startInteractiveAuctionBid(lot, afterClose = null) {
+  state.roomAuction = {
+    lot: { ...lot },
+    currentPrice: lot.price,
+    leaderId: null,
+    leaderName: "",
+    round: 1,
+    passed: {},
+    history: [],
+    afterClose,
+  };
+  if (state.multiplayer && state.roomConnected) {
+    sendRoomFeature("auction_open", { auction: state.roomAuction });
+    sendNet("player_event", { text: `${state.sect.name}开启了联机拍卖竞价：${lot.name}。`, tone: "good" });
+  }
+  showInteractiveAuctionRound();
+}
+
+function showInteractiveAuctionRound() {
+  const auction = state.roomAuction;
+  if (!auction?.lot) return;
+  const lot = auction.lot;
+  const nextBid = auction.currentPrice + 40 + auction.round * 18;
+  const activePlayers = foundedRoomPlayers();
+  const passedCount = Object.keys(auction.passed || {}).length;
+  const history = auction.history.slice(-8).map((row) => `<p><strong>${row.name}</strong> 出价 ${row.price} 灵石</p>`).join("") || "<p>竞价刚刚开始。</p>";
+  showModal({
+    kicker: "多轮拍卖",
+    title: `${lot.name}｜第 ${auction.round} 轮`,
+    body: `
+      <div class="auction-stage">
+        <div class="auction-gavel">槌</div>
+        <div class="auction-lot"><strong>${lot.name}</strong><span>${lot.text}</span></div>
+      </div>
+      <div class="auction-feed">${history}</div>
+      <p>当前最高价：<strong>${auction.currentPrice}</strong> 灵石，领先：<strong>${auction.leaderName || "无人"}</strong>。联机参与 ${activePlayers.length || 1} 宗，已放弃 ${passedCount} 宗。</p>
+    `,
+    actions: [
+      { label: `加价到 ${nextBid}`, disabled: state.sect.stones < nextBid || auction.passed?.[state.clientId], handler: () => placeInteractiveAuctionBid(nextBid) },
+      { label: "放弃本件", disabled: auction.passed?.[state.clientId], handler: () => passInteractiveAuction() },
+      { label: "落槌结算", disabled: !auction.leaderName, handler: () => closeInteractiveAuction() },
+    ],
+  });
+}
+
+function placeInteractiveAuctionBid(price) {
+  const auction = state.roomAuction;
+  if (!auction) return;
+  auction.currentPrice = price;
+  auction.leaderId = state.clientId;
+  auction.leaderName = state.sect.name;
+  auction.round += 1;
+  auction.history.push({ id: state.clientId, name: state.sect.name, price });
+  runAiAuctionBids();
+  if (state.multiplayer && state.roomConnected) sendRoomFeature("auction_bid", { bid: { price: auction.currentPrice, leaderName: auction.leaderName, round: auction.round } });
+  showInteractiveAuctionRound();
+}
+
+function runAiAuctionBids() {
+  const auction = state.roomAuction;
+  if (!auction) return;
+  for (const rival of activeRivals().slice(0, 4)) {
+    const budget = Math.round((rival.stones || 300) * 0.45);
+    const willBid = budget > auction.currentPrice + 35 && Math.random() < 0.35;
+    if (!willBid) continue;
+    const price = auction.currentPrice + rand(25, 75);
+    auction.currentPrice = price;
+    auction.leaderId = rival.id;
+    auction.leaderName = rival.name;
+    auction.history.push({ id: rival.id, name: rival.name, price });
+  }
+}
+
+function passInteractiveAuction() {
+  if (!state.roomAuction) return;
+  state.roomAuction.passed[state.clientId] = true;
+  if (state.multiplayer && state.roomConnected) sendRoomFeature("auction_pass", {});
+  showInteractiveAuctionRound();
+}
+
+function closeInteractiveAuction() {
+  const auction = state.roomAuction;
+  if (!auction) return;
+  const winner = { name: auction.leaderName, player: auction.leaderId === state.clientId, rival: activeRivals().find((r) => r.id === auction.leaderId) };
+  const lot = { ...auction.lot, finalPrice: auction.currentPrice };
+  state.roomAuction = null;
+  if (state.multiplayer && state.roomConnected) sendRoomFeature("auction_result", { result: { lot, winnerName: winner.name, winnerId: auction.leaderId } });
+  finalizeAuctionLot(lot, winner, auction.afterClose);
 }
 
 function startAuctionBid(lot, afterClose = null) {
@@ -3374,7 +3983,9 @@ function buyAuctionLot(lot, afterClose = null) {
     if (!unlocked) state.sect.insight += 30;
   }
   if (lot.grant === "alchemy") {
-    for (let i = 0; i < 2; i += 1) {
+    state.sect.alchemyMats += 2;
+    rewards.push("通用丹材 +2");
+    for (let i = 0; i < 4; i += 1) {
       const id = pick(alchemyMaterialIds);
       addItem(id, 1, rand(0, 1));
       rewards.push(itemCatalog[id].name);
@@ -3490,12 +4101,36 @@ function showWorldAdventurePicker(afterClose) {
       const disciple = state.sect.disciples.find((d) => d.id === btn.dataset.id);
       if (!disciple) return;
       flashFeedback(`世界奇遇已派遣：${disciple.core ? "核心·" : ""}${disciple.name}`);
-      startWorldAdventure(theme, disciple, aiTeams, afterClose);
+      if (state.multiplayer && alliedRemotePlayers().length) showCoopAdventureChoice(theme, disciple, aiTeams, afterClose);
+      else startWorldAdventure(theme, disciple, aiTeams, afterClose);
     });
   }
 }
 
-function startWorldAdventure(theme, disciple, aiTeams, afterClose) {
+function showCoopAdventureChoice(theme, disciple, aiTeams, afterClose) {
+  const allies = alliedRemotePlayers();
+  showModal({
+    kicker: "协作奇遇",
+    title: `${theme.name}：是否邀请盟友`,
+    body: `
+      <p>已结盟玩家可共同探索世界奇遇。参与人数越多，事件阈值会小幅提高，但队友可以通过“护持盟友降险”降低危险值，并在弹框内同步状态。</p>
+      <div class="system-grid">
+        ${allies.map((player) => `<article class="system-card"><strong>${player.name}</strong><span>战力 ${Math.round(player.power || 0)}，弟子 ${player.disciples || 0}，最高境界 ${realms[player.maxRealm || 0]}</span></article>`).join("")}
+      </div>
+    `,
+    actions: [
+      { label: "邀请盟友共同探索", handler: () => {
+        const participants = allies.map((player) => ({ id: player.id, name: player.name, disciple: "待同步弟子", danger: 0, hp: 0 }));
+        closeModal();
+        startWorldAdventure(theme, disciple, aiTeams, afterClose, participants);
+        sendRoomFeature("adventure_progress", { status: { disciple: disciple.name, danger: 0, hp: disciple.hp, step: 0 } });
+      } },
+      { label: "本宗单独探索", handler: () => { closeModal(); startWorldAdventure(theme, disciple, aiTeams, afterClose); } },
+    ],
+  });
+}
+
+function startWorldAdventure(theme, disciple, aiTeams, afterClose, extraParticipants = []) {
   state.selectedDiscipleId = disciple.id;
   state.worldAdventure = {
     theme,
@@ -3505,6 +4140,7 @@ function startWorldAdventure(theme, disciple, aiTeams, afterClose) {
     merit: 0,
     danger: 0,
     injuries: 0,
+    participants: [{ id: state.clientId, name: state.sect.name, disciple: disciple.name, danger: 0, hp: disciple.hp }, ...extraParticipants],
     flags: {},
     history: [],
     afterClose,
@@ -3518,6 +4154,7 @@ function renderWorldAdventureStep() {
   const d = state.sect.disciples.find((item) => item.id === adv?.discipleId);
   if (!adv || !d) return;
   const stage = worldAdventureStages[adv.step];
+  const participants = adv.participants || [{ id: state.clientId, name: state.sect.name, disciple: d.name, danger: adv.danger, hp: d.hp }];
   const choices = stage.choices
     .map((choice) => ({ choice, roll: Math.random() }))
     .sort((a, b) => a.roll - b.roll)
@@ -3531,7 +4168,9 @@ function renderWorldAdventureStep() {
         <div><span>危险</span><strong>${adv.danger}</strong></div>
         <div><span>收获</span><strong>${adv.merit}</strong></div>
         <div><span>伤势</span><strong>${adv.injuries}</strong></div>
+        <div><span>协作</span><strong>${participants.length} 人</strong></div>
       </div>
+      ${participants.length > 1 ? `<div class="adventure-history">${participants.map((p) => `<p><strong>${p.name}</strong>：${p.disciple || "参战弟子"}，危险 ${p.danger || 0}，体魄 ${Math.round(p.hp || 0)}</p>`).join("")}</div>` : ""}
       <p>${stage.intro(adv.theme, d)}</p>
       <div class="adventure-history">
         ${adv.history.slice(-3).map((h) => `<p class="${h.tone}">${h.text}</p>`).join("") || "<p>旅程刚刚开始，所有选择都会留下痕迹。</p>"}
@@ -3540,7 +4179,7 @@ function renderWorldAdventureStep() {
     actions: choices.map((choice) => ({
       label: choice.label,
       handler: () => resolveWorldAdventureChoice(choice),
-    })),
+    })).concat(participants.length > 1 ? [{ label: "护持盟友降险", handler: helpAdventureAllies }] : []),
   });
   els.modalProgress.hidden = false;
   els.modalProgress.textContent = `${adv.step + 1}/${worldAdventureStages.length}`;
@@ -3551,11 +4190,14 @@ function resolveWorldAdventureChoice(choice) {
   const adv = state.worldAdventure;
   const d = state.sect.disciples.find((item) => item.id === adv?.discipleId);
   if (!adv || !d) return;
+  const coopSize = Math.max(1, adv.participants?.length || 1);
+  const coopDifficulty = Math.max(0, coopSize - 1) * 4;
+  const coopSupport = Math.max(0, coopSize - 1) * 6;
   const statValue = d[choice.stat] || 35;
   const flagBonus = (adv.flags.steady || 0) * 2 + (adv.flags.guard || 0) * 2 + (choice.tag === "greed" ? -(adv.flags.mercy || 0) : 0);
-  const score = statValue + d.realm * 10 + Math.floor(d.luck / 3) + flagBonus + rand(1, 100);
-  const threshold = 72 + adv.step * 5 + choice.risk * 3 + Math.floor(adv.danger / 3);
-  const deathChance = clamp(choice.death + Math.floor(adv.danger / 4) + (score < threshold ? 8 : 0) - Math.floor(d.luck / 12) - (adv.flags.guard || 0), 0, 38);
+  const score = statValue + d.realm * 11 + Math.floor(d.luck / 3) + flagBonus + coopSupport + rand(1, 100);
+  const threshold = 58 + adv.step * 3 + choice.risk * 2 + Math.floor(adv.danger / 5) + coopDifficulty;
+  const deathChance = clamp(choice.death - 7 + Math.floor(adv.danger / 7) + (score < threshold ? 4 : 0) - Math.floor(d.luck / 10) - (adv.flags.guard || 0) - Math.max(0, coopSize - 1) * 3, 0, 22);
   const dies = rand(1, 100) <= deathChance && score < threshold + 18;
   if (dies) {
     killAdventureDisciple(d, choice);
@@ -3563,21 +4205,40 @@ function resolveWorldAdventureChoice(choice) {
   }
   const success = score >= threshold;
   if (success) {
-    adv.merit += choice.gain + rand(2, 8);
-    adv.danger += Math.max(0, choice.risk - 2);
+    adv.merit += choice.gain + rand(4, 10) + Math.max(0, coopSize - 1) * 2;
+    adv.danger += Math.max(0, choice.risk - 4 + Math.max(0, coopSize - 2));
     adv.flags[choice.tag] = (adv.flags[choice.tag] || 0) + 1;
     d.exp += 4 + Math.floor(choice.gain / 3);
     adv.history.push({ tone: "good", text: `${choice.label}：${choice.success}` });
   } else {
-    adv.danger += choice.risk + rand(2, 6);
+    adv.danger += Math.max(1, choice.risk - 2) + rand(1, 4) + Math.max(0, coopSize - 2);
     adv.injuries += 1;
     d.hp = Math.max(18, d.hp - rand(3, 10));
     d.temper = Math.max(1, d.temper - rand(1, 4));
     adv.history.push({ tone: "warn", text: `${choice.label}：${choice.fail}` });
   }
   adv.step += 1;
+  if (state.multiplayer && state.roomConnected) {
+    sendRoomFeature("adventure_progress", { status: { disciple: d.name, danger: adv.danger, hp: d.hp, step: adv.step } });
+  }
   if (adv.step >= worldAdventureStages.length) finishWorldAdventure(false);
   else renderWorldAdventureStep();
+  render();
+}
+
+function helpAdventureAllies() {
+  const adv = state.worldAdventure;
+  const d = state.sect.disciples.find((item) => item.id === adv?.discipleId);
+  if (!adv || !d) return;
+  const reduce = clamp(5 + Math.floor(d.temper / 18) + Math.floor(d.realm / 2), 5, 16);
+  adv.danger = Math.max(0, adv.danger - reduce);
+  d.exp += 3;
+  adv.history.push({ tone: "good", text: `${d.name}护持队友，危险值 -${reduce}。` });
+  if (state.multiplayer && state.roomConnected) {
+    sendRoomFeature("adventure_help", { reduce, step: adv.step });
+    sendRoomFeature("adventure_progress", { status: { disciple: d.name, danger: adv.danger, hp: d.hp, step: adv.step } });
+  }
+  renderWorldAdventureStep();
   render();
 }
 
@@ -3611,8 +4272,9 @@ function finishWorldAdventure(dead) {
   const adv = state.worldAdventure;
   const d = state.sect.disciples.find((item) => item.id === adv?.discipleId);
   if (!adv || !d || dead) return;
-  const aiBest = adv.aiTeams.map((team) => ({ ...team, score: team.score + rand(0, 220) })).sort((a, b) => b.score - a.score)[0];
-  const finalScore = adv.merit + (adv.flags.insight || 0) * 8 + (adv.flags.mercy || 0) * 6 + (adv.flags.greed || 0) * 5 + (adv.flags.blood || 0) * 8 - adv.danger * 2 - adv.injuries * 5 + rand(0, 40);
+  const coopSize = Math.max(1, adv.participants?.length || 1);
+  const aiBest = adv.aiTeams.map((team) => ({ ...team, score: team.score * 0.72 + rand(0, 150) })).sort((a, b) => b.score - a.score)[0];
+  const finalScore = adv.merit + (adv.flags.insight || 0) * 9 + (adv.flags.mercy || 0) * 7 + (adv.flags.greed || 0) * 5 + (adv.flags.blood || 0) * 7 + coopSize * 12 - adv.danger * 1.25 - adv.injuries * 3 + rand(12, 55);
   const rank = finalScore >= (aiBest?.score || 0) ? 1 : finalScore > (aiBest?.score || 0) * 0.72 ? 2 : 3;
   const ending = pickWorldAdventureEnding(adv, finalScore, rank);
   const reward = applyWorldAdventureReward(adv, d, finalScore, rank);
@@ -3801,11 +4463,11 @@ function runAiTurns() {
   state.aiReports = [];
   for (const r of activeRivals()) {
     const report = [];
-    const era = 1 + Math.min(1.2, state.year * 0.075);
+    const era = 1 + Math.min(0.72, state.year * 0.045);
     const playerPower = sectPower();
     const pressureGap = playerPower - r.power;
-    const catchUp = playerPower > r.power * 1.2 ? Math.min(state.year >= 7 ? 420 : 260, Math.round(pressureGap * (state.year >= 7 ? 0.13 : 0.09))) : 0;
-    const aiActions = state.year >= 7 || playerPower > r.power * 1.35 ? 4 : r.power > 900 || state.year >= 6 ? 3 : 2;
+    const catchUp = playerPower > r.power * 1.35 ? Math.min(state.year >= 10 ? 180 : 120, Math.round(pressureGap * (state.year >= 10 ? 0.045 : 0.035))) : 0;
+    const aiActions = state.year >= 12 || playerPower > r.power * 1.65 ? 3 : r.power > 1200 || state.year >= 7 ? 2 : 2;
     for (let i = 0; i < aiActions; i += 1) {
       const hostile = r.attitude < -25;
       const stronger = r.power > sectPower() * 0.82;
@@ -3816,7 +4478,7 @@ function runAiTurns() {
         r.grudges = (r.grudges || 0) + 1;
         report.push({ tone: "warn", text: "整备战备，对本宗敌意加深，后续更可能袭扰或合攻。" });
       } else if (Math.random() < 0.38) {
-        const powerGain = Math.round((rand(36, 96) + (r.alchemy || 0) * 10 + (r.forging || 0) * 12) * era) + catchUp;
+        const powerGain = Math.round((rand(24, 68) + (r.alchemy || 0) * 7 + (r.forging || 0) * 8) * era) + catchUp;
         const stoneGain = Math.round(rand(110, 240) * era);
         r.power += powerGain;
         r.stones += stoneGain;
@@ -3877,13 +4539,13 @@ function runAiTurns() {
       report.push({ tone: "info", text: "推演护山阵图，阵法 +1。" });
     }
     if (frontierUnlocked() && Math.random() < 0.46) {
-      const borderGain = Math.round(rand(70, 180) * era + state.year * 12);
+      const borderGain = Math.round(rand(45, 120) * era + state.year * 7);
       r.power += borderGain;
       r.foundation = clamp((r.foundation || 100) + rand(8, 24), 0, 520);
       report.push({ tone: "warn", text: `派队深入边境讨伐妖兽，获得晋升材料与战力 +${borderGain}。` });
     }
-    r.foundation = clamp((r.foundation || 100) + Math.round(rand(9, 24) * era), 0, 420);
-    r.power += Math.round((rand(24, 68) + r.disciples * 4 + (r.alchemy + r.forging) * 9) * era) + catchUp;
+    r.foundation = clamp((r.foundation || 100) + Math.round(rand(5, 15) * era), 0, 320);
+    r.power += Math.round((rand(14, 42) + r.disciples * 2.4 + (r.alchemy + r.forging) * 5.5) * era) + catchUp;
     if (catchUp) report.push({ tone: "warn", text: `感受到本宗压力，强行整合底蕴追赶，战力额外 +${catchUp}。` });
     maybeAiResourceSabotage(r, report);
     if (report.length) {
@@ -4355,6 +5017,11 @@ function finishFrontierDungeon(dungeon, team, won, our, enemy) {
     const materialChance = clamp(54 + team.reduce((s, d) => s + d.luck, 0) / Math.max(1, team.length * 12) - dungeon.tier * 3, 32, 78);
     const gotMaterial = rand(1, 100) <= materialChance;
     if (gotMaterial) addItem(dungeon.material, 1, 0);
+    if (dungeon.reward?.alchemyMats || gotMaterial) {
+      const extra = Math.max(1, Math.floor(dungeon.tier / 2));
+      state.sect.alchemyMats += extra;
+      grantAlchemyMaterialsFromEvent({ name: dungeon.name, materialRich: dungeon.reward?.alchemyMats }, extra);
+    }
     const expGain = 10 + dungeon.tier * 4;
     team.forEach((d) => { d.exp += expGain; d.status = "边境归来"; });
     state.frontier.clears = (state.frontier.clears || 0) + 1;
@@ -4440,7 +5107,7 @@ function openForbiddenGate() {
       <p>禁地是独立 20 层爬塔。弟子使用固定初始属性，词条、心性、气运和已装备遗物会影响开局。通关率约取决于一路选择与强化，目标控制在较难但可突破。</p>
       <div class="adventure-roster">
         ${roster.map((d) => `<article class="adventure-candidate ${d.core ? "is-core" : ""}">
-          <div><strong>${d.core ? "核心·" : ""}${d.name}</strong><span>${realms[d.realm]} · 禁地开局 ${Math.round(forbiddenDiscipleSeed(d))} · 心${d.temper} 运${d.luck}</span></div>
+          <div><strong>${d.core ? "核心·" : ""}${d.name}</strong><span>${realms[d.realm]} · 禁地开局 ${Math.round(forbiddenDiscipleSeed(d))} · 境界加成 ${forbiddenRealmBonusPct(d)}% · 心${d.temper} 运${d.luck}</span></div>
           <button class="forbidden-pick" data-id="${d.id}">入塔</button>
         </article>`).join("")}
       </div>
@@ -4460,23 +5127,28 @@ function forbiddenDiscipleSeed(d) {
   return 220 + d.realm * 22 + d.temper * 0.9 + d.luck * 0.7 + traitBonusOnDisciple(d, "forbidden") * 7 + relic;
 }
 
+function forbiddenRealmBonusPct(d) {
+  return clamp((d?.realm || 0) * 6, 0, 50);
+}
+
 function startForbiddenRun(d) {
   const info = forbiddenAttemptInfo();
   if (info.left <= 0) return;
   state.forbidden.attemptsUsed += 1;
   state.forbidden.totalRuns = (state.forbidden.totalRuns || 0) + 1;
   const seed = forbiddenDiscipleSeed(d);
+  const realmMultiplier = 1 + forbiddenRealmBonusPct(d) / 100;
   state.forbiddenRun = {
     id: uid(),
     discipleId: d.id,
     floor: 1,
-    maxHp: Math.round(88 + seed * 0.16),
-    hp: Math.round(88 + seed * 0.16),
-    atk: Math.round(36 + seed * 0.14),
-    def: Math.round(28 + seed * 0.1),
-    speed: Math.round(24 + d.speed * 0.34),
-    temper: Math.round(30 + d.temper * 0.34),
-    luck: Math.round(16 + d.luck * 0.42),
+    maxHp: Math.round((88 + seed * 0.16) * realmMultiplier),
+    hp: Math.round((88 + seed * 0.16) * realmMultiplier),
+    atk: Math.round((36 + seed * 0.14) * realmMultiplier),
+    def: Math.round((28 + seed * 0.1) * realmMultiplier),
+    speed: Math.round((24 + d.speed * 0.34) * realmMultiplier),
+    temper: Math.round((30 + d.temper * 0.34) * realmMultiplier),
+    luck: Math.round((16 + d.luck * 0.42) * realmMultiplier),
     buffs: [],
     relics: [],
     path: [],
@@ -4659,9 +5331,14 @@ function chooseForbiddenBuff(reason) {
   showModal({
     kicker: "禁地强化",
     title: reason,
-    body: `<p>选择一项只在本次禁地中生效的强化。蓝、紫、红概率递减，红色收益大但并不保证通关。</p>`,
+    body: `
+      <p>选择一项只在本次禁地中生效的强化。下方会显示具体词条内容，方便判断路线。</p>
+      <div class="system-grid">
+        ${choices.map((buff) => `<article class="system-card rarity-${buff.rarity}"><strong>${buff.name}｜${buff.rarity}</strong><span>${buff.text}</span></article>`).join("")}
+      </div>
+    `,
     actions: choices.map((buff) => ({
-      label: `${buff.name}｜${buff.rarity}`,
+      label: `${buff.name}｜${buff.text}`,
       handler: () => {
         applyForbiddenBuff(buff);
         advanceForbiddenFloor(buff.name);
@@ -4882,7 +5559,8 @@ function materialPoolForEvent(event) {
 function grantAlchemyMaterialsFromEvent(event, amount = 1) {
   const pool = materialPoolForEvent(event);
   const gained = [];
-  for (let i = 0; i < amount; i += 1) {
+  const bonus = event?.materialRich ? 2 : 1;
+  for (let i = 0; i < amount + bonus; i += 1) {
     const id = pick(pool);
     addItem(id, 1, 0);
     gained.push(itemCatalog[id].name);
@@ -4918,13 +5596,13 @@ function applyOpportunityReward(event, choice, d, great, score) {
     gear: () => addItem(pick(["spiritBlade", "guardTalisman", "swordManual", "moonBlade"]), 1, quality),
     rarePill: () => addItem(pick(["tribPill", "marrowPill", "qiPill"]), 1, quality),
     safe: () => { state.sect.insight += 14; state.sect.prestige += 8; },
-    alchemyMats: () => { state.sect.alchemyMats += great ? 2 : 1; materialGain.push(...grantAlchemyMaterialsFromEvent(event, great || event.materialRich ? 2 : 1)); },
-    building: () => { state.sect.insight += 22; if (event.materialRich) materialGain.push(...grantAlchemyMaterialsFromEvent(event, 1)); },
+    alchemyMats: () => { state.sect.alchemyMats += great ? 3 : 2; materialGain.push(...grantAlchemyMaterialsFromEvent(event, great || event.materialRich ? 2 : 1)); },
+    building: () => { state.sect.insight += 22; if (event.materialRich) { state.sect.alchemyMats += 1; materialGain.push(...grantAlchemyMaterialsFromEvent(event, 1)); } },
     disciple: () => state.recruitPool.push(createDisciple()),
     battleExp: () => { d.exp += great ? 44 : 26; d.atk += great ? 5 : 2; },
     manual: () => { addItem("swordManual", 1, quality); state.sect.insight += 20; },
     barrier: () => state.sect.barrier = clamp(state.sect.barrier + (great ? 16 : 9), 0, 100),
-    market: () => { state.sect.stones += great ? 180 : 90; if (great) materialGain.push(...grantAlchemyMaterialsFromEvent(event, 1)); state.sect.forgingMats += 1; },
+    market: () => { state.sect.stones += great ? 180 : 90; if (great) { state.sect.alchemyMats += 1; materialGain.push(...grantAlchemyMaterialsFromEvent(event, 1)); } state.sect.forgingMats += 1; },
     prestige: () => state.sect.prestige += great ? 50 : 28,
     random: () => applyRandomOpportunityWindfall(quality, event),
     trib: () => addItem("tribPill", 1, quality),
@@ -5265,6 +5943,27 @@ function resolveTournament(ids, auto = false, afterClose = null) {
   state.lastTournamentYear = state.year;
   const team = ids.map((id) => state.sect.disciples.find((d) => d.id === id)).filter(Boolean);
   const teams = [{ name: state.sect.name, player: true, members: team, score: 0 }];
+  if (state.multiplayer) {
+    for (const p of (state.remotePlayers || []).filter((player) => player.founded)) {
+      const base = Math.max(260, (p.power || 600) / 3);
+      teams.push({
+        name: p.name,
+        player: false,
+        remote: true,
+        members: Array.from({ length: 3 }, (_, i) => ({
+          name: `${p.name.slice(0, 1)}队${i + 1}`,
+          hp: rand(80, 130) + (p.maxRealm || 0) * 9,
+          atk: Math.round(base / 26) + rand(18, 45),
+          def: Math.round(base / 34) + rand(18, 42),
+          speed: rand(22, 62),
+          realm: clamp(p.maxRealm || 0, 0, realms.length - 1),
+          temper: rand(36, 92),
+          aptitude: rand(36, 92),
+        })),
+        score: 0,
+      });
+    }
+  }
   for (const r of activeRivals().slice(0, 7)) {
     teams.push({
       name: r.name,
@@ -5301,6 +6000,9 @@ function resolveTournament(ids, auto = false, afterClose = null) {
   for (const d of team) d.exp += rank === 1 ? 32 : rank <= 3 ? 22 : 12;
   const text = `本宗大比排名第 ${rank}，获得 ${reward.stones} 灵石与${qualityNames[reward.quality]}${itemCatalog[reward.item].name}。`;
   log(text, rank <= 3 ? "good" : "");
+  if (state.multiplayer && state.roomConnected) {
+    sendRoomFeature("tournament_result", { result: { year: state.year, champion: champion.name, rank, text } });
+  }
   showModal({
     kicker: "锦标赛战报",
     title: `冠军：${champion.name} / 本宗第 ${rank} 名`,
@@ -6494,10 +7196,13 @@ function renderTarget() {
     els.hint.textContent = `选址：${node.name}｜灵气 ${node.aura}｜资源 ${node.resource}｜风险 ${node.risk}`;
     addAction("在此立宗", () => foundSect(node), state.founded);
   } else if (node.type === "remotePlayer") {
-    els.targetDetail.textContent = `联机玩家宗门。宗门：${node.name}，战力 ${Math.round(node.power || 0)}，弟子 ${node.disciples || 0}，最高境界 ${realms[node.maxRealm || 0]}，灵石 ${Math.round(node.stones || 0)}，年份 ${node.year || 1}。${node.ready ? "对方已提交本回合。" : "对方仍在操作。"}`;
-    els.hint.textContent = `联机宗门：${node.name}｜战力 ${Math.round(node.power || 0)}`;
-    addAction("联机掠夺", () => remoteBattle(node, "raid"), !state.founded || !state.roomConnected || state.actionPoints < 1);
-    addAction("联机抢徒", () => remoteBattle(node, "steal"), !state.founded || !state.roomConnected || state.actionPoints < 1);
+    const allied = arePlayersAllied(state.clientId, node.id);
+    els.targetDetail.textContent = `联机玩家宗门。宗门：${node.name}，关系 ${allied ? "玩家盟友" : "未结盟"}，战力 ${Math.round(node.power || 0)}，弟子 ${node.disciples || 0}，最高境界 ${realms[node.maxRealm || 0]}，灵石 ${Math.round(node.stones || 0)}，年份 ${node.year || 1}。${node.ready ? "对方已提交本回合。" : "对方仍在操作。"}`;
+    els.hint.textContent = `联机宗门：${node.name}｜战力 ${Math.round(node.power || 0)}${allied ? "｜盟友" : ""}`;
+    addAction(allied ? "已结盟" : "玩家结盟", () => requestRemoteAlliance(node), !state.founded || !state.roomConnected || allied);
+    addAction("玩家交易", () => requestRemoteTrade(node), !state.founded || !state.roomConnected);
+    addAction("联机掠夺", () => remoteBattle(node, "raid"), allied || !state.founded || !state.roomConnected || state.actionPoints < 1);
+    addAction("联机抢徒", () => remoteBattle(node, "steal"), allied || !state.founded || !state.roomConnected || state.actionPoints < 1);
   } else if (node.type === "rival") {
     if (node.alive === false) {
       els.targetDetail.textContent = `${node.name}。此宗山门已破，只剩残阵与废库。原有资源点已被接管或重新归入大世界争夺。`;
@@ -6625,8 +7330,11 @@ function renderMapActionBubble(node) {
     add("抢徒", () => battle(node, "steal"), node.alive === false || node.alliance || state.actionPoints < 1);
   }
   if (node.type === "remotePlayer") {
-    add("掠夺", () => remoteBattle(node, "raid"), !state.roomConnected || state.actionPoints < 1);
-    add("抢徒", () => remoteBattle(node, "steal"), !state.roomConnected || state.actionPoints < 1);
+    const allied = arePlayersAllied(state.clientId, node.id);
+    add(allied ? "盟友" : "结盟", () => requestRemoteAlliance(node), allied || !state.roomConnected);
+    add("交易", () => requestRemoteTrade(node), !state.roomConnected);
+    add("掠夺", () => remoteBattle(node, "raid"), allied || !state.roomConnected || state.actionPoints < 1);
+    add("抢徒", () => remoteBattle(node, "steal"), allied || !state.roomConnected || state.actionPoints < 1);
   }
   els.mapActionBubble.hidden = els.mapActionBubble.children.length === 0;
 }

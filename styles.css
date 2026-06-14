@@ -1136,6 +1136,32 @@ h1 {
   line-height: 1.65;
 }
 
+.modal-body .stat-list,
+.modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.modal-body .stat-list span,
+.modal-grid label {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(24, 32, 28, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 252, 244, 0.74);
+  color: #405347;
+  font-size: 13px;
+}
+
+.modal-grid input,
+.modal-grid select {
+  width: 100%;
+  margin-top: 4px;
+  min-width: 0;
+}
+
 .modal-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2200,6 +2226,11 @@ h1 {
   }
 
   .auction-stage {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-body .stat-list,
+  .modal-grid {
     grid-template-columns: 1fr;
   }
 
