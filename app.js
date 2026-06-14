@@ -61,6 +61,7 @@ const els = {
   roomStatus: document.querySelector("#roomStatus"),
   roomCount: document.querySelector("#roomCount"),
   roomSummary: document.querySelector("#roomSummary"),
+  roomPlayerList: document.querySelector("#roomPlayerList"),
   startScreen: document.querySelector("#startScreen"),
   appShell: document.querySelector("#appShell"),
   iconPicker: document.querySelector("#iconPicker"),
@@ -704,6 +705,9 @@ const state = {
   roomAuction: null,
   roomTournament: null,
   roomAdventureLobby: null,
+  roomWorldAdventureId: "",
+  currentAction: "操作中",
+  currentActionAt: Date.now(),
   selectedSectIcon: "峰",
   currentMap: "central",
   tournamentOpen: false,
@@ -1701,6 +1705,10 @@ function flashFeedback(text, tone = "") {
 function runActionWithFeedback(label, handler) {
   const before = state.logs.length;
   (handler || closeModal)();
+  if (state.multiplayer && state.roomConnected) {
+    const clean = String(label || "操作").replace(/\s+/g, " ").trim();
+    markPlayerAction(state.waitingForPlayers ? "已提交本年操作，等待全员" : clean, true);
+  }
   if (state.logs.length === before) {
     const clean = String(label || "操作").replace(/\s+/g, " ").trim();
     flashFeedback(`已操作：${clean.length > 28 ? `${clean.slice(0, 28)}...` : clean}`);
@@ -1739,6 +1747,59 @@ function showGameShell() {
   els.appShell?.classList.remove("is-hidden");
 }
 
+function markPlayerAction(label = "操作中", broadcast = true) {
+  state.currentAction = String(label || "操作中").replace(/\s+/g, " ").trim().slice(0, 32) || "操作中";
+  state.currentActionAt = Date.now();
+  if (broadcast && state.multiplayer && state.roomConnected) syncPublicState();
+}
+
+function isPlayerReadyForYear(player, year = state.year) {
+  return Boolean(player?.ready) && Number(player.readyYear || 0) === Number(year);
+}
+
+function areRoomPlayersReadyForYear(players = net.lastPlayers, year = state.year) {
+  const founded = (players || []).filter((player) => player?.founded);
+  return founded.length > 0 && founded.every((player) => isPlayerReadyForYear(player, year));
+}
+
+function refreshSelectedRemotePlayer() {
+  if (state.selected?.type !== "remotePlayer") return;
+  const fresh = state.remotePlayers.find((player) => player.id === state.selected.id);
+  if (fresh) state.selected = fresh;
+}
+
+function renderRoomPlayerList(players = []) {
+  if (!els.roomPlayerList) return;
+  const uniquePlayers = Array.isArray(players)
+    ? Array.from(new Map(players.map((player, index) => [player.id || player.name || `player-${index}`, player])).values())
+    : [];
+  if (!state.multiplayer && !state.roomConnected) {
+    els.roomPlayerList.hidden = true;
+    els.roomPlayerList.innerHTML = "";
+    return;
+  }
+  const selfId = state.clientId;
+  const rows = uniquePlayers
+    .sort((a, b) => (a.id === selfId ? -1 : b.id === selfId ? 1 : String(a.name || "").localeCompare(String(b.name || ""))))
+    .map((player) => {
+      const ready = isPlayerReadyForYear(player);
+      const stale = Number(player.year || state.year) !== Number(state.year);
+      const status = ready ? "已提交" : stale ? `年份${player.year || "?"}` : "操作中";
+      const action = player.activity || (ready ? "等待全员" : "操作中");
+      return `
+        <article class="room-player ${ready ? "is-ready" : ""} ${stale ? "is-stale" : ""}">
+          <div>
+            <strong>${tradeEscape(player.name || "未立宗门")}${player.id === selfId ? "（我）" : ""}</strong>
+            <span>${tradeEscape(status)} · ${tradeEscape(action)}</span>
+          </div>
+          <em>战力 ${Math.round(player.power || 0)} · 弟子 ${player.disciples || 0} · ${tradeEscape(realms[player.maxRealm || 0] || "凡人")}</em>
+        </article>
+      `;
+    }).join("");
+  els.roomPlayerList.innerHTML = rows || `<article class="room-player"><div><strong>等待连接</strong><span>暂无玩家状态</span></div></article>`;
+  els.roomPlayerList.hidden = false;
+}
+
 function updateRoomPopulation(players = []) {
   const uniquePlayers = Array.isArray(players)
     ? Array.from(new Map(players.map((player, index) => [player.id || player.name || `player-${index}`, player])).values())
@@ -1753,6 +1814,7 @@ function updateRoomPopulation(players = []) {
     els.roomSummary.textContent = `${connectedText}${state.roomHost ? " · 房主" : ""}${suffix}`;
     els.roomSummary.hidden = !(state.multiplayer || state.roomConnected);
   }
+  renderRoomPlayerList(uniquePlayers.length ? uniquePlayers : roomPopulationSnapshot());
 }
 
 function roomPopulationSnapshot() {
@@ -1867,6 +1929,7 @@ function connectMultiplayerRoom(roomCode = roomCodeValue()) {
       if (els.multiplayerToggle) els.multiplayerToggle.checked = true;
       if (els.roomPanel) els.roomPanel.hidden = false;
       updateRoomStatus(`已连接房间 ${roomCode}`, "online");
+      markPlayerAction("已连接房间", false);
       net.lastPlayers = [getPublicPlayerState()];
       updateRoomPopulation(net.lastPlayers);
       sendNet("join", { player: getPublicPlayerState() });
@@ -2231,9 +2294,25 @@ function getPublicPlayerState() {
     year: state.year,
     power: state.founded ? sectPower() : 0,
     stones: Math.round(sect.stones || 0),
+    grain: Math.round(sect.grain || 0),
+    prestige: Math.round(sect.prestige || 0),
+    alchemyMats: Math.round(sect.alchemyMats || 0),
+    forgingMats: Math.round(sect.forgingMats || 0),
+    arrayMats: Math.round(sect.arrayMats || 0),
+    aura: Math.round(sect.aura || 0),
+    risk: Math.round(sect.risk || 0),
+    resource: Math.round(sect.resource || 0),
+    barrier: Math.round(sect.barrier || 0),
+    buildings: { ...(sect.buildings || {}) },
+    actionPoints: state.actionPoints || 0,
+    maxActionPoints: state.maxActionPoints || 0,
     disciples: sect.disciples?.length || 0,
     maxRealm: sect.disciples?.length ? Math.max(...sect.disciples.map((d) => d.realm)) : 0,
+    topDisciple: sect.disciples?.length ? sect.disciples.slice().sort((a, b) => discipleBattleScore(b) - discipleBattleScore(a))[0]?.name : "",
     ready: Boolean(state.waitingForPlayers),
+    readyYear: state.waitingForPlayers ? state.year : 0,
+    activity: state.waitingForPlayers ? "等待全员进入下一年" : (state.currentAction || "操作中"),
+    activityAt: state.currentActionAt || Date.now(),
     forbiddenFloor: state.forbiddenRun?.floor || 0,
     allies: Object.keys(state.roomAlliances || {}).filter((key) => key.includes(state.clientId)),
   };
@@ -2254,10 +2333,12 @@ function handleNetMessage(msg) {
   if (msg.type === "room_state") {
     net.lastPlayers = msg.players || [];
     state.remotePlayers = (msg.players || []).filter((p) => p.id !== state.clientId).map((p) => ({ ...p, type: "remotePlayer" }));
-    state.readyPlayers = (msg.players || []).filter((p) => p.ready).map((p) => p.id);
+    state.readyPlayers = (msg.players || []).filter((p) => isPlayerReadyForYear(p)).map((p) => p.id);
+    refreshSelectedRemotePlayer();
     updateRoomPopulation(net.lastPlayers);
     updateForbiddenRoomBlock(msg.players || []);
     updateMultiplayerWaitingText(msg.players || []);
+    if (state.waitingForPlayers && areRoomPlayersReadyForYear(msg.players || [], state.year)) onRoomAllReady({ ...msg, year: state.year });
     render();
   }
   if (msg.type === "player_event" && msg.text) {
@@ -2295,6 +2376,15 @@ function handleRoomFeatureMessage(msg) {
   }
   if (action === "trade_cancel") {
     handleCancelledTrade(payload, msg.sourceName);
+    return;
+  }
+  if (action === "world_adventure_open") {
+    const setup = normalizeRoomWorldAdventureSetup(payload.adventure);
+    if (!setup || setup.id === state.roomWorldAdventureId || !state.founded || state.year !== setup.year) return;
+    state.roomWorldAdventureId = setup.id;
+    state.nextWorldAdventureYear = setup.nextYear || state.nextWorldAdventureYear;
+    markPlayerAction("响应世界奇遇", true);
+    showWorldAdventurePicker(null, setup);
     return;
   }
   if (action === "alliance_request" && payload.targetId === state.clientId) {
@@ -2421,7 +2511,7 @@ function updateMultiplayerWaitingText(players = []) {
     els.waitingText.textContent = `${state.roomBlockedByForbidden.name}正在禁地爬塔，第 ${state.roomBlockedByForbidden.floor}/20 层。`;
     return;
   }
-  const ready = players.filter((p) => p.ready).length;
+  const ready = players.filter((p) => isPlayerReadyForYear(p)).length;
   const total = Math.max(1, players.length);
   const forbidden = players.find((p) => p.forbiddenFloor);
   els.waitingText.textContent = forbidden
@@ -2447,6 +2537,17 @@ function updateForbiddenRoomBlock(players = []) {
 
 function onRoomAllReady(msg) {
   if (!state.multiplayer) return;
+  const players = Array.isArray(msg?.players) && msg.players.length ? msg.players : (net.lastPlayers.length ? net.lastPlayers : roomPopulationSnapshot());
+  if (!state.waitingForPlayers) {
+    syncPublicState();
+    updateRoomPopulation(players.length ? players : roomPopulationSnapshot());
+    return;
+  }
+  if (!areRoomPlayersReadyForYear(players, state.year)) {
+    updateMultiplayerWaitingText(players);
+    syncPublicState();
+    return;
+  }
   els.otherReadyDot.classList.add("ready");
   els.waitingText.textContent = `房间 ${state.roomCode} 全员完成，正在同步进入下一年。`;
   state.waitingForPlayers = false;
@@ -3470,6 +3571,7 @@ function submitMultiplayerTurn() {
   if (state.waitingForPlayers) return;
   if (state.roomConnected) {
     state.waitingForPlayers = true;
+    markPlayerAction("已提交本年操作，等待全员", false);
     els.waitingOverlay.hidden = false;
     els.otherReadyDot.classList.remove("ready");
     els.waitingText.textContent = "已提交本年操作，等待房间内其他玩家完成。";
@@ -3556,6 +3658,8 @@ function resolveYearAdvance() {
   } else {
     nextYearStep();
   }
+  markPlayerAction(`太初 ${state.year} 年操作中`, false);
+  if (state.multiplayer && state.roomConnected) syncPublicState();
   render();
 }
 
@@ -3596,6 +3700,15 @@ function showAiReportModal(afterClose = null) {
 
 function maybeStartWorldAdventure(afterClose) {
   if (!state.founded || state.year < state.nextWorldAdventureYear || state.sect.disciples.length === 0) return false;
+  if (state.multiplayer && state.roomConnected) {
+    const setup = createRoomWorldAdventureSetup();
+    if (state.roomWorldAdventureId === setup.id) return false;
+    state.roomWorldAdventureId = setup.id;
+    state.nextWorldAdventureYear = setup.nextYear;
+    sendRoomFeature("world_adventure_open", { adventure: setup });
+    showWorldAdventurePicker(afterClose, setup);
+    return true;
+  }
   state.nextWorldAdventureYear = state.year + rand(4, 7);
   showWorldAdventurePicker(afterClose);
   return true;
@@ -4039,6 +4152,50 @@ function generateIntelReports(force = false) {
   return state.intelReports;
 }
 
+function stableHash(text = "") {
+  let hash = 2166136261;
+  for (let i = 0; i < String(text).length; i += 1) {
+    hash ^= String(text).charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function stableRange(seed, min, max) {
+  const span = Math.max(1, max - min + 1);
+  return min + (stableHash(seed) % span);
+}
+
+function createRoomWorldAdventureSetup() {
+  const base = `${state.roomCode || "solo"}:${state.year}:world-adventure`;
+  const themeIndex = stableHash(base) % worldAdventureThemes.length;
+  const theme = worldAdventureThemes[themeIndex];
+  const aiTeams = activeRivals().slice(0, 8).map((r, index) => ({
+    sect: r.name,
+    disciple: `${r.name.replace("遗址·", "").slice(0, 1)}门${stableRange(`${base}:disciple:${index}`, 1, 9)}`,
+    score: Math.round(r.power * 0.28 + r.disciples * 20 + stableRange(`${base}:score:${r.id || r.name}`, 80, 260)),
+  }));
+  return {
+    id: `${state.roomCode || "ROOM"}-${state.year}-${themeIndex}`,
+    year: state.year,
+    nextYear: state.year + stableRange(`${base}:next`, 4, 7),
+    themeIndex,
+    theme,
+    aiTeams,
+  };
+}
+
+function normalizeRoomWorldAdventureSetup(adventure) {
+  if (!adventure) return null;
+  const themeIndex = Number(adventure.themeIndex || 0);
+  return {
+    ...adventure,
+    themeIndex,
+    theme: worldAdventureThemes[themeIndex] || adventure.theme || worldAdventureThemes[0],
+    aiTeams: Array.isArray(adventure.aiTeams) ? adventure.aiTeams : [],
+  };
+}
+
 function openIntelBoard() {
   if (!state.founded) return;
   const free = state.yearlyBoon?.key === "intelBonus";
@@ -4062,9 +4219,9 @@ function openIntelBoard() {
   render();
 }
 
-function showWorldAdventurePicker(afterClose) {
-  const theme = pick(worldAdventureThemes);
-  const aiTeams = activeRivals().slice(0, 8).map((r) => ({
+function showWorldAdventurePicker(afterClose, setup = null) {
+  const theme = setup?.theme || pick(worldAdventureThemes);
+  const aiTeams = setup?.aiTeams || activeRivals().slice(0, 8).map((r) => ({
     sect: r.name,
     disciple: `${r.name.replace("遗址·", "").slice(0, 1)}门${rand(1, 9)}`,
     score: Math.round(r.power * 0.28 + r.disciples * 20 + rand(80, 260)),
@@ -7197,7 +7354,7 @@ function renderTarget() {
     addAction("在此立宗", () => foundSect(node), state.founded);
   } else if (node.type === "remotePlayer") {
     const allied = arePlayersAllied(state.clientId, node.id);
-    els.targetDetail.textContent = `联机玩家宗门。宗门：${node.name}，关系 ${allied ? "玩家盟友" : "未结盟"}，战力 ${Math.round(node.power || 0)}，弟子 ${node.disciples || 0}，最高境界 ${realms[node.maxRealm || 0]}，灵石 ${Math.round(node.stones || 0)}，年份 ${node.year || 1}。${node.ready ? "对方已提交本回合。" : "对方仍在操作。"}`;
+    els.targetDetail.innerHTML = renderRemotePlayerDetail(node, allied);
     els.hint.textContent = `联机宗门：${node.name}｜战力 ${Math.round(node.power || 0)}${allied ? "｜盟友" : ""}`;
     addAction(allied ? "已结盟" : "玩家结盟", () => requestRemoteAlliance(node), !state.founded || !state.roomConnected || allied);
     addAction("玩家交易", () => requestRemoteTrade(node), !state.founded || !state.roomConnected);
@@ -7421,6 +7578,33 @@ function selectAtEvent(evt) {
     return;
   }
   render();
+}
+
+function renderRemotePlayerDetail(node, allied) {
+  const b = node.buildings || {};
+  const stock = [
+    `灵石 ${Math.round(node.stones || 0)}`,
+    `粮草 ${Math.round(node.grain || 0)}`,
+    `丹材 ${Math.round(node.alchemyMats || 0)}`,
+    `器材 ${Math.round(node.forgingMats || 0)}`,
+    `阵材 ${Math.round(node.arrayMats || 0)}`,
+  ].join(" · ");
+  return `
+    <div class="remote-detail">
+      <p>联机玩家宗门。宗门：<strong>${tradeEscape(node.name)}</strong>，关系：${allied ? "玩家盟友" : "未结盟"}，状态：${tradeEscape(node.activity || (node.ready ? "等待回合" : "操作中"))}。</p>
+      <div class="stat-list">
+        <span>战力 ${Math.round(node.power || 0)}</span>
+        <span>弟子 ${node.disciples || 0}</span>
+        <span>最高 ${tradeEscape(realms[node.maxRealm || 0] || "凡人")}</span>
+        <span>年份 ${node.year || 1}</span>
+        <span>行动 ${node.actionPoints ?? "?"}/${node.maxActionPoints ?? "?"}</span>
+        <span>${node.ready && Number(node.readyYear || 0) === state.year ? "本年已提交" : "本年操作中"}</span>
+      </div>
+      <p>山门：灵气 ${Math.round(node.aura || 0)}，风险 ${Math.round(node.risk || 0)}，资源 ${Math.round(node.resource || 0)}，护山 ${Math.round(node.barrier || 0)}。</p>
+      <p>建筑：议事殿${b.commandHall || 0}、演武场${b.trainingHall || 0}、市集${b.market || 0}、观星楼${b.scoutTower || 0}。</p>
+      <p>仓库：${stock}。声望 ${Math.round(node.prestige || 0)}。最强弟子：${tradeEscape(node.topDisciple || "未同步")}。</p>
+    </div>
+  `;
 }
 
 canvas.addEventListener("click", (evt) => {
