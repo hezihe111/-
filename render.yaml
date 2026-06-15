@@ -1,7 +1,8 @@
 services:
   - type: web
-    name: cultivation-sect-sim
+    name: sect-simulator-room-server
     env: node
-    buildCommand: ""
-    startCommand: "npm start"
     plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz

@@ -8,48 +8,103 @@
   </head>
   <body>
     <section id="startScreen" class="start-screen">
-      <form id="startPanel" class="start-panel">
-        <button id="startCollapseBtn" class="start-collapse" type="button">收起选址</button>
-        <div class="start-hero">
-          <span>开局菜单</span>
-          <h2>山海宗门录</h2>
-          <p>先选择单机或联机模式，再进入大世界地图选择山门所在地。</p>
-        </div>
-        <label for="sectNameInput">宗门名</label>
-        <div class="name-row">
-          <input id="sectNameInput" maxlength="12" placeholder="例如：问道宗" autocomplete="off" />
-          <button id="randomNameBtn" type="button" title="随机宗门名">换名</button>
-        </div>
-        <label>宗门印记</label>
-        <div class="icon-picker" id="iconPicker">
-          <button type="button" data-icon="峰" class="is-active">峰</button>
-          <button type="button" data-icon="剑">剑</button>
-          <button type="button" data-icon="鼎">鼎</button>
-          <button type="button" data-icon="莲">莲</button>
-          <button type="button" data-icon="星">星</button>
-        </div>
-        <input id="multiplayerToggle" type="checkbox" hidden />
-        <div id="roomPanel" class="room-panel">
-          <label for="roomCodeInput">联机房间</label>
-          <div class="name-row">
-            <input id="roomCodeInput" maxlength="16" placeholder="例如：ZIHE01" autocomplete="off" />
-            <button id="roomConnectBtn" type="button">连接</button>
+      <div class="start-shell">
+        <div class="start-copy">
+          <span class="start-badge">联机宗门模拟 · 回合制修仙经营</span>
+          <h1>山海宗门录</h1>
+          <p>选址立宗、收徒养成、炼丹炼器、宗门大比、世界奇遇和联机竞拍，都从这一座山门开始。</p>
+          <div class="start-feature-grid">
+            <div><strong>多人同房</strong><span>竞拍、投票、大比、巨兽血量同步</span></div>
+            <div><strong>弟子养成</strong><span>功法顺序、装备词条、境界战力差距</span></div>
+            <div><strong>世界事件</strong><span>机缘奖励明示，奇遇可与盟友协作</span></div>
+            <div><strong>经营路线</strong><span>飞升、盟主、商业、阵法、魔道等结局</span></div>
           </div>
-          <p id="roomStatus" class="room-status">联机时输入同一个房间号，点击“联机模式”后进入正式游戏。</p>
-          <p id="roomCount" class="room-count">房间人数：0</p>
+          <div class="start-flow">
+            <span>1 命名宗门</span>
+            <span>2 选择模式</span>
+            <span>3 地图选址</span>
+            <span>4 开始第一年</span>
+          </div>
         </div>
-        <div class="mode-select" aria-label="选择游戏模式">
-          <button type="button" class="mode-card is-active" data-mode="solo">
-            <strong>单机模式</strong>
-            <span>AI 宗门自动发展，进入地图后选择山门所在地。</span>
-          </button>
-          <button type="button" class="mode-card" data-mode="multi">
-            <strong>联机模式</strong>
-            <span>连接同房间玩家，同回合操作，全员完成后进入下一年。</span>
-          </button>
-        </div>
-        <p class="author-note">作者声明：本作品为个人网页游戏原型，用于玩法测试与学习交流。by:zihe</p>
-      </form>
+        <form id="startPanel" class="start-panel">
+          <button id="startCollapseBtn" class="start-collapse" type="button">收起选址</button>
+          <div class="start-hero">
+            <span>开局菜单</span>
+            <h2>创建你的宗门</h2>
+            <p>先确定游玩方式。单机直接进入地图选址；联机会先进入房间大厅等待全员准备。</p>
+          </div>
+          <label for="sectNameInput">宗门名</label>
+          <div class="name-row">
+            <input id="sectNameInput" maxlength="12" placeholder="例如：问道宗" autocomplete="off" />
+            <button id="randomNameBtn" type="button" title="随机宗门名">换名</button>
+          </div>
+          <label>宗门印记</label>
+          <div class="icon-picker" id="iconPicker">
+            <button type="button" data-icon="峰" class="is-active">峰</button>
+            <button type="button" data-icon="剑">剑</button>
+            <button type="button" data-icon="鼎">鼎</button>
+            <button type="button" data-icon="莲">莲</button>
+            <button type="button" data-icon="星">星</button>
+          </div>
+          <input id="multiplayerToggle" type="checkbox" hidden />
+          <div id="roomPanel" class="room-panel" hidden>
+            <label for="roomCodeInput">联机房间</label>
+            <div class="name-row">
+              <input id="roomCodeInput" maxlength="16" placeholder="输入房间号" autocomplete="off" />
+              <button id="roomConnectBtn" type="button">连接</button>
+            </div>
+            <p id="roomStatus" class="room-status">联机时输入同一个房间号，点击“联机模式”后进入正式游戏。</p>
+            <p id="roomCount" class="room-count">房间人数：0</p>
+          </div>
+          <div class="mode-select" aria-label="选择游戏模式">
+            <button type="button" class="mode-card is-active" data-mode="solo">
+              <strong>单机模式</strong>
+              <span>AI 宗门自动发展，进入地图后选择山门所在地。</span>
+            </button>
+            <button type="button" class="mode-card" data-mode="multi">
+              <strong>联机模式</strong>
+              <span>进入房间大厅，查看在线玩家，准备后由房主开始。</span>
+            </button>
+          </div>
+          <p class="author-note">作者声明：本作品为个人网页游戏原型，用于玩法测试与学习交流。by:zihe</p>
+        </form>
+        <section id="multiplayerLobby" class="start-panel multiplayer-lobby is-hidden" aria-live="polite">
+          <button id="lobbyBackBtn" class="start-collapse" type="button">返回开局菜单</button>
+          <div class="start-hero">
+            <span>联机房间</span>
+            <h2>等待宗门入席</h2>
+            <p>输入同一个房间号后连接。所有玩家准备后，房主可以开始游戏；已有联机存档可在这里直接读取。</p>
+          </div>
+          <label for="lobbyRoomCodeInput">房间号</label>
+          <div class="name-row room-code-row">
+            <input id="lobbyRoomCodeInput" maxlength="16" placeholder="例如：ZIHE01" autocomplete="off" />
+            <button id="lobbyConnectBtn" type="button">进入房间</button>
+          </div>
+          <div class="lobby-status-card">
+            <div>
+              <span>连接状态</span>
+              <strong id="lobbyRoomStatus">未连接房间</strong>
+            </div>
+            <div>
+              <span>房间人数</span>
+              <strong id="lobbyRoomCount">0</strong>
+            </div>
+            <div>
+              <span>当前身份</span>
+              <strong id="lobbyHostStatus">未入席</strong>
+            </div>
+          </div>
+          <div id="lobbyPlayerList" class="room-player-list lobby-player-list">
+            <article class="room-player"><div><strong>等待连接</strong><span>输入房间号后进入大厅</span></div></article>
+          </div>
+          <div class="lobby-actions">
+            <button id="lobbyReadyBtn" type="button" disabled>准备</button>
+            <button id="lobbyStartBtn" type="button" disabled>房主开始游戏</button>
+            <button id="lobbyLoadBtn" type="button" disabled>读取联机存档</button>
+          </div>
+          <p id="lobbySaveSummary" class="room-status">联机存档：暂无</p>
+        </section>
+      </div>
     </section>
 
     <main id="appShell" class="app-shell is-hidden">
@@ -60,6 +115,7 @@
             <h1>2D 大世界宗门模拟器</h1>
           </div>
           <div id="roomSummary" class="room-summary" hidden>房间人数：0</div>
+          <div id="roomPlayerList" class="room-player-list" hidden></div>
           <div class="season-box">
             <span id="season">开局择址</span>
             <strong id="year">太初 1 年</strong>

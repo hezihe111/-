@@ -60,6 +60,18 @@ const els = {
   roomConnectBtn: document.querySelector("#roomConnectBtn"),
   roomStatus: document.querySelector("#roomStatus"),
   roomCount: document.querySelector("#roomCount"),
+  multiplayerLobby: document.querySelector("#multiplayerLobby"),
+  lobbyBackBtn: document.querySelector("#lobbyBackBtn"),
+  lobbyRoomCodeInput: document.querySelector("#lobbyRoomCodeInput"),
+  lobbyConnectBtn: document.querySelector("#lobbyConnectBtn"),
+  lobbyRoomStatus: document.querySelector("#lobbyRoomStatus"),
+  lobbyRoomCount: document.querySelector("#lobbyRoomCount"),
+  lobbyHostStatus: document.querySelector("#lobbyHostStatus"),
+  lobbyPlayerList: document.querySelector("#lobbyPlayerList"),
+  lobbyReadyBtn: document.querySelector("#lobbyReadyBtn"),
+  lobbyStartBtn: document.querySelector("#lobbyStartBtn"),
+  lobbyLoadBtn: document.querySelector("#lobbyLoadBtn"),
+  lobbySaveSummary: document.querySelector("#lobbySaveSummary"),
   roomSummary: document.querySelector("#roomSummary"),
   roomPlayerList: document.querySelector("#roomPlayerList"),
   startScreen: document.querySelector("#startScreen"),
@@ -94,8 +106,12 @@ const realms = ["炼气", "筑基", "金丹", "元婴", "化神", "炼虚", "合
 const seasons = ["孟春", "仲夏", "白露", "霜降"];
 const playerSectPrefixes = ["归元", "问道", "长明", "栖霞", "太初", "扶摇", "玄心", "鸣玉", "照夜", "青冥"];
 const qualityNames = ["凡品", "良品", "上品", "极品", "地阶", "天阶"];
+const gearQualityNames = ["白", "绿", "蓝", "紫", "红"];
 const formationQualityNames = ["九品", "八品", "七品", "六品", "五品", "四品", "三品", "二品", "一品"];
 const SAVE_KEY = "cultivation-sect-sim-save-v1";
+const SAVE_SLOT_PREFIX = "cultivation-sect-sim-save-slot-v2-";
+const SAVE_SLOT_COUNT = 3;
+const ROOM_SAVE_PREFIX = "cultivation-sect-room-save-v1-";
 const omens = [
   { name: "天降灵雨", text: "本年探索收益提升，探索时更容易获得丹材与机缘。", key: "exploreBonus" },
   { name: "剑星入命", text: "本年对战战力提升，掠夺与大比更容易取胜。", key: "battleBonus" },
@@ -541,6 +557,49 @@ const itemCatalog = {
   starBow: { name: "星砂逐日弓", kind: "武器", equipment: true, slot: "weapon", text: "提升攻伐、气运与身法", apply: (d, q = 0) => { d.atk += 16 + q * 9; d.luck += 5 + q * 2; d.speed += 5 + q * 3; }, remove: (d, q = 0) => { d.atk -= 16 + q * 9; d.luck -= 5 + q * 2; d.speed -= 5 + q * 3; } },
   guardTalisman: { name: "玄龟护身符", kind: "法器", equipment: true, slot: "artifact", text: "提升守御与体魄", apply: (d, q = 0) => { d.def += 14 + q * 8; d.hp += 10 + q * 7; }, remove: (d, q = 0) => { d.def -= 14 + q * 8; d.hp -= 10 + q * 7; } },
   arrayCompass: { name: "七曜阵盘", kind: "法器", equipment: true, slot: "artifact", text: "提升阵道推演、防守与心性", arrayGear: 18, apply: (d, q = 0) => { d.def += 9 + q * 5; d.temper += 7 + q * 3; }, remove: (d, q = 0) => { d.def -= 9 + q * 5; d.temper -= 7 + q * 3; } },
+  cloudRobe: { name: "流云护身袍", kind: "防具", equipment: true, slot: "armor", text: "提升体魄与守御" },
+  spiritRing: { name: "聚灵戒", kind: "灵器", equipment: true, slot: "spirit", text: "提升资质、气运与功法熟练" },
+  shadowBoots: { name: "踏影履", kind: "饰品", equipment: true, slot: "accessory", text: "提升身法与闪避" },
+  flameMethod: { name: "焚心诀", kind: "功法", manual: true, text: "火属性攻法，提升攻伐与火伤", method: { id: "flameMethod", name: "焚心诀", role: "火攻", atk: 12, element: "火", elementDamage: 18, damagePct: 6 } },
+  waterMethod: { name: "沧浪回春诀", kind: "功法", manual: true, text: "水属性功法，提供回血与减伤", method: { id: "waterMethod", name: "沧浪回春诀", role: "回血", hp: 22, element: "水", heal: 18, reducePct: 5 } },
+  thunderMethod: { name: "紫霄雷法", kind: "功法", manual: true, text: "雷属性爆发功法，提升身法与雷伤", method: { id: "thunderMethod", name: "紫霄雷法", role: "雷攻", speed: 8, element: "雷", elementDamage: 24, damagePct: 8 } },
+  earthMethod: { name: "厚土玄功", kind: "功法", manual: true, text: "土属性防御功法，提升守御与护盾", method: { id: "earthMethod", name: "厚土玄功", role: "护盾", def: 16, element: "土", shield: 22, reducePct: 7 } },
+  refineStone: { name: "洗练灵砂", kind: "洗练材料", material: true, text: "用于重洗装备词条。来源：奇遇、资源点、流浪商人。" },
+  affixLock: { name: "定纹玉扣", kind: "洗练材料", material: true, text: "洗练时锁定词条位消耗。锁一位消耗 1，锁二位消耗 2，锁三位消耗 4，锁四位消耗 8。" },
+  severingSword: { name: "斩尘剑", kind: "武器", equipment: true, slot: "weapon", text: "适合高速剑修，偏攻伐与身法" },
+  bloodAxe: { name: "血魄战斧", kind: "武器", equipment: true, slot: "weapon", text: "重攻武器，偏爆发与体魄" },
+  jadeFlute: { name: "青玉灵箫", kind: "法器", equipment: true, slot: "artifact", text: "法器槽装备，偏心性、减伤与辅助" },
+  soulLamp: { name: "长明魂灯", kind: "法器", equipment: true, slot: "artifact", text: "法器槽装备，偏守御、气运与续航" },
+  scaleArmor: { name: "玄鳞甲", kind: "防具", equipment: true, slot: "armor", text: "厚重防具，偏守御与体魄" },
+  phoenixCape: { name: "赤羽披风", kind: "防具", equipment: true, slot: "armor", text: "火性防具，偏体魄与增伤" },
+  voidMirror: { name: "太虚镜", kind: "灵器", equipment: true, slot: "spirit", text: "灵器槽装备，偏资质、阴阳属性" },
+  thunderSeal: { name: "雷狱印", kind: "灵器", equipment: true, slot: "spirit", text: "灵器槽装备，偏雷伤与爆发" },
+  windBelt: { name: "御风带", kind: "饰品", equipment: true, slot: "accessory", text: "饰品槽装备，偏身法与先手" },
+  poisonNeedle: { name: "碧落毒针", kind: "饰品", equipment: true, slot: "accessory", text: "饰品槽装备，偏毒伤与奇袭" },
+  metalMethod: { name: "庚金破岳诀", kind: "功法", manual: true, text: "金属性破防攻法，攻伐与金伤成长" },
+  woodMethod: { name: "青木长生功", kind: "功法", manual: true, text: "木属性续航功法，回血与体魄成长" },
+  poisonMethod: { name: "万毒蚀心经", kind: "功法", manual: true, text: "毒属性持续伤害功法，偏毒伤与减防" },
+  yinMethod: { name: "太阴玄照录", kind: "功法", manual: true, text: "稀有阴属性功法，偏减伤、控制与阴伤" },
+  yangMethod: { name: "太阳真火经", kind: "功法", manual: true, text: "稀有阳属性功法，偏爆发、回血与阳伤" },
+  shieldMethod: { name: "琉璃金身诀", kind: "功法", manual: true, text: "护盾型功法，防守和护盾成长明显" },
+  hasteMethod: { name: "浮光掠影步", kind: "功法", manual: true, text: "身法型功法，抢先手和连击表现更好" },
+  bloodMethod: { name: "血煞燃灵术", kind: "功法", manual: true, text: "高风险增伤功法，偏爆发与攻伐" },
+  frostMethod: { name: "玄冰封脉诀", kind: "功法", manual: true, text: "水阴混合控制功法，偏减伤、缓速与冰寒伤害" },
+  windMethod: { name: "御风追星步", kind: "功法", manual: true, text: "高速游斗功法，偏身法、先手与少量雷伤" },
+  rockMethod: { name: "镇岳搬山经", kind: "功法", manual: true, text: "重防功法，偏体魄、守御和厚土护盾" },
+  starMethod: { name: "星河照命录", kind: "功法", manual: true, text: "气运参悟功法，偏暴击、参悟和金雷混合爆发" },
+  shadowMethod: { name: "幽影蚀魂诀", kind: "功法", manual: true, text: "阴毒袭杀功法，偏毒伤、阴伤和破防" },
+  lifeMethod: { name: "万木回春真经", kind: "功法", manual: true, text: "木属性治疗功法，偏回血、体魄和持续作战" },
+  swordStormMethod: { name: "万剑归宗诀", kind: "功法", manual: true, text: "金属性连斩功法，偏攻伐、破防和会心" },
+  dragonMethod: { name: "龙象镇狱功", kind: "功法", manual: true, text: "体修镇压功法，偏体魄、守御和爆发反击" },
+  voidMethod: { name: "太虚挪移法", kind: "功法", manual: true, text: "稀有身法功法，偏闪避、减伤和阴阳奇袭" },
+  lotusMethod: { name: "净世莲华诀", kind: "功法", manual: true, text: "净化辅助功法，偏治疗、护盾和心性稳定" },
+  mirrorMethod: { name: "明镜返照功", kind: "功法", manual: true, text: "反制型功法，偏减伤、护盾和反击增伤" },
+  beastMethod: { name: "驭兽通灵诀", kind: "功法", manual: true, text: "边境讨伐功法，偏体魄、攻伐和妖兽战增伤" },
+  rainMethod: { name: "甘霖渡厄篇", kind: "功法", manual: true, text: "团队续航功法，偏回血、减伤和渡劫稳定" },
+  sunMethod: { name: "大日焚天经", kind: "功法", manual: true, text: "顶级阳火功法，偏阳伤、火伤、回血和爆发" },
+  moonMethod: { name: "寒月照神章", kind: "功法", manual: true, text: "顶级阴水功法，偏阴伤、减伤、缓速和心性" },
+  plagueMethod: { name: "瘟云百厄经", kind: "功法", manual: true, text: "毒属性压制功法，偏持续毒伤、破防和削弱" },
 };
 const alchemyRecipes = [
   { id: "qiPill", name: "聚气丹方", output: "qiPill", stones: 90, generic: 1, materials: { jadeDew: 1 }, source: "云海秘境、洗髓灵泉、药园类机缘" },
@@ -559,8 +618,165 @@ const forgingRecipes = [
   { id: "starBow", name: "星砂逐日弓图", output: "starBow", stones: 260, generic: 2, materials: { starSand: 2, dragonBone: 1 }, source: "星陨坑、龙骨浅滩、世界奇遇" },
   { id: "guardTalisman", name: "玄龟护身符图", output: "guardTalisman", stones: 160, generic: 1, materials: { redCopper: 1 }, source: "地火窟、沉舟宝库、矿脉类机缘" },
   { id: "arrayCompass", name: "七曜阵盘图", output: "arrayCompass", stones: 320, generic: 2, materials: { coldIron: 1, starSand: 1, dragonBone: 1 }, source: "荒塔问心、古碑裂隙、龙骨浅滩类机缘" },
+  { id: "cloudRobe", name: "流云护身袍图", output: "cloudRobe", stones: 210, generic: 1, materials: { starSand: 1, redCopper: 1 }, source: "云海秘境、世界奇遇、流浪商人" },
+  { id: "spiritRing", name: "聚灵戒图", output: "spiritRing", stones: 260, generic: 2, materials: { dragonBone: 1, starSand: 1 }, source: "灵泉、古碑裂隙、拍卖会" },
+  { id: "shadowBoots", name: "踏影履图", output: "shadowBoots", stones: 190, generic: 1, materials: { coldIron: 1, redCopper: 1 }, source: "幽谷、妖兽巢穴、流浪商人" },
+  { id: "severingSword", name: "斩尘剑图", output: "severingSword", stones: 260, generic: 2, materials: { coldIron: 2, starSand: 1 }, source: "剑冢、拍卖会、流浪商人" },
+  { id: "bloodAxe", name: "血魄战斧图", output: "bloodAxe", stones: 300, generic: 2, materials: { redCopper: 2, dragonBone: 1 }, source: "妖兽巢穴、边境、地火窟" },
+  { id: "jadeFlute", name: "青玉灵箫图", output: "jadeFlute", stones: 240, generic: 1, materials: { starSand: 1, dragonBone: 1 }, source: "仙市、古碑、云海" },
+  { id: "soulLamp", name: "长明魂灯图", output: "soulLamp", stones: 340, generic: 2, materials: { dragonBone: 1, redCopper: 1, starSand: 1 }, source: "旧仙坟、世界奇遇、拍卖会" },
+  { id: "scaleArmor", name: "玄鳞甲图", output: "scaleArmor", stones: 310, generic: 2, materials: { dragonBone: 1, coldIron: 2 }, source: "龙骨浅滩、边境首领" },
+  { id: "phoenixCape", name: "赤羽披风图", output: "phoenixCape", stones: 330, generic: 2, materials: { redCopper: 2, starSand: 1 }, source: "地火窟、星陨坑、流浪商人" },
+  { id: "voidMirror", name: "太虚镜图", output: "voidMirror", stones: 520, generic: 3, materials: { starSand: 2, dragonBone: 2 }, source: "世界奇遇、拍卖会" },
+  { id: "thunderSeal", name: "雷狱印图", output: "thunderSeal", stones: 420, generic: 2, materials: { redCopper: 1, starSand: 2 }, source: "雷池、边境、拍卖会" },
+  { id: "windBelt", name: "御风带图", output: "windBelt", stones: 220, generic: 1, materials: { starSand: 1, coldIron: 1 }, source: "云海、幽谷、流浪商人" },
+  { id: "poisonNeedle", name: "碧落毒针图", output: "poisonNeedle", stones: 260, generic: 1, materials: { redCopper: 1, dragonBone: 1 }, source: "毒沼、妖兽巢穴、黑市" },
 ];
 const forgingMaterialIds = ["coldIron", "starSand", "dragonBone", "redCopper"];
+const gearSlots = [
+  { key: "weapon", name: "武器" },
+  { key: "artifact", name: "法器" },
+  { key: "armor", name: "防具" },
+  { key: "spirit", name: "灵器" },
+  { key: "accessory", name: "饰品" },
+  { key: "relic", name: "遗物" },
+];
+const gearBaseStats = {
+  weapon: { atk: 18, speed: 4 },
+  artifact: { def: 12, temper: 6 },
+  armor: { hp: 24, def: 12 },
+  spirit: { aptitude: 7, luck: 7 },
+  accessory: { speed: 14, charm: 3 },
+};
+const affixRarities = [
+  { key: "white", name: "白", weight: 40, mult: 1 },
+  { key: "green", name: "绿", weight: 30, mult: 1.35 },
+  { key: "blue", name: "蓝", weight: 15, mult: 1.8 },
+  { key: "purple", name: "紫", weight: 10, mult: 2.45 },
+  { key: "red", name: "红", weight: 5, mult: 3.35 },
+];
+const elementNames = ["金", "木", "水", "火", "土", "雷", "毒", "阴", "阳"];
+const gearAffixPool = [
+  { key: "atk", name: "攻伐", stat: "atk", base: 8, text: "攻伐提高" },
+  { key: "def", name: "守御", stat: "def", base: 7, text: "守御提高" },
+  { key: "hp", name: "体魄", stat: "hp", base: 18, text: "体魄提高" },
+  { key: "speed", name: "身法", stat: "speed", base: 6, text: "身法提高" },
+  { key: "temper", name: "心性", stat: "temper", base: 5, text: "心性提高" },
+  { key: "luck", name: "气运", stat: "luck", base: 5, text: "气运提高" },
+  { key: "damagePct", name: "增伤", stat: "damagePct", base: 3, pct: true, text: "造成伤害提高" },
+  { key: "reducePct", name: "减伤", stat: "reducePct", base: 3, pct: true, text: "受到伤害降低" },
+  { key: "critPct", name: "会心", stat: "critPct", base: 3, pct: true, text: "暴击率提高" },
+  { key: "critDamage", name: "会伤", stat: "critDamage", base: 8, pct: true, text: "暴击伤害提高" },
+  { key: "lifeSteal", name: "饮血", stat: "lifeSteal", base: 3, pct: true, text: "造成伤害时回血" },
+  { key: "pierce", name: "破防", stat: "pierce", base: 5, pct: true, text: "忽略部分守御" },
+  { key: "shieldPower", name: "护盾", stat: "shieldPower", base: 8, text: "战斗开局护盾" },
+  { key: "methodMastery", name: "悟性", stat: "methodMastery", base: 5, pct: true, text: "功法效果提高" },
+  { key: "metalDamage", name: "金伤", stat: "金", element: true, base: 8, text: "金属性伤害" },
+  { key: "woodDamage", name: "木伤", stat: "木", element: true, base: 8, text: "木属性伤害" },
+  { key: "waterDamage", name: "水伤", stat: "水", element: true, base: 8, text: "水属性伤害" },
+  { key: "fireDamage", name: "火伤", stat: "火", element: true, base: 9, text: "火属性伤害" },
+  { key: "earthDamage", name: "土伤", stat: "土", element: true, base: 8, text: "土属性伤害" },
+  { key: "thunderDamage", name: "雷伤", stat: "雷", element: true, base: 10, text: "雷属性伤害" },
+  { key: "poisonDamage", name: "毒伤", stat: "毒", element: true, base: 9, text: "毒属性伤害" },
+  { key: "yinDamage", name: "阴伤", stat: "阴", element: true, base: 12, rare: true, text: "阴属性伤害" },
+  { key: "yangDamage", name: "阳伤", stat: "阳", element: true, base: 12, rare: true, text: "阳属性伤害" },
+];
+const methodCatalog = {
+  swordManual: { id: "swordManual", name: "残缺剑诀", rarity: 1, role: "剑诀", atk: 10, speed: 5, damagePct: 3, element: "金", elementDamage: 8 },
+  flameMethod: { id: "flameMethod", name: "焚心诀", rarity: 2, role: "火攻", atk: 12, damagePct: 6, element: "火", elementDamage: 18 },
+  waterMethod: { id: "waterMethod", name: "沧浪回春诀", rarity: 2, role: "回血", hp: 22, reducePct: 5, element: "水", heal: 18 },
+  thunderMethod: { id: "thunderMethod", name: "紫霄雷法", rarity: 3, role: "雷攻", speed: 8, damagePct: 8, element: "雷", elementDamage: 24 },
+  earthMethod: { id: "earthMethod", name: "厚土玄功", rarity: 2, role: "护盾", def: 16, reducePct: 7, element: "土", shield: 22 },
+  metalMethod: { id: "metalMethod", name: "庚金破岳诀", rarity: 2, role: "破防", atk: 15, damagePct: 5, element: "金", elementDamage: 20, pierce: 8 },
+  woodMethod: { id: "woodMethod", name: "青木长生功", rarity: 2, role: "续航", hp: 30, reducePct: 4, element: "木", heal: 24 },
+  poisonMethod: { id: "poisonMethod", name: "万毒蚀心经", rarity: 3, role: "毒伤", atk: 8, damagePct: 5, element: "毒", elementDamage: 28, poison: 18 },
+  yinMethod: { id: "yinMethod", name: "太阴玄照录", rarity: 4, role: "控制", def: 10, reducePct: 10, element: "阴", elementDamage: 32, slow: 12 },
+  yangMethod: { id: "yangMethod", name: "太阳真火经", rarity: 4, role: "爆发", atk: 18, damagePct: 12, element: "阳", elementDamage: 34, heal: 12 },
+  shieldMethod: { id: "shieldMethod", name: "琉璃金身诀", rarity: 3, role: "护盾", def: 24, reducePct: 8, element: "土", shield: 36 },
+  hasteMethod: { id: "hasteMethod", name: "浮光掠影步", rarity: 2, role: "先手", speed: 24, damagePct: 3, element: "雷", elementDamage: 10 },
+  bloodMethod: { id: "bloodMethod", name: "血煞燃灵术", rarity: 3, role: "爆发", atk: 24, damagePct: 14, element: "火", elementDamage: 20, selfHurt: 8 },
+  frostMethod: { id: "frostMethod", name: "玄冰封脉诀", rarity: 3, role: "控制", def: 12, speed: 4, reducePct: 8, element: "水", elementDamage: 24, slow: 12 },
+  windMethod: { id: "windMethod", name: "御风追星步", rarity: 2, role: "先手", speed: 28, damagePct: 5, element: "雷", elementDamage: 14 },
+  rockMethod: { id: "rockMethod", name: "镇岳搬山经", rarity: 3, role: "重防", hp: 42, def: 22, reducePct: 9, element: "土", shield: 28 },
+  starMethod: { id: "starMethod", name: "星河照命录", rarity: 4, role: "会心", luck: 20, speed: 8, damagePct: 10, element: "金", elementDamage: 26, critPct: 8 },
+  shadowMethod: { id: "shadowMethod", name: "幽影蚀魂诀", rarity: 4, role: "袭杀", atk: 18, damagePct: 10, element: "阴", elementDamage: 28, poison: 16, pierce: 10 },
+  lifeMethod: { id: "lifeMethod", name: "万木回春真经", rarity: 3, role: "治疗", hp: 48, reducePct: 5, element: "木", heal: 34 },
+  swordStormMethod: { id: "swordStormMethod", name: "万剑归宗诀", rarity: 4, role: "破防", atk: 28, speed: 8, damagePct: 12, element: "金", elementDamage: 30, pierce: 14 },
+  dragonMethod: { id: "dragonMethod", name: "龙象镇狱功", rarity: 4, role: "体修", hp: 60, atk: 18, def: 18, damagePct: 8, element: "土", shield: 24 },
+  voidMethod: { id: "voidMethod", name: "太虚挪移法", rarity: 5, role: "奇袭", speed: 36, reducePct: 12, damagePct: 8, element: "阴", elementDamage: 36, slow: 16 },
+  lotusMethod: { id: "lotusMethod", name: "净世莲华诀", rarity: 4, role: "辅助", hp: 34, temper: 16, reducePct: 8, element: "木", heal: 30, shield: 18 },
+  mirrorMethod: { id: "mirrorMethod", name: "明镜返照功", rarity: 3, role: "反制", def: 22, reducePct: 10, damagePct: 5, element: "水", shield: 30 },
+  beastMethod: { id: "beastMethod", name: "驭兽通灵诀", rarity: 3, role: "讨伐", atk: 18, hp: 30, damagePct: 9, element: "木", elementDamage: 18 },
+  rainMethod: { id: "rainMethod", name: "甘霖渡厄篇", rarity: 3, role: "续航", hp: 38, temper: 12, reducePct: 7, element: "水", heal: 32 },
+  sunMethod: { id: "sunMethod", name: "大日焚天经", rarity: 5, role: "阳火", atk: 32, damagePct: 16, element: "阳", elementDamage: 46, heal: 18 },
+  moonMethod: { id: "moonMethod", name: "寒月照神章", rarity: 5, role: "阴水", def: 22, temper: 18, reducePct: 13, element: "阴", elementDamage: 42, slow: 18 },
+  plagueMethod: { id: "plagueMethod", name: "瘟云百厄经", rarity: 4, role: "毒压", atk: 16, damagePct: 8, element: "毒", elementDamage: 34, poison: 24, pierce: 8 },
+};
+Object.assign(itemCatalog, {
+  cloudSword: { name: "流云问心剑", kind: "装备", equipment: true, slot: "weapon", stats: { atk: 28, speed: 10 }, text: "剑光如云，适合先手压制。" },
+  meteorHammer: { name: "陨星镇岳锤", kind: "装备", equipment: true, slot: "weapon", stats: { atk: 36, hp: 18 }, text: "重器破阵，爆发高但更吃体魄。" },
+  jadeFan: { name: "青玉万象扇", kind: "装备", equipment: true, slot: "weapon", stats: { atk: 20, luck: 14, charm: 8 }, text: "攻守兼备，适合机缘探索。" },
+  dragonSaber: { name: "蟠龙断海刀", kind: "装备", equipment: true, slot: "weapon", stats: { atk: 34, damagePct: 4 }, text: "刀势大开大合，越战越烈。" },
+  voidDagger: { name: "太虚影刃", kind: "装备", equipment: true, slot: "weapon", stats: { atk: 24, speed: 22, pierce: 5 }, text: "贴身破防，适合身法弟子。" },
+  sunStaff: { name: "大日扶桑杖", kind: "装备", equipment: true, slot: "weapon", stats: { atk: 26, hp: 24, elementDamage: { "阳": 10 } }, text: "阳火入骨，兼顾回复功法。" },
+  moonBell: { name: "寒月摄魂铃", kind: "装备", equipment: true, slot: "artifact", stats: { def: 14, temper: 18, reducePct: 3 }, text: "铃声定魂，可压低心魔风险。" },
+  spiritGourd: { name: "紫府纳灵葫", kind: "装备", equipment: true, slot: "artifact", stats: { hp: 32, luck: 12 }, text: "纳灵养身，适合长线副本。" },
+  thunderDrum: { name: "九霄雷鼓", kind: "装备", equipment: true, slot: "artifact", stats: { atk: 22, speed: 12, elementDamage: { "雷": 12 } }, text: "雷鼓一响，先手与雷伤并进。" },
+  fateBrush: { name: "命书判星笔", kind: "装备", equipment: true, slot: "artifact", stats: { luck: 22, critPct: 4, charm: 8 }, text: "改写一线命数，偏向暴击与奇遇。" },
+  soulBanner: { name: "幽都摄魂幡", kind: "装备", equipment: true, slot: "artifact", stats: { atk: 18, def: 12, elementDamage: { "阴": 12 } }, text: "阴属罕见法器，适合控制流。" },
+  iceArmor: { name: "玄霜锁灵甲", kind: "装备", equipment: true, slot: "armor", stats: { hp: 44, def: 20, reducePct: 3 }, text: "厚甲锁灵，稳定承伤。" },
+  lotusRobe: { name: "净莲无垢衣", kind: "装备", equipment: true, slot: "armor", stats: { hp: 34, temper: 16, luck: 8 }, text: "适合辅助与探索弟子。" },
+  demonMail: { name: "镇魔黑鳞铠", kind: "装备", equipment: true, slot: "armor", stats: { hp: 52, def: 18, atk: 8 }, text: "黑鳞护身，偏向近战硬拼。" },
+  starMantle: { name: "星河披霞裘", kind: "装备", equipment: true, slot: "armor", stats: { hp: 30, speed: 10, reducePct: 4 }, text: "以星辉卸力，适合高阶斗法。" },
+  phoenixPearl: { name: "凤血涅槃珠", kind: "装备", equipment: true, slot: "spirit", stats: { hp: 36, damagePct: 3, lifeSteal: 4 }, text: "涅槃血气，提升续航。" },
+  abyssSeal: { name: "渊海归墟印", kind: "装备", equipment: true, slot: "spirit", stats: { def: 18, elementDamage: { "水": 12 }, shieldPower: 16 }, text: "水属镇压，开局护盾更厚。" },
+  fiveElementOrb: { name: "五行轮转珠", kind: "装备", equipment: true, slot: "spirit", stats: { atk: 12, def: 12, hp: 24, elementDamage: { "金": 5, "木": 5, "水": 5, "火": 5, "土": 5 } }, text: "五行小成，属性伤害全面。" },
+  cloudBoots: { name: "踏云逐月履", kind: "装备", equipment: true, slot: "accessory", stats: { speed: 30, luck: 8 }, text: "极大提升身法先手。" },
+  jadePendant: { name: "玄玉养魂佩", kind: "装备", equipment: true, slot: "accessory", stats: { temper: 22, hp: 22, reducePct: 2 }, text: "养魂安神，适合禁地外的长线养成。" },
+  bloodCharm: { name: "赤血同心符", kind: "装备", equipment: true, slot: "accessory", stats: { atk: 16, critDamage: 10, lifeSteal: 3 }, text: "血符燃战，爆发与吸血兼顾。" },
+});
+const extraMethodCatalog = {
+  cloudRainMethod: { id: "cloudRainMethod", name: "行云布雨诀", rarity: 2, role: "群疗", hp: 26, reducePct: 4, element: "水", heal: 26, shield: 10 },
+  firePhoenixMethod: { id: "firePhoenixMethod", name: "离火凤鸣经", rarity: 4, role: "火爆", atk: 26, speed: 6, damagePct: 13, element: "火", elementDamage: 36 },
+  goldenBodyMethod: { id: "goldenBodyMethod", name: "不坏金身录", rarity: 3, role: "重防", hp: 54, def: 26, reducePct: 9, element: "金", shield: 30 },
+  thousandShadowMethod: { id: "thousandShadowMethod", name: "千影幻身步", rarity: 3, role: "闪击", speed: 34, damagePct: 6, element: "雷", elementDamage: 18, slow: 8 },
+  greenVineMethod: { id: "greenVineMethod", name: "青藤缚灵术", rarity: 2, role: "控制", hp: 24, def: 10, element: "木", elementDamage: 16, slow: 12 },
+  deepSeaMethod: { id: "deepSeaMethod", name: "沧海归元诀", rarity: 3, role: "续航", hp: 44, def: 12, reducePct: 7, element: "水", heal: 38 },
+  earthPulseMethod: { id: "earthPulseMethod", name: "地脉镇岳功", rarity: 3, role: "护阵", hp: 48, def: 24, element: "土", shield: 34, reducePct: 8 },
+  thunderPrisonMethod: { id: "thunderPrisonMethod", name: "紫霄雷狱典", rarity: 4, role: "雷控", atk: 24, speed: 14, damagePct: 10, element: "雷", elementDamage: 38, slow: 10 },
+  poisonFogMethod: { id: "poisonFogMethod", name: "碧落毒雾经", rarity: 3, role: "毒耗", atk: 12, damagePct: 6, element: "毒", elementDamage: 24, poison: 26 },
+  yinGhostMethod: { id: "yinGhostMethod", name: "玄阴鬼步", rarity: 4, role: "阴袭", speed: 26, reducePct: 8, element: "阴", elementDamage: 34, pierce: 8 },
+  yangHeartMethod: { id: "yangHeartMethod", name: "纯阳炼心诀", rarity: 4, role: "阳护", atk: 18, hp: 34, damagePct: 9, element: "阳", elementDamage: 32, heal: 20 },
+  fiveElementMethod: { id: "fiveElementMethod", name: "五行归藏录", rarity: 5, role: "五行", atk: 18, def: 18, hp: 36, damagePct: 9, reducePct: 7, element: "土", elementDamage: 40, shield: 18 },
+  swordHeartMethod: { id: "swordHeartMethod", name: "一剑生莲诀", rarity: 4, role: "剑修", atk: 32, speed: 10, damagePct: 14, element: "金", elementDamage: 30, critPct: 6 },
+  saberSoulMethod: { id: "saberSoulMethod", name: "霸刀断魂经", rarity: 4, role: "重击", atk: 38, hp: 20, damagePct: 15, element: "火", elementDamage: 28, selfHurt: 5 },
+  spearRiverMethod: { id: "spearRiverMethod", name: "长河贯日枪", rarity: 3, role: "穿刺", atk: 26, speed: 8, damagePct: 8, element: "水", elementDamage: 22, pierce: 12 },
+  bellGuardMethod: { id: "bellGuardMethod", name: "金钟护命篇", rarity: 2, role: "护盾", def: 20, hp: 30, reducePct: 6, element: "金", shield: 28 },
+  alchemyBreathMethod: { id: "alchemyBreathMethod", name: "丹息养元法", rarity: 2, role: "养元", hp: 36, temper: 14, element: "木", heal: 30 },
+  arrayStarMethod: { id: "arrayStarMethod", name: "星斗布阵录", rarity: 3, role: "阵修", def: 18, luck: 14, reducePct: 7, element: "金", shield: 24 },
+  merchantLuckMethod: { id: "merchantLuckMethod", name: "聚财通玄诀", rarity: 2, role: "奇遇", luck: 28, charm: 12, speed: 8, element: "木", heal: 14 },
+  beastRoarMethod: { id: "beastRoarMethod", name: "万兽震山吼", rarity: 3, role: "压制", atk: 22, hp: 34, damagePct: 8, element: "土", elementDamage: 22, slow: 8 },
+  bloodRiverMethod: { id: "bloodRiverMethod", name: "血河燃魂术", rarity: 4, role: "吸血", atk: 30, damagePct: 12, element: "火", elementDamage: 32, lifeSteal: 10, selfHurt: 6 },
+  voidLotusMethod: { id: "voidLotusMethod", name: "虚莲照界篇", rarity: 5, role: "稀有", hp: 38, speed: 20, reducePct: 12, element: "阴", elementDamage: 44, shield: 30 },
+  sunMoonMethod: { id: "sunMoonMethod", name: "日月同辉经", rarity: 5, role: "阴阳", atk: 28, def: 22, damagePct: 12, reducePct: 10, element: "阳", elementDamage: 48, heal: 22 },
+  chaosSeedMethod: { id: "chaosSeedMethod", name: "混沌种道诀", rarity: 5, role: "极稀", atk: 26, hp: 52, damagePct: 14, reducePct: 8, element: "阴", elementDamage: 52, pierce: 10 },
+  frostFireMethod: { id: "frostFireMethod", name: "冰火两仪诀", rarity: 4, role: "双修", atk: 22, def: 14, damagePct: 10, element: "火", elementDamage: 34, slow: 10 },
+  windThunderMethod: { id: "windThunderMethod", name: "风雷遁天术", rarity: 4, role: "先手", speed: 40, damagePct: 9, element: "雷", elementDamage: 30, pierce: 6 },
+  mountainSeaMethod: { id: "mountainSeaMethod", name: "山海镇灵卷", rarity: 4, role: "坦修", hp: 70, def: 24, reducePct: 11, element: "土", shield: 42 },
+  heavenMirrorMethod: { id: "heavenMirrorMethod", name: "照天明镜诀", rarity: 3, role: "反制", def: 24, luck: 12, reducePct: 8, element: "水", shield: 32 },
+  demonSealMethod: { id: "demonSealMethod", name: "封魔十二禁", rarity: 4, role: "封禁", atk: 18, def: 18, damagePct: 8, reducePct: 8, element: "阴", elementDamage: 36, slow: 14 },
+};
+for (const [id, data] of Object.entries(extraMethodCatalog)) {
+  methodCatalog[id] = data;
+  itemCatalog[id] = {
+    name: data.name,
+    kind: "功法",
+    manual: true,
+    text: `${data.role || "功法"}功法，可参悟并随熟练度线性增强。`,
+  };
+}
+const methodItemIds = Object.keys(methodCatalog);
+const equipmentItemIds = Object.keys(itemCatalog).filter((id) => itemCatalog[id]?.equipment && itemCatalog[id].slot !== "relic");
 const marketGoods = [
   { id: "riceBond", name: "灵米期契", base: 86, volatility: 16, text: "受粮草丰歉与宗门战争影响，波动较稳。" },
   { id: "oreBond", name: "寒铁矿券", base: 128, volatility: 24, text: "矿脉争夺越激烈，价格越容易上冲或崩落。" },
@@ -590,6 +806,15 @@ const auctionLotCatalog = [
   { key: "recipeTrib", name: "渡厄丹方残卷", recipe: "tribPill", base: 760, text: "解锁渡厄丹方，能提高渡劫成功率。" },
   { key: "blade", name: "旧朝名剑", item: "spiritBlade", quality: 2, base: 430, text: "直接入库，可给核心弟子装备。" },
   { key: "talisman", name: "镇山古符", item: "guardTalisman", quality: 2, base: 390, text: "偏防御与守点，适合保护资源。" },
+  { key: "robe", name: "流云法袍", item: "cloudRobe", quality: 2, base: 460, text: "防具槽装备，提供体魄、守御与随机词条。" },
+  { key: "spiritRing", name: "聚灵古戒", item: "spiritRing", quality: 3, base: 640, text: "灵器槽装备，更容易刷出高价值词条。" },
+  { key: "thunderManual", name: "紫霄雷法卷", item: "thunderMethod", quality: 2, base: 620, text: "雷属性功法，可让核心弟子获得爆发能力。" },
+  { key: "earthManual", name: "厚土玄功卷", item: "earthMethod", quality: 2, base: 560, text: "防御功法，适合边境副本和宗门大比。" },
+  { key: "yinManual", name: "太阴玄照录", item: "yinMethod", quality: 3, base: 980, text: "稀有阴属性功法，控制与减伤兼具。" },
+  { key: "yangManual", name: "太阳真火经", item: "yangMethod", quality: 3, base: 1040, text: "稀有阳属性功法，爆发、回血与阳伤兼备。" },
+  { key: "voidMirror", name: "太虚镜胚", item: "voidMirror", quality: 3, base: 1120, text: "高阶灵器，可能洗出阴阳属性词条。" },
+  { key: "refinePack", name: "洗练匣", item: "refineStone", quality: 0, base: 260, text: "用于重洗装备词条，适合追求红词条。" },
+  { key: "lockPack", name: "定纹玉扣", item: "affixLock", quality: 0, base: 360, text: "用于锁定装备词条位，洗练高阶装备时很关键。" },
   { key: "manual", name: "残卷功法", item: "swordManual", quality: 1, base: 310, text: "增加仓库物品，并补充参悟。" },
   { key: "alchemy", name: "异域丹材包", grant: "alchemy", base: 260, text: "随机获得两份专用丹材。" },
   { key: "forging", name: "陨铁器材包", grant: "forging", base: 280, text: "随机获得两份专用器材。" },
@@ -615,6 +840,48 @@ const traits = [
   { name: "猎妖血脉", beast: 14, atk: 6, note: "边境讨伐妖兽时战力提高" },
   { name: "禁地孤胆", forbidden: 14, temper: 6, note: "禁地爬塔初始属性更稳" },
   { name: "拍卖老手", trade: 8, stonesPct: 10, note: "市集和拍卖判断更强，灵石收益提高一成" },
+];
+
+const daoHeartCatalog = [
+  { id: "sword", name: "剑心通明", text: "偏向主动出击和剑诀爆发，战斗越多成长越快。", stats: { atk: 10, speed: 5 }, growth: 0.08, battle: 34, methodRole: "攻击" },
+  { id: "alchemy", name: "丹心澄澈", text: "更擅长炼丹、修复伤势和稳定心魔。", stats: { temper: 8, aptitude: 6 }, growth: 0.06, craft: { alchemy: 26 }, mindEase: 3, methodRole: "回血" },
+  { id: "guardian", name: "守山执念", text: "擅长护宗、防守和持久战。", stats: { hp: 18, def: 8 }, growth: 0.04, battle: 24, methodRole: "防御" },
+  { id: "profit", name: "逐利灵台", text: "擅长交易和机缘判断，但心境更容易摇摆。", stats: { luck: 8, charm: 7 }, growth: 0.04, trade: 0.04, mindRisk: 2, methodRole: "增益" },
+  { id: "battle", name: "斗战道心", text: "适合宗门大比、劫掠和边境讨伐。", stats: { atk: 8, hp: 10 }, growth: 0.07, battle: 42, mindRisk: 2, methodRole: "攻击" },
+  { id: "wander", name: "逍遥本心", text: "适合探索、世界奇遇和闪避先手。", stats: { luck: 7, speed: 7 }, growth: 0.05, explore: 24, methodRole: "控制" },
+  { id: "demonic", name: "魔性未泯", text: "战力提升高，但心魔风险也高。", stats: { atk: 14, damagePct: 4 }, growth: 0.08, battle: 50, mindRisk: 5, methodRole: "毒伤" },
+  { id: "benevolent", name: "仁善慧心", text: "稳定心境、保护队友，适合协作和远征。", stats: { temper: 10, reducePct: 3 }, growth: 0.05, support: 30, mindEase: 4, methodRole: "护盾" },
+];
+
+const constitutionCatalog = [
+  { id: "swordBone", name: "先天剑骨", weight: 20, text: "天生适合剑修，攻击和身法极强。", stats: { atk: 22, speed: 10, aptitude: 6 }, battle: 115 },
+  { id: "yangBody", name: "九阳灵体", weight: 15, text: "阳火旺盛，气血充沛，火阳伤害更强。", stats: { hp: 32, atk: 8 }, elementDamage: { fire: 18, yang: 8 }, battle: 130 },
+  { id: "yinBody", name: "玄阴道体", weight: 15, text: "阴寒入脉，擅长控制和减伤。", stats: { def: 12, temper: 8 }, elementDamage: { water: 12, yin: 10 }, battle: 128 },
+  { id: "poisonBody", name: "百毒灵胎", weight: 16, text: "毒性亲和，擅长持续伤害。", stats: { hp: 16, luck: 5 }, elementDamage: { poison: 22 }, battle: 120 },
+  { id: "thunderRoot", name: "雷灵根", weight: 14, text: "雷法亲和，爆发和先手极强。", stats: { atk: 12, speed: 12 }, elementDamage: { thunder: 20 }, battle: 138 },
+  { id: "fiveElement", name: "五行道胎", weight: 10, text: "五行俱全，属性伤害全面但成长慢热。", stats: { aptitude: 12, grow: 8 }, elementDamage: { metal: 8, wood: 8, water: 8, fire: 8, earth: 8 }, battle: 150 },
+  { id: "mortalFate", name: "凡体逆命", weight: 8, text: "初看平凡，境界越高越能逆命。", stats: { grow: 18, temper: 12 }, battle: 80 },
+  { id: "chaosVessel", name: "混沌灵胚", weight: 2, text: "极稀有体质，阴阳五行皆可承载。", stats: { hp: 38, atk: 16, def: 16, speed: 10, aptitude: 18 }, elementDamage: { yin: 18, yang: 18 }, battle: 280 },
+];
+
+const specializationCatalog = [
+  { id: "sword", name: "剑修", text: "单体爆发、宗门大比和切磋更强。", stats: { atk: 2, speed: 1 }, battlePerLevel: 18 },
+  { id: "body", name: "体修", text: "高血量高防御，适合边境和巨兽。", stats: { hp: 8, def: 2 }, battlePerLevel: 16 },
+  { id: "alchemy", name: "丹修", text: "炼丹、回血功法和心魔压制更强。", stats: { aptitude: 2, temper: 2 }, craft: { alchemy: 12 }, battlePerLevel: 9 },
+  { id: "forging", name: "器修", text: "炼器、本命法宝和装备词条利用更强。", stats: { def: 2, atk: 1 }, craft: { forging: 12 }, battlePerLevel: 12 },
+  { id: "array", name: "阵修", text: "阵法、防守和资源驻守更强。", stats: { def: 2, temper: 1 }, craft: { array: 12 }, battlePerLevel: 12 },
+  { id: "poison", name: "毒修", text: "持续伤害和削弱敌方更强。", stats: { atk: 1, luck: 1 }, elementDamage: { poison: 2 }, battlePerLevel: 15 },
+  { id: "thunder", name: "雷修", text: "先手、爆发和雷属性伤害更强。", stats: { atk: 1, speed: 2 }, elementDamage: { thunder: 2 }, battlePerLevel: 17 },
+  { id: "yinYang", name: "阴阳修", text: "稀有路线，兼具回血、爆发和属性压制。", stats: { aptitude: 2, speed: 1 }, elementDamage: { yin: 1, yang: 1 }, battlePerLevel: 20 },
+];
+
+const discipleTitleCatalog = [
+  { id: "youngSword", name: "少宗剑魁", text: "攻击破百后获得，剑修战力更显著。", condition: (d) => d.atk >= 100, stats: { atk: 5, speed: 2 }, battle: 45 },
+  { id: "thunderHeir", name: "雷坛真传", text: "雷属性伤害达到一定值后获得。", condition: (d) => (d.elementDamage?.thunder || 0) >= 25, stats: { speed: 3 }, elementDamage: { thunder: 5 }, battle: 55 },
+  { id: "danMaster", name: "丹房首席", text: "丹修或丹道词条弟子长期培养后获得。", condition: (d) => traitCraftBonus(d, "alchemy") >= 26 || d.specialization === "alchemy", stats: { aptitude: 4, temper: 3 }, battle: 24 },
+  { id: "mountainGuard", name: "镇山真君", text: "高防御弟子获得，驻守和防御战更稳。", condition: (d) => d.def >= 90 || (d.arrayLevel || 0) >= 3, stats: { hp: 12, def: 5 }, battle: 50 },
+  { id: "bossSlayer", name: "斩妖名宿", text: "高境界战斗弟子获得，边境副本表现更强。", condition: (d) => d.realm >= 3 && discipleBattleScore(d) >= 1800, stats: { atk: 6, hp: 12 }, battle: 70 },
+  { id: "wayfarer", name: "天涯行者", text: "高气运高身法弟子获得，探索收益更好。", condition: (d) => d.luck >= 55 && d.speed >= 80, stats: { luck: 4, speed: 3 }, battle: 35 },
 ];
 
 const sectRoutes = [
@@ -697,6 +964,7 @@ const state = {
   roomCode: "",
   roomConnected: false,
   roomHost: false,
+  roomLobbyReady: false,
   remotePlayers: [],
   readyPlayers: [],
   roomBlockedByForbidden: null,
@@ -705,7 +973,18 @@ const state = {
   roomAuction: null,
   roomTournament: null,
   roomAdventureLobby: null,
+  roomPvpDuel: null,
+  roomBossLobby: null,
+  appliedRoomPvpResults: {},
+  appliedRoomBossResults: {},
   roomWorldAdventureId: "",
+  pendingTradeEscrows: {},
+  cancelledIncomingTrades: {},
+  pendingAuctionAfterClose: null,
+  pendingCouncilAfterClose: null,
+  pendingTournamentAfterClose: null,
+  pendingTournamentCost: 0,
+  pendingAdventureAfterClose: null,
   currentAction: "操作中",
   currentActionAt: Date.now(),
   selectedSectIcon: "峰",
@@ -733,6 +1012,8 @@ const state = {
   councilEdict: null,
   selectedRoute: null,
   victoryGoal: null,
+  completedVictoryGoals: [],
+  tutorial: { enabled: false, skipped: false, seen: [] },
   completedMissions: [],
   frontier: null,
   forbidden: null,
@@ -768,6 +1049,105 @@ function uid() {
   return globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function catalogById(list, id) {
+  return list.find((item) => item.id === id) || null;
+}
+
+function weightedPickCatalog(list) {
+  const total = list.reduce((sum, item) => sum + Number(item.weight || 1), 0);
+  let roll = Math.random() * total;
+  for (const item of list) {
+    roll -= Number(item.weight || 1);
+    if (roll <= 0) return item;
+  }
+  return list[0] || null;
+}
+
+function pickDaoHeart() {
+  return pick(daoHeartCatalog);
+}
+
+function rollConstitution(force = false) {
+  if (!force && Math.random() > 0.055) return null;
+  return weightedPickCatalog(constitutionCatalog);
+}
+
+function applyDiscipleTemplateStats(d, template, multiplier = 1) {
+  if (!d || !template) return;
+  for (const [stat, value] of Object.entries(template.stats || {})) {
+    mutateDiscipleStat(d, stat, Number(value || 0) * multiplier);
+  }
+  for (const [element, value] of Object.entries(template.elementDamage || {})) {
+    mutateDiscipleStat(d, element, Number(value || 0) * multiplier);
+  }
+  d.aptitude = clamp(d.aptitude || 1, 1, 260);
+  d.temper = clamp(d.temper || 1, 1, 260);
+  d.hp = Math.max(1, Math.round(d.hp || 1));
+  d.atk = Math.max(1, Math.round(d.atk || 1));
+  d.def = Math.max(0, Math.round(d.def || 0));
+  d.speed = Math.max(1, Math.round(d.speed || 1));
+}
+
+function daoHeartOf(d) {
+  return catalogById(daoHeartCatalog, d?.daoHeart) || daoHeartCatalog[0];
+}
+
+function constitutionOf(d) {
+  return catalogById(constitutionCatalog, d?.constitution);
+}
+
+function specializationOf(d) {
+  return catalogById(specializationCatalog, d?.specialization);
+}
+
+function inferSpecialization(d) {
+  const heart = daoHeartOf(d);
+  if (heart?.id === "alchemy") return "alchemy";
+  if (heart?.id === "guardian" || d.def > d.atk + 12) return "body";
+  if (heart?.id === "wander") return "array";
+  if (heart?.id === "demonic") return "poison";
+  if ((d.elementDamage?.thunder || 0) > 0) return "thunder";
+  if ((d.elementDamage?.yin || 0) + (d.elementDamage?.yang || 0) > 0) return "yinYang";
+  return "sword";
+}
+
+function discipleTitleNames(d) {
+  return (d?.titles || [])
+    .map((id) => catalogById(discipleTitleCatalog, id)?.name)
+    .filter(Boolean);
+}
+
+function refreshDiscipleTitles(d) {
+  if (!d) return [];
+  d.titles = Array.isArray(d.titles) ? d.titles : [];
+  const gained = [];
+  for (const title of discipleTitleCatalog) {
+    if (!d.titles.includes(title.id) && title.condition(d)) {
+      d.titles.push(title.id);
+      applyDiscipleTemplateStats(d, title, 1);
+      gained.push(title.name);
+    }
+  }
+  if (gained.length) {
+    d.personalFame = Number(d.personalFame || 0) + gained.length * 8;
+    log(`${d.name}获得称号：${gained.join("、")}。`, "good");
+  }
+  return gained;
+}
+
+function cultivationPowerBonus(d) {
+  if (!d) return 0;
+  const heart = daoHeartOf(d);
+  const con = constitutionOf(d);
+  const spec = specializationOf(d);
+  const specLevel = Number(d.specializationLevel || 0);
+  const titlePower = (d.titles || []).reduce((sum, id) => sum + Number(catalogById(discipleTitleCatalog, id)?.battle || 0), 0);
+  const artifact = d.bondedArtifact ? Number(d.bondedArtifact.power || 0) + Number(d.bondedArtifact.level || 1) * 38 : 0;
+  const mentor = d.mentorId ? 24 + Number(d.realm || 0) * 6 : 0;
+  const conRealm = con?.id === "mortalFate" ? Number(d.realm || 0) * 45 : 0;
+  return Number(heart?.battle || 0) + Number(con?.battle || 0) + conRealm + specLevel * Number(spec?.battlePerLevel || 10) + titlePower + artifact + mentor + Number(d.personalFame || 0) * 1.5;
+}
+
 function initWorld() {
   state.tick = 0;
   state.year = 1;
@@ -778,6 +1158,8 @@ function initWorld() {
   state.roomCode = "";
   state.roomConnected = false;
   state.roomHost = false;
+  state.roomLobbyReady = false;
+  if (els.multiplayerToggle) els.multiplayerToggle.checked = false;
   state.remotePlayers = [];
   state.readyPlayers = [];
   state.roomBlockedByForbidden = null;
@@ -786,6 +1168,12 @@ function initWorld() {
   state.roomAuction = null;
   state.roomTournament = null;
   state.roomAdventureLobby = null;
+  state.roomPvpDuel = null;
+  state.roomBossLobby = null;
+  state.appliedRoomPvpResults = {};
+  state.appliedRoomBossResults = {};
+  state.pendingTradeEscrows = {};
+  state.cancelledIncomingTrades = {};
   state.selectedSectIcon = "峰";
   state.currentMap = "central";
   state.lastTournamentYear = 0;
@@ -803,10 +1191,13 @@ function initWorld() {
   state.worldCrisis = null;
   state.lastAuctionYear = 0;
   state.lastCouncilYear = 0;
+  state.lastMerchantYear = 0;
   state.intelReports = [];
   state.councilEdict = null;
   state.selectedRoute = null;
   state.victoryGoal = null;
+  state.completedVictoryGoals = [];
+  state.tutorial = { enabled: false, skipped: false, seen: [] };
   state.completedMissions = [];
   state.frontier = createFrontierState();
   state.forbidden = createForbiddenState();
@@ -855,16 +1246,23 @@ function initWorld() {
     { id: "mine-2", type: "resource", kind: "mine", name: "寒玉矿脉", x: 844, y: 222, value: 74, owner: null, yields: { stones: 74, forgingMats: 1, arrayMats: 1 } },
     { id: "herb-1", type: "resource", kind: "herb", name: "青蘅药谷", x: 318, y: 560, value: 68, owner: null, yields: { grain: 44, alchemyMats: 1 } },
     { id: "spring-1", type: "resource", kind: "spring", name: "洗髓灵泉", x: 668, y: 330, value: 84, owner: null, yields: { alchemyMats: 1, grain: 28, arrayMats: 1 } },
+    { id: "forge-1", type: "resource", kind: "forge", name: "陨铁洗练池", x: 728, y: 248, value: 86, owner: null, yields: { forgingMats: 1, refineStone: 1 } },
+    { id: "jade-1", type: "resource", kind: "jade", name: "定纹玉脉", x: 222, y: 430, value: 78, owner: null, yields: { stones: 46, affixLock: 1 } },
+    { id: "poison-1", type: "resource", kind: "poison", name: "碧瘴毒泽", x: 784, y: 586, value: 72, owner: null, yields: { alchemyMats: 1, refineStone: 1 } },
+    { id: "spirit-1", type: "resource", kind: "spring", name: "聚灵石窟", x: 472, y: 468, value: 82, owner: null, yields: { arrayMats: 1, affixLock: 1 } },
   ];
   state.events = createOpportunityNodes(9, "init");
   showStartScreen();
+  showStartMenuPanel();
   els.startPanel.classList.remove("is-collapsed");
   els.waitingOverlay.hidden = true;
   els.multiplayerToggle.checked = false;
-  if (els.roomPanel) els.roomPanel.hidden = false;
-  if (els.roomCodeInput) els.roomCodeInput.value = state.roomCode || "ZIHE01";
+  if (els.roomPanel) els.roomPanel.hidden = true;
+  if (els.roomCodeInput) els.roomCodeInput.value = "";
+  if (els.lobbyRoomCodeInput) els.lobbyRoomCodeInput.value = "";
   updateRoomPopulation([]);
   updateRoomStatus("未连接房间", "warn");
+  updateMultiplayerLobbyControls();
   for (const btn of els.startPanel.querySelectorAll(".mode-card")) btn.classList.toggle("is-active", btn.dataset.mode === "solo");
   for (const btn of els.iconPicker.querySelectorAll("button")) btn.classList.toggle("is-active", btn.dataset.icon === state.selectedSectIcon);
   els.sectNameInput.value = els.sectNameInput.value.trim() || randomPlayerSectName();
@@ -940,12 +1338,32 @@ function createDisciple(options = {}) {
     status: pick(["潜修", "巡山", "悟道", "养息"]),
     equipment: { weapon: null, artifact: null },
     traits: ownedTraits,
+    daoHeart: pickDaoHeart().id,
+    constitution: "",
+    constitutionAwakened: false,
+    specialization: "",
+    specializationExp: 0,
+    specializationLevel: 0,
+    mentorId: "",
+    seclusion: null,
+    bondedArtifact: null,
+    titles: [],
+    personalFame: 0,
+    lastPersonalEventYear: 0,
   };
   for (const t of ownedTraits) {
     for (const key of ["hp", "atk", "def", "speed", "grow", "luck", "charm", "temper"]) {
       base[key] += t[key] || 0;
     }
   }
+  applyDiscipleTemplateStats(base, daoHeartOf(base), 1);
+  const constitution = rollConstitution(false);
+  if (constitution) {
+    base.constitution = constitution.id;
+    base.constitutionAwakened = true;
+    applyDiscipleTemplateStats(base, constitution, 1);
+  }
+  base.specialization = inferSpecialization(base);
   return base;
 }
 
@@ -969,6 +1387,8 @@ function createFrontierState() {
     clears: 0,
     lastRefreshYear: 0,
     beastTideYear: 0,
+    worldBoss: null,
+    bossDamageLog: [],
   };
 }
 
@@ -1076,6 +1496,43 @@ function openVictoryGoalChoice(afterClose = null) {
   };
 }
 
+function offerTutorialChoice(afterClose = null) {
+  showModal({
+    kicker: "新手指引",
+    title: "是否开启前期高亮指引？",
+    body: `
+      <p>开启后，前几年会在你解锁对应玩法时用高亮框标出关键区域，并配一段短说明。它只提示流程，不替你做选择。</p>
+      <p>你随时可以点地图右上角“?”打开完整手册；如果跳过，高亮指引本局不会再自动弹出。</p>
+    `,
+    actions: [
+      {
+        label: "开启指引",
+        handler: () => {
+          state.tutorial = { enabled: true, skipped: false, seen: [] };
+          closeModal();
+          afterClose?.();
+          render();
+        },
+      },
+      {
+        label: "跳过指引",
+        handler: () => {
+          state.tutorial = { enabled: false, skipped: true, seen: [] };
+          closeModal();
+          afterClose?.();
+          render();
+        },
+      },
+    ],
+  });
+  els.modalCloseBtn.onclick = () => {
+    state.tutorial = { enabled: false, skipped: true, seen: [] };
+    closeModal();
+    afterClose?.();
+    render();
+  };
+}
+
 function foundSect(site) {
   const disciples = Array.from({ length: 4 }, createDisciple);
   const customName = els.sectNameInput.value.trim();
@@ -1106,6 +1563,8 @@ function foundSect(site) {
       trainingHall: 0,
       market: 0,
       scoutTower: 0,
+      insightRoom: 0,
+      spiritArray: 0,
     },
     inventory: [
       { id: "qiPill", count: 2, quality: 0 },
@@ -1134,7 +1593,7 @@ function foundSect(site) {
     if (!state.roomConnected) connectMultiplayerRoom();
     else syncPublicState();
   }
-  openSectRouteChoice(() => openVictoryGoalChoice(() => offerYearlyBoons()));
+  openSectRouteChoice(() => openVictoryGoalChoice(() => offerTutorialChoice(() => offerYearlyBoons())));
   updateButtons();
   render();
 }
@@ -1144,7 +1603,8 @@ function startPlayerYear() {
   const prestigeBonus = Math.floor(Math.min(state.sect.prestige, 600) / 240);
   const buildingBonus = state.sect.buildings.commandHall;
   const omenBonus = state.yearlyBoon?.key === "actionBonus" ? 1 : 0;
-  state.maxActionPoints = clamp(4 + prestigeBonus + buildingBonus + omenBonus - disciplePressure, 3, 7);
+  const decadeBonus = Math.floor(Math.max(0, state.year - 1) / 10);
+  state.maxActionPoints = clamp(4 + prestigeBonus + buildingBonus + omenBonus + decadeBonus - disciplePressure, 3, 10);
   state.actionPoints = state.maxActionPoints;
   state.recruitedThisYear = false;
   state.refreshedRecruitment = false;
@@ -1346,8 +1806,23 @@ function ensureSectDefaults() {
   state.roomAuction = state.roomAuction || null;
   state.roomTournament = state.roomTournament || null;
   state.roomAdventureLobby = state.roomAdventureLobby || null;
+  state.roomPvpDuel = state.roomPvpDuel || null;
+  state.roomBossLobby = state.roomBossLobby || null;
+  state.appliedRoomPvpResults = state.appliedRoomPvpResults || {};
+  state.appliedRoomBossResults = state.appliedRoomBossResults || {};
+  state.pendingTradeEscrows = state.pendingTradeEscrows || {};
+  state.cancelledIncomingTrades = state.cancelledIncomingTrades || {};
   state.completedMissions = Array.isArray(state.completedMissions) ? state.completedMissions : [];
+  state.completedVictoryGoals = Array.isArray(state.completedVictoryGoals) ? state.completedVictoryGoals : [];
+  state.tutorial = state.tutorial || { enabled: false, skipped: false, seen: [] };
+  state.tutorial.seen = Array.isArray(state.tutorial.seen) ? state.tutorial.seen : [];
+  state.tutorial.enabled = Boolean(state.tutorial.enabled);
+  state.tutorial.skipped = Boolean(state.tutorial.skipped);
   state.frontier = state.frontier || createFrontierState();
+  state.frontier.dungeons = Array.isArray(state.frontier.dungeons) ? state.frontier.dungeons : [];
+  state.frontier.outposts = Array.isArray(state.frontier.outposts) ? state.frontier.outposts : [];
+  state.frontier.bossDamageLog = Array.isArray(state.frontier.bossDamageLog) ? state.frontier.bossDamageLog : [];
+  state.frontier.worldBoss = state.frontier.worldBoss || null;
   state.forbidden = state.forbidden || createForbiddenState();
   state.forbiddenRun = state.forbiddenRun || null;
   state.worldCrisis = state.worldCrisis || null;
@@ -1357,6 +1832,7 @@ function ensureSectDefaults() {
   state.lastAuctionYear = Number(state.lastAuctionYear || 0);
   state.lastCouncilYear = Number(state.lastCouncilYear || 0);
   state.lastTournamentYear = Number(state.lastTournamentYear || 0);
+  state.lastMerchantYear = Number(state.lastMerchantYear || 0);
   state.sect.arrayMats = Number(state.sect.arrayMats || 0);
   state.sect.unlockedAlchemyRecipes = Array.isArray(state.sect.unlockedAlchemyRecipes) && state.sect.unlockedAlchemyRecipes.length
     ? state.sect.unlockedAlchemyRecipes
@@ -1370,16 +1846,18 @@ function ensureSectDefaults() {
   state.sect.formations = Array.isArray(state.sect.formations) ? state.sect.formations : [];
   state.sect.mountainFormation = state.sect.mountainFormation || null;
   state.sect.marketPortfolio = state.sect.marketPortfolio || {};
+  state.sect.buildings.insightRoom = Number(state.sect.buildings.insightRoom || 0);
+  state.sect.buildings.spiritArray = Number(state.sect.buildings.spiritArray || 0);
   state.sect.diplomacy = state.sect.diplomacy || { reputation: 20, infamy: 0 };
   state.sect.bonds = Array.isArray(state.sect.bonds) ? state.sect.bonds : [];
   state.sect.inventory = Array.isArray(state.sect.inventory) ? state.sect.inventory : [];
+  normalizeGearInventory();
   for (const d of state.sect.disciples || []) {
     d.arrayLevel = Number(d.arrayLevel || 0);
     d.mind = Number(d.mind || 0);
     d.elder = Boolean(d.elder);
     d.elderRole = d.elderRole || "";
-    d.equipment = d.equipment || { weapon: null, artifact: null, relic: null };
-    if (!("relic" in d.equipment)) d.equipment.relic = null;
+    normalizeDiscipleProgression(d);
     d.traits = Array.isArray(d.traits) ? d.traits : [];
   }
   for (const r of state.resources || []) {
@@ -1412,30 +1890,355 @@ function selectedDisciple() {
   return state.sect.disciples.find((d) => d.id === state.selectedDiscipleId) || null;
 }
 
+function gearTier(quality = 0) {
+  return clamp(Math.round(Number(quality) || 0), 0, 4);
+}
+
+function gearTierName(quality = 0) {
+  return gearQualityNames[gearTier(quality)] || gearQualityNames[0] || "";
+}
+
+function rollAffixRarity() {
+  const total = affixRarities.reduce((sum, item) => sum + item.weight, 0);
+  let roll = Math.random() * total;
+  for (const rarity of affixRarities) {
+    roll -= rarity.weight;
+    if (roll <= 0) return rarity;
+  }
+  return affixRarities[0];
+}
+
+function affixValue(def, rarity, quality = 0) {
+  const tierScale = 1 + gearTier(quality) * 0.28;
+  return Math.max(1, Math.round(def.base * (rarity?.mult || 1) * tierScale));
+}
+
+function rollGearAffixes(quality = 0) {
+  const slots = gearTier(quality) + 1;
+  const picked = [];
+  const used = new Set();
+  for (let i = 0; i < slots; i += 1) {
+    const pool = gearAffixPool.filter((affix) => !used.has(affix.key) && (!affix.rare || Math.random() < 0.22 || gearTier(quality) >= 3));
+    const def = pick(pool.length ? pool : gearAffixPool);
+    const rarity = rollAffixRarity();
+    used.add(def.key);
+    picked.push({
+      key: def.key,
+      name: def.name,
+      stat: def.stat,
+      element: Boolean(def.element),
+      pct: Boolean(def.pct),
+      rarity: rarity.key,
+      rarityName: rarity.name,
+      value: affixValue(def, rarity, quality),
+    });
+  }
+  return picked;
+}
+
+function ensureGearInstance(slot) {
+  const item = itemCatalog[slot?.id];
+  if (!item?.equipment || item.slot === "relic") return slot;
+  slot.count = 1;
+  slot.quality = gearTier(slot.quality);
+  slot.gearUid = slot.gearUid || uid();
+  slot.affixes = Array.isArray(slot.affixes) && slot.affixes.length ? slot.affixes : rollGearAffixes(slot.quality);
+  slot.lockedAffixes = Array.isArray(slot.lockedAffixes) ? slot.lockedAffixes : [];
+  return slot;
+}
+
+function normalizeGearInventory() {
+  if (!state.sect?.inventory) return;
+  const normalized = [];
+  for (const slot of state.sect.inventory) {
+    const item = itemCatalog[slot?.id];
+    if (!item?.equipment || item.slot === "relic") {
+      normalized.push(slot);
+      continue;
+    }
+    const count = Math.max(1, Number(slot.count || 1));
+    for (let i = 0; i < count; i += 1) {
+      normalized.push(ensureGearInstance({
+        id: slot.id,
+        count: 1,
+        quality: slot.quality || 0,
+        gearUid: i === 0 ? slot.gearUid : null,
+        affixes: i === 0 ? slot.affixes : null,
+        lockedAffixes: i === 0 ? slot.lockedAffixes : [],
+      }));
+    }
+  }
+  state.sect.inventory = normalized.filter((slot) => slot && Number(slot.count || 0) > 0);
+}
+
+function normalizeDiscipleProgression(d) {
+  d.equipment = d.equipment || {};
+  for (const slot of gearSlots) {
+    if (!(slot.key in d.equipment)) d.equipment[slot.key] = null;
+    if (d.equipment[slot.key] && slot.key !== "relic") ensureGearInstance(d.equipment[slot.key]);
+  }
+  if (!catalogById(daoHeartCatalog, d.daoHeart)) d.daoHeart = pickDaoHeart().id;
+  d.constitution = catalogById(constitutionCatalog, d.constitution) ? d.constitution : "";
+  d.constitutionAwakened = Boolean(d.constitution);
+  if (!catalogById(specializationCatalog, d.specialization)) d.specialization = inferSpecialization(d);
+  d.specializationExp = clamp(Number(d.specializationExp || 0), 0, 9999);
+  d.specializationLevel = clamp(Number(d.specializationLevel || 0), 0, 20);
+  d.mentorId = d.mentorId || "";
+  d.seclusion = d.seclusion && Number(d.seclusion.yearsLeft || 0) > 0 ? d.seclusion : null;
+  d.bondedArtifact = d.bondedArtifact || null;
+  d.titles = Array.isArray(d.titles) ? d.titles.filter((id) => catalogById(discipleTitleCatalog, id)) : [];
+  d.personalFame = Number(d.personalFame || 0);
+  d.lastPersonalEventYear = Number(d.lastPersonalEventYear || 0);
+  d.elementDamage = d.elementDamage || {};
+  d.methods = Array.isArray(d.methods) ? d.methods : [];
+  d.activeMethods = Array.isArray(d.activeMethods) ? d.activeMethods.slice(0, 5) : d.methods.slice(0, 5).map((method) => method.id);
+  for (const method of d.methods) {
+    method.quality = gearTier(method.quality || method.rarity || 0);
+    method.proficiency = clamp(Number(method.proficiency || 0), 0, 100);
+  }
+  d.activeMethods = d.activeMethods.filter((id) => d.methods.some((method) => method.id === id)).slice(0, 5);
+}
+
+function gearBaseValue(stat, value, quality = 0) {
+  return Math.round(value * (1 + gearTier(quality) * 0.45));
+}
+
+function mutateDiscipleStat(d, stat, value) {
+  if (elementNames.includes(stat)) {
+    d.elementDamage = d.elementDamage || {};
+    d.elementDamage[stat] = Math.max(0, Math.round((d.elementDamage[stat] || 0) + value));
+    return;
+  }
+  d[stat] = Math.round((d[stat] || 0) + value);
+}
+
+function applyGearStats(d, gear, sign = 1) {
+  const item = itemCatalog[gear?.id];
+  if (!d || !item?.equipment || item.slot === "relic") return;
+  const quality = gearTier(gear.quality);
+  const baseStats = gearBaseStats[item.slot] || {};
+  for (const [stat, value] of Object.entries(baseStats)) {
+    mutateDiscipleStat(d, stat, sign * gearBaseValue(stat, value, quality));
+  }
+  for (const affix of gear.affixes || []) {
+    mutateDiscipleStat(d, affix.stat, sign * Number(affix.value || 0));
+  }
+  d.aptitude = clamp(d.aptitude, 1, 220);
+  d.temper = clamp(d.temper, 1, 220);
+  d.hp = Math.max(1, d.hp);
+  d.atk = Math.max(1, d.atk);
+  d.def = Math.max(0, d.def);
+  d.speed = Math.max(1, d.speed);
+}
+
+function affixLabel(affix) {
+  if (!affix) return "";
+  const suffix = affix.pct ? "%" : "";
+  return `[${affix.rarityName || affix.rarity || ""}]${affix.name}+${affix.value}${suffix}`;
+}
+
+function gearAffixSummary(gear) {
+  return (gear?.affixes || []).map(affixLabel).filter(Boolean).join(" / ");
+}
+
+function lockAffixCost(count) {
+  if (count <= 0) return 0;
+  return Math.pow(2, count - 1);
+}
+
+function openGearRefinePanel(gearUid) {
+  const slot = state.sect.inventory.find((item) => item.gearUid === gearUid);
+  const item = itemCatalog[slot?.id];
+  if (!slot || !item?.equipment) return;
+  showModal({
+    kicker: "装备洗练",
+    title: `${gearTierName(slot.quality)}${item.name}`,
+    body: `
+      <p>消耗 1 个洗练灵砂重洗未锁定词条。锁定词条需要定纹玉扣：锁 1 位消耗 1，锁 2 位消耗 2，锁 3 位消耗 4，锁 4 位消耗 8。</p>
+      <p>当前材料：洗练灵砂 ${itemCount("refineStone")}，定纹玉扣 ${itemCount("affixLock")}。</p>
+      <div class="method-list">
+        ${(slot.affixes || []).map((affix, index) => `
+          <label class="method-card">
+            <strong>${affixLabel(affix)}</strong>
+            <span>${affix.element ? "属性伤害" : affix.pct ? "百分比词条" : "基础属性"}</span>
+            <label><input type="checkbox" class="affix-lock-pick" value="${index}"> 锁定此词条</label>
+          </label>
+        `).join("")}
+      </div>
+    `,
+    actions: [
+      { label: "开始洗练", handler: () => refineGearAffixes(slot.gearUid) },
+      { label: "关闭", handler: closeModal },
+    ],
+  });
+}
+
+function refineGearAffixes(gearUid) {
+  const slot = state.sect.inventory.find((item) => item.gearUid === gearUid);
+  if (!slot || !itemCatalog[slot.id]?.equipment) return;
+  const locked = [...els.modalBody.querySelectorAll(".affix-lock-pick:checked")].map((input) => Number(input.value));
+  const lockCost = lockAffixCost(locked.length);
+  if (itemCount("refineStone") < 1) {
+    flashFeedback("缺少洗练灵砂", "warn");
+    return;
+  }
+  if (itemCount("affixLock") < lockCost) {
+    flashFeedback(`锁定这些词条需要 ${lockCost} 个定纹玉扣`, "warn");
+    return;
+  }
+  consumeItemCount("refineStone", 1);
+  if (lockCost) consumeItemCount("affixLock", lockCost);
+  const fresh = rollGearAffixes(slot.quality);
+  const old = slot.affixes || [];
+  slot.affixes = fresh.map((affix, index) => locked.includes(index) ? old[index] || affix : affix);
+  log(`${itemCatalog[slot.id].name}洗练完成：${gearAffixSummary(slot)}`, "good");
+  closeModal();
+  render();
+}
+
+function methodEffectScale(method, data = {}, d = null) {
+  const quality = gearTier(method?.quality || data.rarity || 0);
+  const proficiency = clamp(Number(method?.proficiency || 0), 0, 100);
+  const mastery = Number(d?.methodMastery || 0) / 100;
+  return 1 + quality * 0.18 + proficiency * (0.006 + quality * 0.0015) + mastery;
+}
+
+function methodPowerBonus(d) {
+  const active = Array.isArray(d.activeMethods) ? d.activeMethods : [];
+  return active.reduce((sum, id) => {
+    const known = d.methods?.find((method) => method.id === id);
+    const data = methodCatalog[id];
+    if (!known || !data) return sum;
+    const flat = (data.atk || 0) * 2.1 + (data.def || 0) * 1.7 + (data.hp || 0) * 0.75 + (data.speed || 0) * 1.45;
+    const special = (data.damagePct || 0) * 8 + (data.reducePct || 0) * 7 + (data.elementDamage || 0) * 1.5 + (data.heal || 0) * 1.1 + (data.shield || 0) * 1.1 + (data.poison || 0) * 1.2 + (data.pierce || 0) * 7;
+    return sum + (flat + special) * methodEffectScale(known, data, d);
+  }, 0);
+}
+
+function gearPowerBonus(d) {
+  const gears = Object.values(d.equipment || {}).filter((gear) => gear && itemCatalog[gear.id]?.equipment && itemCatalog[gear.id]?.slot !== "relic");
+  return gears.reduce((sum, gear) => {
+    const baseStats = gearBaseStats[itemCatalog[gear.id]?.slot] || {};
+    const base = Object.entries(baseStats).reduce((total, [stat, value]) => {
+      const scaled = gearBaseValue(stat, value, gear.quality);
+      return total + (stat === "atk" ? scaled * 1.2 : stat === "def" ? scaled : stat === "hp" ? scaled * 0.45 : scaled * 0.8);
+    }, 0);
+    const affix = (gear.affixes || []).reduce((total, item) => total + Number(item.value || 0) * (item.pct ? 4 : item.element ? 1.25 : 0.8), 0);
+    return sum + base + affix;
+  }, 0);
+}
+
+function learnMethod(d, slot) {
+  const data = methodCatalog[slot?.id];
+  if (!d || !data || !slot || slot.count <= 0) return;
+  normalizeDiscipleProgression(d);
+  if (d.methods.some((method) => method.id === data.id)) {
+    const known = d.methods.find((method) => method.id === data.id);
+    known.proficiency = clamp((known.proficiency || 0) + 12 + gearTier(slot.quality) * 4, 0, 100);
+    log(`${d.name}温故${data.name}，熟练度提升至 ${known.proficiency}。`, "good");
+  } else {
+    d.methods.push({ id: data.id, quality: gearTier(slot.quality || data.rarity || 0), proficiency: 8 + gearTier(slot.quality) * 4 });
+    if (d.activeMethods.length < 5) d.activeMethods.push(data.id);
+    log(`${d.name}参悟${gearTierName(slot.quality)}${data.name}，已加入功法库。`, "good");
+  }
+  slot.count -= 1;
+  state.sect.inventory = state.sect.inventory.filter((item) => item.count > 0);
+  syncSharedWorld();
+  render();
+}
+
+function openMethodPanel(d) {
+  normalizeDiscipleProgression(d);
+  const known = d.methods.map((method) => ({ ...method, data: methodCatalog[method.id] })).filter((method) => method.data);
+  const activeSet = new Set(d.activeMethods || []);
+  showModal({
+    kicker: "功法配置",
+    title: d.name,
+    body: `
+      <p>最多携带五本功法，战斗时按携带顺序释放。熟练度会提高功法对战力和战斗表现的影响。</p>
+      <div class="method-list">
+        ${known.length ? known.map((method, index) => `
+          <article class="method-card ${activeSet.has(method.id) ? "is-active" : ""}">
+            <strong>${method.data.name}</strong>
+            <span>${method.data.role} · ${gearTierName(method.quality)} · 熟练 ${Math.round(method.proficiency || 0)}/100</span>
+            <em>${method.data.element ? `${method.data.element}属性` : "无属性"} ${method.data.damagePct ? `增伤${method.data.damagePct}%` : ""} ${method.data.reducePct ? `减伤${method.data.reducePct}%` : ""}</em>
+            <div class="method-actions">
+              <button data-method="${method.id}" data-action="${activeSet.has(method.id) ? "drop" : "equip"}">${activeSet.has(method.id) ? "卸下" : "携带"}</button>
+              <button data-method="${method.id}" data-action="up" ${!activeSet.has(method.id) || d.activeMethods.indexOf(method.id) <= 0 ? "disabled" : ""}>上移</button>
+              <button data-method="${method.id}" data-action="down" ${!activeSet.has(method.id) || d.activeMethods.indexOf(method.id) >= d.activeMethods.length - 1 ? "disabled" : ""}>下移</button>
+              <button data-method="${method.id}" data-action="train" ${state.actionPoints < 1 || state.sect.insight < 30 ? "disabled" : ""}>参悟</button>
+            </div>
+          </article>
+        `).join("") : `<div class="target-detail">尚未参悟功法，可从奇遇、拍卖和流浪商人处获得功法残卷。</div>`}
+      </div>
+    `,
+    actions: [{ label: "完成", handler: () => { closeModal(); render(); } }],
+  });
+  els.modalBody.querySelectorAll("button[data-method]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.method;
+      const action = btn.dataset.action;
+      const pos = d.activeMethods.indexOf(id);
+      if (action === "equip" && pos < 0 && d.activeMethods.length < 5) d.activeMethods.push(id);
+      if (action === "drop" && pos >= 0) d.activeMethods.splice(pos, 1);
+      if (action === "up" && pos > 0) [d.activeMethods[pos - 1], d.activeMethods[pos]] = [d.activeMethods[pos], d.activeMethods[pos - 1]];
+      if (action === "down" && pos >= 0 && pos < d.activeMethods.length - 1) [d.activeMethods[pos + 1], d.activeMethods[pos]] = [d.activeMethods[pos], d.activeMethods[pos + 1]];
+      if (action === "train") {
+        if (!spendAction(1, "参悟功法")) return;
+        if (state.sect.insight < 30) {
+          state.actionPoints += 1;
+          log("参悟功法需要 30 参悟。", "warn");
+          return;
+        }
+        state.sect.insight -= 30;
+        const knownMethod = d.methods.find((method) => method.id === id);
+        if (knownMethod) knownMethod.proficiency = clamp((knownMethod.proficiency || 0) + 8 + Math.floor((state.sect.site.aura || 1) / 18), 0, 100);
+      }
+      openMethodPanel(d);
+    });
+  });
+}
+
 function itemLabel(slot) {
   const item = itemCatalog[slot.id];
+  if (!item) return slot.id || "未知物品";
   if (item?.material) return item.name;
-  return `${qualityNames[slot.quality || 0]}${item.name}`;
+  return `${gearTierName(slot.quality || 0)}${item.name}`;
 }
 
 function addItem(itemId, count = 1, quality = 0) {
+  const item = itemCatalog[itemId];
+  if (!item) {
+    console.warn(`未知物品未入库：${itemId}`);
+    return;
+  }
+  if (item?.equipment && item.slot !== "relic") {
+    for (let i = 0; i < count; i += 1) {
+      state.sect.inventory.push(ensureGearInstance({ id: itemId, count: 1, quality }));
+    }
+    return;
+  }
   const slot = state.sect.inventory.find((item) => item.id === itemId && (item.quality || 0) === quality);
   if (slot) slot.count += count;
   else state.sect.inventory.push({ id: itemId, count, quality });
 }
 
-function useItemOnSelected(itemId, quality = 0) {
+function useItemOnSelected(itemId, quality = 0, gearUid = null) {
   const d = selectedDisciple();
-  const slot = state.sect?.inventory.find((item) => item.id === itemId && (item.quality || 0) === quality);
+  const slot = state.sect?.inventory.find((item) => item.id === itemId && (item.quality || 0) === quality && (!gearUid || item.gearUid === gearUid));
   const item = itemCatalog[itemId];
   if (!d || !slot || slot.count <= 0 || !item) return;
-  if (item.material || typeof item.apply !== "function") {
-    log(`${item.name}是炼丹材料，请在炼丹丹方中消耗。`, "warn");
-    render();
+  if (methodCatalog[itemId]) {
+    learnMethod(d, slot);
     return;
   }
   if (item.equipment) {
     equipItem(d, slot);
+    return;
+  }
+  if (item.material || typeof item.apply !== "function") {
+    log(`${item.name}是${item.kind || "材料"}，请在对应炼丹、炼器、晋升或洗练功能中消耗。`, "warn");
+    render();
     return;
   }
   item.apply(d, quality);
@@ -1457,11 +2260,12 @@ function equipItem(d, slot) {
   const item = itemCatalog[slot.id];
   const equipSlot = item.slot;
   if (d.equipment[equipSlot]) unequipItem(d, equipSlot, false);
-  item.apply(d, slot.quality || 0);
-  d.equipment[equipSlot] = { id: slot.id, quality: slot.quality || 0 };
+  const gear = ensureGearInstance({ ...slot, count: 1 });
+  applyGearStats(d, gear, 1);
+  d.equipment[equipSlot] = gear;
   slot.count -= 1;
   state.sect.inventory = state.sect.inventory.filter((itemSlot) => itemSlot.count > 0);
-  log(`${d.name}装备${qualityNames[slot.quality || 0]}${item.name}。`, "good");
+  log(`${d.name}装备${gearTierName(slot.quality || 0)}${item.name}。${gearAffixSummary(gear)}`, "good");
   render();
 }
 
@@ -1477,10 +2281,11 @@ function unequipItem(d, equipSlot, rerender = true) {
     return;
   }
   const item = itemCatalog[equipped.id];
-  item.remove?.(d, equipped.quality || 0);
-  addItem(equipped.id, 1, equipped.quality || 0);
+  applyGearStats(d, equipped, -1);
+  if (item?.equipment) state.sect.inventory.push(ensureGearInstance({ ...equipped, count: 1 }));
+  else state.sect.inventory.push({ id: equipped.id, count: 1, quality: equipped.quality || 0 });
   d.equipment[equipSlot] = null;
-  log(`${d.name}卸下${qualityNames[equipped.quality || 0]}${item.name}，已放回仓库。`);
+  log(`${d.name}卸下${item ? `${gearTierName(equipped.quality || 0)}${item.name}` : "旧装备"}，已放回仓库。`);
   if (rerender) render();
 }
 
@@ -1496,7 +2301,10 @@ function equipRelic(d, relicSlot) {
 }
 
 function traitCraftBonus(d, key) {
-  return d.traits.reduce((sum, t) => sum + (t[key] || 0), 0);
+  const trait = d.traits.reduce((sum, t) => sum + (t[key] || 0), 0);
+  const spec = specializationOf(d);
+  const specCraft = Number(spec?.craft?.[key] || 0) + (spec?.id === key ? Number(d.specializationLevel || 0) * 3 : 0);
+  return trait + specCraft;
 }
 
 function craftCost(kind) {
@@ -1530,6 +2338,12 @@ function canCraftRecipe(recipe, kind = "alchemy") {
   if (state.sect.stones < recipe.stones) return false;
   if (state.sect[recipeGenericKey(kind)] < (recipe.generic || 0)) return false;
   return Object.entries(recipe.materials || {}).every(([id, count]) => itemCount(id) >= count);
+}
+
+function canCraftRecipeBatch(recipe, kind = "alchemy", batch = 1) {
+  if (state.sect.stones < recipe.stones * batch) return false;
+  if (state.sect[recipeGenericKey(kind)] < (recipe.generic || 0) * batch) return false;
+  return Object.entries(recipe.materials || {}).every(([id, count]) => itemCount(id) >= count * batch);
 }
 
 function consumeItemCount(itemId, count) {
@@ -1568,6 +2382,7 @@ function openAlchemyRecipePicker(d) {
             <em>消耗：${recipe.stones} 灵石、${recipeMaterialText(recipe, "alchemy")}</em>
             <small>来源提示：${recipe.source}</small>
             <button class="recipe-craft" data-recipe="${recipe.id}" ${ready && state.actionPoints >= 1 ? "" : "disabled"}>${locked ? "未获丹方" : ready ? "炼制此丹" : "材料不足"}</button>
+            <button class="recipe-craft" data-recipe="${recipe.id}" data-batch="3" ${!locked && canCraftRecipeBatch(recipe, "alchemy", 3) && state.actionPoints >= 1 ? "" : "disabled"}>批量3份</button>
           </article>`;
         }).join("")}
       </div>
@@ -1579,7 +2394,7 @@ function openAlchemyRecipePicker(d) {
       const recipe = alchemyRecipes.find((item) => item.id === btn.dataset.recipe);
       if (!recipe) return;
       closeModal();
-      craftItem("alchemy", d.id, recipe.id);
+      craftItem("alchemy", d.id, recipe.id, Number(btn.dataset.batch || 1));
     });
   }
 }
@@ -1600,6 +2415,7 @@ function openForgeRecipePicker(d) {
             <em>消耗：${recipe.stones} 灵石、${recipeMaterialText(recipe, "forging")}</em>
             <small>来源提示：${recipe.source}</small>
             <button class="forge-craft" data-recipe="${recipe.id}" ${ready && state.actionPoints >= 1 ? "" : "disabled"}>${ready ? "炼制此器" : "材料不足"}</button>
+            <button class="forge-craft" data-recipe="${recipe.id}" data-batch="3" ${canCraftRecipeBatch(recipe, "forging", 3) && state.actionPoints >= 1 ? "" : "disabled"}>批量3份</button>
           </article>`;
         }).join("")}
       </div>
@@ -1611,12 +2427,12 @@ function openForgeRecipePicker(d) {
       const recipe = forgingRecipes.find((item) => item.id === btn.dataset.recipe);
       if (!recipe) return;
       closeModal();
-      craftItem("forging", d.id, recipe.id);
+      craftItem("forging", d.id, recipe.id, Number(btn.dataset.batch || 1));
     });
   }
 }
 
-function craftItem(kind, discipleId = state.selectedDiscipleId, recipeId = null) {
+function craftItem(kind, discipleId = state.selectedDiscipleId, recipeId = null, batch = 1) {
   const d = state.sect?.disciples.find((item) => item.id === discipleId) || selectedDisciple();
   if (!d) {
     log("请先选择一名弟子，再安排炼丹或炼器。", "warn");
@@ -1642,7 +2458,8 @@ function craftItem(kind, discipleId = state.selectedDiscipleId, recipeId = null)
   const cost = recipe?.stones || craftCost(kind);
   const matKey = kind === "alchemy" ? "alchemyMats" : "forgingMats";
   const matName = kind === "alchemy" ? "丹材" : "器材";
-  if (!recipe || !canCraftRecipe(recipe, kind)) {
+  batch = clamp(Math.floor(Number(batch || 1)), 1, 9);
+  if (!recipe || !canCraftRecipeBatch(recipe, kind, batch)) {
     state.actionPoints += 1;
     log(`${kind === "alchemy" ? "丹方" : "器方"}材料不足，无法开炉。请探索对应机缘获取材料。`, "warn");
     render();
@@ -1660,7 +2477,7 @@ function craftItem(kind, discipleId = state.selectedDiscipleId, recipeId = null)
     render();
     return;
   }
-  consumeRecipe(recipe, kind);
+  for (let i = 0; i < batch; i += 1) consumeRecipe(recipe, kind);
   const savedGeneric = state.yearlyBoon?.key === "materialEase" && Math.random() < 0.35;
   if (savedGeneric) state.sect[matKey] += 1;
   const craftBonus = traitCraftBonus(d, kind);
@@ -1672,12 +2489,12 @@ function craftItem(kind, discipleId = state.selectedDiscipleId, recipeId = null)
   const leaped = rand(1, 100) <= leapChance;
   if (leaped) quality = clamp(quality + 1, 0, qualityNames.length - 1);
   const itemId = recipe.output;
-  addItem(itemId, 1, quality);
-  d.exp += 7 + quality * 4;
+  addItem(itemId, batch, quality);
+  d.exp += (7 + quality * 4) * batch;
   d.status = kind === "alchemy" ? "守炉" : "铸器";
   const item = itemCatalog[itemId];
   const craftText = kind === "alchemy" ? "开炉炼丹" : "引火炼器";
-  log(`${d.name}${craftText}，按「${recipe.name}」消耗${recipeMaterialText(recipe, kind)}，凭${d.traits.map((t) => t.name).join("、")}炼成${qualityNames[quality]}${item.name}${leaped ? "，火候骤然跃升，品质越阶" : ""}，已存入仓库。`, "good");
+  log(`${d.name}${craftText}，按「${recipe.name}」批量 ${batch} 份，凭${d.traits.map((t) => t.name).join("、")}炼成${qualityNames[quality]}${item.name}${leaped ? "，火候骤然跃升，品质越阶" : ""}，已存入仓库。`, "good");
   if (savedGeneric) log("天炉回响，本次炼制返还 1 份通用材料。", "good");
   showCraftModal(d, item, quality, kind, leaped);
   render();
@@ -1727,14 +2544,23 @@ const net = {
 localStorage.setItem("cultivation-sect-client-id", state.clientId);
 
 function roomCodeValue() {
-  const raw = (els.roomCodeInput?.value || state.roomCode || "ZIHE01").trim().toUpperCase();
-  return raw.replace(/[^A-Z0-9_-]/g, "").slice(0, 16) || "ZIHE01";
+  const raw = (els.lobbyRoomCodeInput?.value || els.roomCodeInput?.value || state.roomCode || "").trim().toUpperCase();
+  return raw.replace(/[^A-Z0-9_-]/g, "").slice(0, 16);
 }
 
 function updateRoomStatus(text, tone = "") {
-  if (!els.roomStatus) return;
-  els.roomStatus.textContent = text;
-  els.roomStatus.className = `room-status ${tone === "online" ? "is-online" : tone === "warn" ? "is-warn" : ""}`;
+  const className = `room-status ${tone === "online" ? "is-online" : tone === "warn" ? "is-warn" : ""}`;
+  if (els.roomStatus) {
+    els.roomStatus.textContent = text;
+    els.roomStatus.className = className;
+  }
+  if (els.lobbyRoomStatus) {
+    els.lobbyRoomStatus.textContent = text;
+    els.lobbyRoomStatus.className = className;
+  }
+  if (els.lobbyHostStatus) {
+    els.lobbyHostStatus.textContent = state.roomConnected ? (state.roomHost ? "房主" : "成员") : "未入席";
+  }
 }
 
 function showStartScreen() {
@@ -1745,6 +2571,22 @@ function showStartScreen() {
 function showGameShell() {
   els.startScreen?.classList.add("is-hidden");
   els.appShell?.classList.remove("is-hidden");
+}
+
+function showStartMenuPanel() {
+  els.startPanel?.classList.remove("is-hidden");
+  els.multiplayerLobby?.classList.add("is-hidden");
+  if (els.roomPanel) els.roomPanel.hidden = true;
+}
+
+function showMultiplayerLobbyPanel() {
+  els.startPanel?.classList.add("is-hidden");
+  els.multiplayerLobby?.classList.remove("is-hidden");
+  if (els.roomPanel) els.roomPanel.hidden = true;
+  updateRoomStatus(state.roomConnected ? `已连接房间 ${state.roomCode}` : "未连接房间", state.roomConnected ? "online" : "warn");
+  updateRoomPopulation(state.roomConnected ? (net.lastPlayers.length ? net.lastPlayers : roomPopulationSnapshot()) : []);
+  updateMultiplayerLobbyControls();
+  setTimeout(() => els.lobbyRoomCodeInput?.focus(), 0);
 }
 
 function markPlayerAction(label = "操作中", broadcast = true) {
@@ -1758,8 +2600,8 @@ function isPlayerReadyForYear(player, year = state.year) {
 }
 
 function areRoomPlayersReadyForYear(players = net.lastPlayers, year = state.year) {
-  const founded = (players || []).filter((player) => player?.founded);
-  return founded.length > 0 && founded.every((player) => isPlayerReadyForYear(player, year));
+  const eligible = eligibleRoomPlayers(players);
+  return eligible.length > 0 && eligible.every((player) => isPlayerReadyForYear(player, year));
 }
 
 function refreshSelectedRemotePlayer() {
@@ -1768,26 +2610,24 @@ function refreshSelectedRemotePlayer() {
   if (fresh) state.selected = fresh;
 }
 
-function renderRoomPlayerList(players = []) {
-  if (!els.roomPlayerList) return;
+function roomPlayerListHtml(players = []) {
   const uniquePlayers = Array.isArray(players)
     ? Array.from(new Map(players.map((player, index) => [player.id || player.name || `player-${index}`, player])).values())
     : [];
   if (!state.multiplayer && !state.roomConnected) {
-    els.roomPlayerList.hidden = true;
-    els.roomPlayerList.innerHTML = "";
-    return;
+    return "";
   }
   const selfId = state.clientId;
-  const rows = uniquePlayers
+  return uniquePlayers
     .sort((a, b) => (a.id === selfId ? -1 : b.id === selfId ? 1 : String(a.name || "").localeCompare(String(b.name || ""))))
     .map((player) => {
       const ready = isPlayerReadyForYear(player);
       const stale = Number(player.year || state.year) !== Number(state.year);
-      const status = ready ? "已提交" : stale ? `年份${player.year || "?"}` : "操作中";
-      const action = player.activity || (ready ? "等待全员" : "操作中");
+      const lobbyReady = Boolean(player.lobbyReady);
+      const status = !state.founded ? (lobbyReady ? "大厅已准备" : "等待准备") : ready ? "已提交" : stale ? `年份${player.year || "?"}` : "操作中";
+      const action = !state.founded ? (player.online === false ? "离线" : lobbyReady ? "等待房主开始" : "正在大厅") : player.activity || (ready ? "等待全员" : "操作中");
       return `
-        <article class="room-player ${ready ? "is-ready" : ""} ${stale ? "is-stale" : ""}">
+        <article class="room-player ${ready || lobbyReady ? "is-ready" : ""} ${stale && state.founded ? "is-stale" : ""}">
           <div>
             <strong>${tradeEscape(player.name || "未立宗门")}${player.id === selfId ? "（我）" : ""}</strong>
             <span>${tradeEscape(status)} · ${tradeEscape(action)}</span>
@@ -1795,9 +2635,18 @@ function renderRoomPlayerList(players = []) {
           <em>战力 ${Math.round(player.power || 0)} · 弟子 ${player.disciples || 0} · ${tradeEscape(realms[player.maxRealm || 0] || "凡人")}</em>
         </article>
       `;
-    }).join("");
-  els.roomPlayerList.innerHTML = rows || `<article class="room-player"><div><strong>等待连接</strong><span>暂无玩家状态</span></div></article>`;
-  els.roomPlayerList.hidden = false;
+    }).join("") || `<article class="room-player"><div><strong>等待连接</strong><span>暂无玩家状态</span></div></article>`;
+}
+
+function renderRoomPlayerList(players = []) {
+  const html = roomPlayerListHtml(players);
+  if (els.roomPlayerList) {
+    els.roomPlayerList.innerHTML = html;
+    els.roomPlayerList.hidden = !html || (!state.multiplayer && !state.roomConnected);
+  }
+  if (els.lobbyPlayerList) {
+    els.lobbyPlayerList.innerHTML = html || `<article class="room-player"><div><strong>等待连接</strong><span>输入房间号后进入大厅</span></div></article>`;
+  }
 }
 
 function updateRoomPopulation(players = []) {
@@ -1810,11 +2659,77 @@ function updateRoomPopulation(players = []) {
     ? `房间人数：${uniquePlayers.length}（已立宗 ${founded}）`
     : `房间人数：${state.roomConnected ? 1 : 0}`;
   if (els.roomCount) els.roomCount.textContent = `${connectedText}${suffix}`;
+  if (els.lobbyRoomCount) els.lobbyRoomCount.textContent = `${uniquePlayers.length || (state.roomConnected ? 1 : 0)}${suffix ? " · 重连中" : ""}`;
+  if (els.lobbyHostStatus) els.lobbyHostStatus.textContent = state.roomConnected ? (state.roomHost ? "房主" : "成员") : "未入席";
   if (els.roomSummary) {
     els.roomSummary.textContent = `${connectedText}${state.roomHost ? " · 房主" : ""}${suffix}`;
     els.roomSummary.hidden = !(state.multiplayer || state.roomConnected);
   }
-  renderRoomPlayerList(uniquePlayers.length ? uniquePlayers : roomPopulationSnapshot());
+  const visiblePlayers = uniquePlayers.length ? uniquePlayers : (state.roomConnected ? roomPopulationSnapshot() : []);
+  renderRoomPlayerList(visiblePlayers);
+  updateMultiplayerLobbyControls(visiblePlayers);
+}
+
+function roomLobbyPlayers(players = net.lastPlayers) {
+  if (!state.roomConnected) return [];
+  const list = Array.isArray(players) && players.length ? players : roomPopulationSnapshot();
+  return Array.from(new Map(list.filter((player) => player && player.id && player.online !== false).map((player, index) => [player.id || `player-${index}`, player])).values());
+}
+
+function areLobbyPlayersReady(players = net.lastPlayers) {
+  const list = roomLobbyPlayers(players);
+  return list.length > 0 && list.every((player) => Boolean(player.lobbyReady));
+}
+
+function updateMultiplayerLobbyControls(players = net.lastPlayers) {
+  const room = roomCodeValue() || state.roomCode || "";
+  const connected = Boolean(state.roomConnected && state.multiplayer);
+  const list = roomLobbyPlayers(players);
+  const allReady = areLobbyPlayersReady(list);
+  const hasSave = Boolean(room && readRoomSave(room)?.data?.state);
+  if (els.lobbyReadyBtn) {
+    els.lobbyReadyBtn.disabled = !connected;
+    els.lobbyReadyBtn.textContent = state.roomLobbyReady ? "取消准备" : "准备";
+  }
+  if (els.lobbyStartBtn) {
+    els.lobbyStartBtn.disabled = !connected || !state.roomHost || !allReady || !list.length;
+    els.lobbyStartBtn.textContent = state.roomHost ? "房主开始游戏" : "等待房主开始";
+  }
+  if (els.lobbyLoadBtn) els.lobbyLoadBtn.disabled = !room || !hasSave;
+  if (els.lobbySaveSummary) els.lobbySaveSummary.textContent = `联机存档：${room ? roomSaveSummary(room) : "请输入房间号后查看"}`;
+  if (els.lobbyHostStatus) els.lobbyHostStatus.textContent = connected ? (state.roomHost ? "房主" : "成员") : "未入席";
+}
+
+function toggleLobbyReady() {
+  if (!state.multiplayer || !state.roomConnected) {
+    flashFeedback("请先进入联机房间", "warn");
+    return;
+  }
+  state.roomLobbyReady = !state.roomLobbyReady;
+  markPlayerAction(state.roomLobbyReady ? "大厅已准备" : "取消大厅准备", false);
+  syncPublicState();
+  updateRoomPopulation(net.lastPlayers.length ? net.lastPlayers : roomPopulationSnapshot());
+  flashFeedback(state.roomLobbyReady ? "已准备，等待房主开始" : "已取消准备", state.roomLobbyReady ? "good" : "warn");
+}
+
+function startMultiplayerGameFromLobby(remote = false) {
+  if (!state.multiplayer || !state.roomConnected) {
+    flashFeedback("请先进入联机房间", "warn");
+    return;
+  }
+  const players = roomLobbyPlayers(net.lastPlayers.length ? net.lastPlayers : roomPopulationSnapshot());
+  if (!remote && (!state.roomHost || !areLobbyPlayersReady(players))) {
+    flashFeedback(state.roomHost ? "仍有玩家未准备" : "只有房主可以开始游戏", "warn");
+    return;
+  }
+  state.roomLobbyReady = true;
+  if (!remote) sendRoomFeature("lobby_start", { roomCode: state.roomCode, year: state.year, players });
+  showGameShell();
+  closeModal();
+  els.hint.textContent = "联机模式已进入大世界。请选择宗门所在地；全员完成操作后才会推进到下一年。";
+  markPlayerAction("进入联机大世界", true);
+  flashFeedback(remote ? "房主已开始游戏，请选择宗门所在地" : "房间已开始，请选择宗门所在地", "good");
+  render();
 }
 
 function roomPopulationSnapshot() {
@@ -1848,13 +2763,11 @@ function enterGameMode(mode = "solo") {
   const isMulti = mode === "multi";
   state.multiplayer = isMulti;
   if (els.multiplayerToggle) els.multiplayerToggle.checked = isMulti;
-  if (els.roomCodeInput && !els.roomCodeInput.value.trim()) els.roomCodeInput.value = state.roomCode || "ZIHE01";
   for (const item of els.startPanel.querySelectorAll(".mode-card")) item.classList.toggle("is-active", item.dataset.mode === mode);
-  showGameShell();
   if (isMulti) {
-    connectMultiplayerRoom(roomCodeValue());
-    els.hint.textContent = "联机模式已进入大世界。请选择宗门所在地；全员完成操作后才会推进到下一年。";
-    flashFeedback("已进入联机模式，正在同步房间人数", "good");
+    showMultiplayerLobbyPanel();
+    updateRoomStatus("请输入房间号并进入联机大厅", "warn");
+    flashFeedback("已进入联机房间菜单", "good");
   } else {
     clearTimeout(net.reconnectTimer);
     net.reconnectAttempts = 0;
@@ -1867,11 +2780,13 @@ function enterGameMode(mode = "solo") {
     }
     state.roomConnected = false;
     state.roomHost = false;
+    state.roomLobbyReady = false;
     state.remotePlayers = [];
     state.readyPlayers = [];
     state.roomBlockedByForbidden = null;
     updateRoomStatus("未连接房间", "warn");
     updateRoomPopulation([]);
+    showGameShell();
     els.hint.textContent = "单机模式已进入大世界。请选择宗门所在地，AI 宗门会自动发展并参与争夺。";
     flashFeedback("已进入单机模式，请选择宗门所在地", "good");
   }
@@ -1892,6 +2807,13 @@ function wsUrlForRoom(roomCode) {
 }
 
 function connectMultiplayerRoom(roomCode = roomCodeValue()) {
+  roomCode = String(roomCode || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 16);
+  if (!roomCode) {
+    updateRoomStatus("请先输入房间号", "warn");
+    flashFeedback("联机房间号不能为空", "warn");
+    updateMultiplayerLobbyControls();
+    return;
+  }
   if (!("WebSocket" in window)) {
     updateRoomStatus("当前浏览器不支持 WebSocket。", "warn");
     return;
@@ -1905,8 +2827,10 @@ function connectMultiplayerRoom(roomCode = roomCodeValue()) {
     flashFeedback("Netlify 页面需要外部 WebSocket 房间服务器", "warn");
     return;
   }
+  if (state.roomCode && state.roomCode !== roomCode) state.roomLobbyReady = false;
   state.roomCode = roomCode;
   if (els.roomCodeInput) els.roomCodeInput.value = roomCode;
+  if (els.lobbyRoomCodeInput) els.lobbyRoomCodeInput.value = roomCode;
   if (net.ws && net.ws.readyState === WebSocket.OPEN) {
     sendNet("public_state", { player: getPublicPlayerState() });
     return;
@@ -1927,7 +2851,7 @@ function connectMultiplayerRoom(roomCode = roomCodeValue()) {
       net.reconnectAttempts = 0;
       net.reconnecting = false;
       if (els.multiplayerToggle) els.multiplayerToggle.checked = true;
-      if (els.roomPanel) els.roomPanel.hidden = false;
+      if (els.roomPanel) els.roomPanel.hidden = true;
       updateRoomStatus(`已连接房间 ${roomCode}`, "online");
       markPlayerAction("已连接房间", false);
       net.lastPlayers = [getPublicPlayerState()];
@@ -1987,8 +2911,15 @@ function roomPlayers() {
   ].filter((player) => player && player.id);
 }
 
+function eligibleRoomPlayers(players = roomPlayers()) {
+  const online = (players || []).filter((player) => player && player.id && player.online !== false);
+  const founded = online.filter((player) => player.founded);
+  if (founded.length) return founded;
+  return online;
+}
+
 function foundedRoomPlayers() {
-  return roomPlayers().filter((player) => player.founded);
+  return eligibleRoomPlayers(roomPlayers());
 }
 
 function allianceKey(a, b) {
@@ -2016,6 +2947,7 @@ function requestRemoteAlliance(target) {
     return;
   }
   sendRoomFeature("alliance_request", { targetId: target.id });
+  sendNet("player_event", { text: `${state.sect.name}向${target.name}发起玩家结盟请求。`, tone: "good" });
   log(`已向${target.name}发送玩家盟约邀请。`, "good");
   flashFeedback("盟约邀请已发送", "good");
 }
@@ -2036,13 +2968,10 @@ function tradeableCatalogIds() {
     "tribPill",
     "marrowPill",
     "heartLotus",
-    "swordManual",
-    "spiritBlade",
-    "thunderSpear",
-    "moonBlade",
-    "starBow",
-    "guardTalisman",
-    "arrayCompass",
+    "refineStone",
+    "affixLock",
+    ...methodItemIds,
+    ...equipmentItemIds,
   ];
   return [...new Set(ids)].filter((id) => itemCatalog[id]);
 }
@@ -2052,7 +2981,8 @@ function tradeItemLabel(entry) {
   const item = itemCatalog[entry.id];
   if (!item) return entry.id;
   if (item.material) return item.name;
-  return `${qualityNames[entry.quality || 0]}${item.name}`;
+  const affix = entry.affixes?.length ? `（${entry.affixes.map(affixLabel).join(" / ")}）` : "";
+  return `${gearTierName(entry.quality || 0)}${item.name}${affix}`;
 }
 
 function tradePartsText(parts) {
@@ -2098,10 +3028,72 @@ function hasTradeParts(parts) {
   for (const item of parts?.items || []) {
     if (!item?.id || !item.count) continue;
     const quality = Math.max(0, Math.min(qualityNames.length - 1, Math.floor(Number(item.quality || 0))));
-    const slot = state.sect.inventory.find((owned) => owned.id === item.id && (owned.quality || 0) === quality);
-    if (!slot || slot.count < item.count) return false;
+    const catalog = itemCatalog[item.id];
+    if (catalog?.equipment && item.gearUid) {
+      const slot = state.sect.inventory.find((owned) => owned.gearUid === item.gearUid && owned.id === item.id);
+      if (!slot || slot.count < 1) return false;
+      continue;
+    }
+    const total = state.sect.inventory
+      .filter((owned) => owned.id === item.id && (owned.quality || 0) === quality)
+      .reduce((sum, owned) => sum + Number(owned.count || 0), 0);
+    if (total < item.count) return false;
   }
   return true;
+}
+
+function tradeSnapshotFromSlot(slot, count = 1) {
+  const catalog = itemCatalog[slot?.id];
+  if (!slot || !catalog) return null;
+  const quality = catalog.material ? 0 : gearTier(slot.quality || 0);
+  if (catalog.equipment) {
+    const gear = ensureGearInstance({ ...slot, count: 1 });
+    return {
+      id: gear.id,
+      quality: gear.quality || quality,
+      count: 1,
+      gearUid: gear.gearUid,
+      affixes: (gear.affixes || []).map((affix) => ({ ...affix })),
+      lockedAffixes: Array.isArray(gear.lockedAffixes) ? [...gear.lockedAffixes] : [],
+    };
+  }
+  return { id: slot.id, quality, count: Math.max(1, Math.floor(Number(count || 1))) };
+}
+
+function materializeTradeParts(parts) {
+  const result = { stones: Math.max(0, Math.floor(Number(parts?.stones || 0))), items: [] };
+  const usedGear = new Set();
+  for (const item of parts?.items || []) {
+    if (!item?.id || !item.count || !itemCatalog[item.id]) continue;
+    const catalog = itemCatalog[item.id];
+    const quality = catalog.material ? 0 : gearTier(item.quality || 0);
+    if (catalog.equipment) {
+      if (item.gearUid) {
+        result.items.push({
+          id: item.id,
+          quality,
+          count: 1,
+          gearUid: item.gearUid,
+          affixes: (item.affixes || []).map((affix) => ({ ...affix })),
+          lockedAffixes: Array.isArray(item.lockedAffixes) ? [...item.lockedAffixes] : [],
+        });
+        usedGear.add(item.gearUid);
+        continue;
+      }
+      const need = Math.max(1, Math.floor(Number(item.count || 1)));
+      const slots = state.sect.inventory.filter((owned) => owned.id === item.id && (owned.quality || 0) === quality && owned.gearUid && !usedGear.has(owned.gearUid));
+      for (const slot of slots.slice(0, need)) {
+        const snap = tradeSnapshotFromSlot(slot, 1);
+        if (snap) {
+          result.items.push(snap);
+          usedGear.add(snap.gearUid);
+        }
+      }
+      continue;
+    }
+    result.items.push({ id: item.id, quality, count: Math.max(1, Math.floor(Number(item.count || 1))) });
+  }
+  return result;
 }
 
 function deductTradeParts(parts) {
@@ -2111,8 +3103,19 @@ function deductTradeParts(parts) {
   for (const item of parts?.items || []) {
     if (!item?.id || !item.count) continue;
     const quality = Math.max(0, Math.min(qualityNames.length - 1, Math.floor(Number(item.quality || 0))));
-    const slot = state.sect.inventory.find((owned) => owned.id === item.id && (owned.quality || 0) === quality);
-    if (slot) slot.count -= Math.max(1, Math.floor(Number(item.count || 1)));
+    const catalog = itemCatalog[item.id];
+    if (catalog?.equipment && item.gearUid) {
+      const slot = state.sect.inventory.find((owned) => owned.gearUid === item.gearUid && owned.id === item.id);
+      if (slot) slot.count = 0;
+      continue;
+    }
+    let left = Math.max(1, Math.floor(Number(item.count || 1)));
+    for (const slot of state.sect.inventory.filter((owned) => owned.id === item.id && (owned.quality || 0) === quality)) {
+      if (left <= 0) break;
+      const taken = Math.min(left, Number(slot.count || 0));
+      slot.count -= taken;
+      left -= taken;
+    }
   }
   state.sect.inventory = state.sect.inventory.filter((item) => item.count > 0);
   return true;
@@ -2125,7 +3128,18 @@ function grantTradeParts(parts) {
     if (!item?.id || !item.count || !itemCatalog[item.id]) continue;
     const catalog = itemCatalog[item.id];
     const quality = catalog.material ? 0 : Math.max(0, Math.min(qualityNames.length - 1, Math.floor(Number(item.quality || 0))));
-    addItem(item.id, Math.max(1, Math.floor(Number(item.count || 1))), quality);
+    if (catalog.equipment) {
+      state.sect.inventory.push(ensureGearInstance({
+        id: item.id,
+        count: 1,
+        quality,
+        gearUid: item.gearUid || uid(),
+        affixes: Array.isArray(item.affixes) ? item.affixes.map((affix) => ({ ...affix })) : null,
+        lockedAffixes: Array.isArray(item.lockedAffixes) ? [...item.lockedAffixes] : [],
+      }));
+    } else {
+      addItem(item.id, Math.max(1, Math.floor(Number(item.count || 1))), quality);
+    }
   }
 }
 
@@ -2174,7 +3188,8 @@ function sendTradeOffer(target, ownItems) {
   const offerIndex = document.getElementById("tradeOfferItem")?.value;
   if (offerIndex !== "") {
     const slot = ownItems[Number(offerIndex)];
-    if (slot) offer.items.push({ id: slot.id, quality: slot.quality || 0, count: readTradeNumber("tradeOfferQty", 1, slot.count) });
+    const snap = tradeSnapshotFromSlot(slot, readTradeNumber("tradeOfferQty", 1, slot?.count || 1));
+    if (snap) offer.items.push(snap);
   }
   const request = { stones: readTradeNumber("tradeAskStones", 0, 999999), items: [] };
   const askId = document.getElementById("tradeAskItem")?.value;
@@ -2198,6 +3213,7 @@ function sendTradeOffer(target, ownItems) {
   const trade = { id: uid(), sourceId: state.clientId, sourceName: state.sect.name, targetId: target.id, targetName: target.name, offer, request, year: state.year };
   state.pendingTradeEscrows[trade.id] = { parts: offer, targetId: target.id, targetName: target.name };
   sendRoomFeature("trade_request", { trade });
+  sendNet("player_event", { text: `${state.sect.name}向${target.name || "联机宗门"}发起交易。`, tone: "good" });
   log(`已向${target.name || "联机宗门"}发起交易：给出 ${tradePartsText(offer)}，索取 ${tradePartsText(request)}。`, "good");
   closeModal();
   syncPublicState();
@@ -2227,12 +3243,13 @@ function acceptRemoteTrade(trade) {
     flashFeedback("这笔交易已被对方取消", "warn");
     return;
   }
-  if (!deductTradeParts(trade.request)) {
+  const actualRequest = materializeTradeParts(trade.request);
+  if (!deductTradeParts(actualRequest)) {
     flashFeedback("资源不足，无法接受交易", "warn");
     return;
   }
   grantTradeParts(trade.offer);
-  sendRoomFeature("trade_accept", { trade });
+  sendRoomFeature("trade_accept", { trade: { ...trade, request: actualRequest } });
   log(`已接受${trade.sourceName || "联机宗门"}的交易，获得 ${tradePartsText(trade.offer)}。`, "good");
   closeModal();
   syncPublicState();
@@ -2287,6 +3304,7 @@ function getPublicPlayerState() {
   return {
     id: state.clientId,
     name: sect.name || els.sectNameInput?.value?.trim() || "未立宗门",
+    online: true,
     icon: sect.icon || state.selectedSectIcon || "宗",
     founded: Boolean(state.founded),
     x: Number(sect.x || 0),
@@ -2309,6 +3327,7 @@ function getPublicPlayerState() {
     disciples: sect.disciples?.length || 0,
     maxRealm: sect.disciples?.length ? Math.max(...sect.disciples.map((d) => d.realm)) : 0,
     topDisciple: sect.disciples?.length ? sect.disciples.slice().sort((a, b) => discipleBattleScore(b) - discipleBattleScore(a))[0]?.name : "",
+    lobbyReady: Boolean(state.roomLobbyReady),
     ready: Boolean(state.waitingForPlayers),
     readyYear: state.waitingForPlayers ? state.year : 0,
     activity: state.waitingForPlayers ? "等待全员进入下一年" : (state.currentAction || "操作中"),
@@ -2329,6 +3348,7 @@ function handleNetMessage(msg) {
     updateRoomStatus(`已进入房间 ${state.roomCode}${state.roomHost ? "（房主）" : ""}`, "online");
     net.lastPlayers = net.lastPlayers.length ? net.lastPlayers : [getPublicPlayerState()];
     updateRoomPopulation(net.lastPlayers);
+    maybeOfferRoomSaveOnJoin();
   }
   if (msg.type === "room_state") {
     net.lastPlayers = msg.players || [];
@@ -2362,6 +3382,35 @@ function handleNetMessage(msg) {
 function handleRoomFeatureMessage(msg) {
   const action = msg.action;
   const payload = msg.payload || {};
+  if (action === "pvp_duel_request") {
+    handleRoomPvpDuelRequest(payload.duel, msg.sourceName);
+    return;
+  }
+  if (action === "pvp_duel_accept") {
+    handleRoomPvpDuelAccept(payload.duel);
+    return;
+  }
+  if (action === "pvp_duel_reject") {
+    handleRoomPvpDuelReject(payload);
+    return;
+  }
+  if (action === "pvp_duel_result") {
+    applyRoomPvpDuelResult(payload.result);
+    return;
+  }
+  if (action === "room_close_save") {
+    handleRoomCloseSave(payload, msg.sourceName);
+    return;
+  }
+  if (action === "room_save_available") {
+    if (payload.snapshot && state.multiplayer) applySharedWorldSnapshot(payload.snapshot);
+    maybeOfferRoomSaveOnJoin();
+    return;
+  }
+  if (action === "lobby_start") {
+    if (!state.founded) startMultiplayerGameFromLobby(true);
+    return;
+  }
   if (action === "trade_request" && payload.trade?.targetId === state.clientId) {
     showTradeRequestModal(payload.trade, msg.sourceName);
     return;
@@ -2380,11 +3429,101 @@ function handleRoomFeatureMessage(msg) {
   }
   if (action === "world_adventure_open") {
     const setup = normalizeRoomWorldAdventureSetup(payload.adventure);
-    if (!setup || setup.id === state.roomWorldAdventureId || !state.founded || state.year !== setup.year) return;
+    if (!setup || !state.founded) return;
+    if (Number(setup.year) > Number(state.year)) state.year = Number(setup.year);
+    if (Number(setup.year) !== Number(state.year)) return;
+    if (setup.id === state.roomWorldAdventureId && state.worldAdventure) return;
     state.roomWorldAdventureId = setup.id;
     state.nextWorldAdventureYear = setup.nextYear || state.nextWorldAdventureYear;
     markPlayerAction("响应世界奇遇", true);
-    showWorldAdventurePicker(null, setup);
+    showWorldAdventurePicker(state.pendingAdventureAfterClose, setup);
+    return;
+  }
+  if (action === "adventure_lobby_open") {
+    const lobby = normalizeAdventureLobby(payload.lobby);
+    if (!lobby || lobby.year !== state.year) return;
+    state.roomAdventureLobby = lobby;
+    if (lobby.hostId !== state.clientId) showAdventureLobbyInvite(lobby);
+    else showAdventureLobbyModal(lobby, state.pendingAdventureAfterClose);
+    return;
+  }
+  if (action === "adventure_lobby_ready") {
+    if (!payload.participant) return;
+    if (!state.roomAdventureLobby && payload.lobby) state.roomAdventureLobby = normalizeAdventureLobby(payload.lobby);
+    state.roomAdventureLobby = mergeAdventureLobbyParticipant(state.roomAdventureLobby, payload.participant);
+    if (state.roomAdventureLobby?.hostId === state.clientId) sendRoomFeature("adventure_lobby_open", { lobby: state.roomAdventureLobby });
+    if (state.roomAdventureLobby?.hostId === state.clientId || state.roomAdventureLobby?.participants?.[state.clientId]) {
+      showAdventureLobbyModal(state.roomAdventureLobby, state.pendingAdventureAfterClose);
+    }
+    return;
+  }
+  if (action === "adventure_lobby_decline") {
+    if (!state.roomAdventureLobby && payload.lobby) state.roomAdventureLobby = normalizeAdventureLobby(payload.lobby);
+    state.roomAdventureLobby = markAdventureLobbyDeclined(state.roomAdventureLobby, payload.playerId, payload.playerName || msg.sourceName);
+    if (state.roomAdventureLobby?.hostId === state.clientId) {
+      sendRoomFeature("adventure_lobby_open", { lobby: state.roomAdventureLobby });
+      showAdventureLobbyModal(state.roomAdventureLobby, state.pendingAdventureAfterClose);
+    }
+    return;
+  }
+  if (action === "adventure_lobby_start") {
+    beginAdventureFromLobby(payload.lobby, state.pendingAdventureAfterClose);
+    return;
+  }
+  if (action === "adventure_lockstep_choice") {
+    applyRoomAdventureLockstepChoice(payload, msg.sourceId);
+    return;
+  }
+  if (action === "adventure_lobby_cancel") {
+    if (state.roomAdventureLobby?.id === payload.lobbyId) {
+      state.roomAdventureLobby = null;
+      log("协作世界奇遇邀请已取消。", "warn");
+      closeModal();
+      render();
+    }
+    return;
+  }
+  if (action === "frontier_boss_spawn") {
+    mergeFrontierBoss(payload.boss);
+    log(`联机边境巨兽同步出现：${payload.boss?.name || "未知巨兽"}。`, "warn");
+    render();
+    return;
+  }
+  if (action === "frontier_boss_lobby_open") {
+    handleRoomBossLobbyOpen(payload.lobby);
+    return;
+  }
+  if (action === "frontier_boss_lobby_ready") {
+    handleRoomBossLobbyReady(payload);
+    return;
+  }
+  if (action === "frontier_boss_lobby_cancel") {
+    if (state.roomBossLobby?.id === payload.lobbyId) {
+      state.roomBossLobby = null;
+      closeModal();
+      log("巨兽协作房间已取消。", "warn");
+      render();
+    }
+    return;
+  }
+  if (action === "frontier_boss_lobby_start") {
+    applyRoomBossLobbyResult(payload.result);
+    return;
+  }
+  if (action === "frontier_boss_damage") {
+    applyRemoteBossDamage(payload);
+    return;
+  }
+  if (action === "frontier_boss_defeated") {
+    applyRemoteBossDamage({ ...payload, hp: 0, defeated: true });
+    return;
+  }
+  if (action === "frontier_boss_expire") {
+    if (state.frontier?.worldBoss?.id === payload.bossId) {
+      state.frontier.worldBoss = null;
+      log("联机边境巨兽已遁走。", "warn");
+      render();
+    }
     return;
   }
   if (action === "alliance_request" && payload.targetId === state.clientId) {
@@ -2417,7 +3556,12 @@ function handleRoomFeatureMessage(msg) {
   }
   if (action === "auction_open") {
     state.roomAuction = payload.auction;
-    if (state.roomAuction) showInteractiveAuctionRound();
+    if (state.roomAuction) {
+      if (Number(state.roomAuction.year) > Number(state.year)) state.year = Number(state.roomAuction.year);
+      state.lastAuctionYear = state.roomAuction.year || state.year;
+      state.roomAuction.afterClose = state.pendingAuctionAfterClose;
+      showInteractiveAuctionRound();
+    }
     return;
   }
   if (action === "auction_bid" && state.roomAuction) {
@@ -2439,6 +3583,24 @@ function handleRoomFeatureMessage(msg) {
   }
   if (action === "auction_result") {
     const result = payload.result;
+    const afterClose = state.pendingAuctionAfterClose;
+    state.roomAuction = null;
+    state.pendingAuctionAfterClose = null;
+    if (result?.winnerId === state.clientId) {
+      finalizeAuctionLot(result.lot, { name: state.sect.name, player: true }, afterClose);
+      return;
+    }
+    if (result?.winnerName) {
+      log(`联机拍卖落槌：${result.winnerName}取得${result.lot?.name || "拍品"}。`, "warn");
+      showModal({
+        kicker: "联机拍卖",
+        title: "拍卖落槌",
+        body: `<p>${tradeEscape(result.winnerName)} 以 ${Math.round(result.lot?.finalPrice || result.lot?.price || 0)} 灵石取得 ${tradeEscape(result.lot?.name || "拍品")}。</p>`,
+        actions: [{ label: "继续", handler: () => { closeModal(); afterClose?.(); render(); } }],
+      });
+      render();
+      return;
+    }
     if (result?.winnerName) log(`联机拍卖落槌：${result.winnerName}取得${result.lot?.name || "拍品"}。`, result.winnerId === state.clientId ? "good" : "warn");
     state.roomAuction = null;
     closeModal();
@@ -2447,7 +3609,11 @@ function handleRoomFeatureMessage(msg) {
   }
   if (action === "council_open") {
     state.roomCouncil = payload.council;
-    if (state.roomCouncil) openCouncilMeeting(null);
+    if (state.roomCouncil) {
+      if (Number(state.roomCouncil.year) > Number(state.year)) state.year = Number(state.roomCouncil.year);
+      state.lastCouncilYear = state.roomCouncil.year || state.year;
+      openCouncilMeeting(state.pendingCouncilAfterClose);
+    }
     return;
   }
   if (action === "council_vote") {
@@ -2460,6 +3626,20 @@ function handleRoomFeatureMessage(msg) {
   if (action === "council_result") {
     const result = payload.result;
     if (result?.edict) {
+      const afterClose = state.pendingCouncilAfterClose;
+      state.pendingCouncilAfterClose = null;
+      state.councilEdict = result.edict;
+      state.lastCouncilYear = result.year || state.year;
+      state.roomCouncil = null;
+      log(`联机仙盟会议通过《${result.edict.name}》：${result.edict.text}`, "good");
+      showModal({
+        kicker: "仙盟会议",
+        title: `通过：${tradeEscape(result.edict.name)}`,
+        body: `<p>${tradeEscape(result.edict.text)}</p><p>本结果已同步到房间内所有玩家。</p>`,
+        actions: [{ label: "继续", handler: () => { closeModal(); afterClose?.(); render(); } }],
+      });
+      render();
+      return;
       state.councilEdict = result.edict;
       state.lastCouncilYear = result.year || state.year;
       log(`联机仙盟会议统一通过《${result.edict.name}》：${result.edict.text}`, "good");
@@ -2469,7 +3649,26 @@ function handleRoomFeatureMessage(msg) {
     }
     return;
   }
+  if (action === "tournament_open") {
+    state.roomTournament = payload.tournament || { year: state.year, ready: {}, resolved: false };
+    if (Number(state.roomTournament.year) > Number(state.year)) state.year = Number(state.roomTournament.year);
+    state.lastTournamentYear = state.roomTournament.year || state.year;
+    openTournamentPicker(true, state.pendingTournamentAfterClose);
+    return;
+  }
+  if (action === "tournament_ready") {
+    state.roomTournament = state.roomTournament || { year: state.year, ready: {}, resolved: false };
+    state.roomTournament.ready = state.roomTournament.ready || {};
+    if (payload.team?.id) state.roomTournament.ready[payload.team.id] = payload.team;
+    if (state.roomHost) maybeFinalizeRoomTournament();
+    else showTournamentWaitingRoom();
+    return;
+  }
   if (action === "tournament_result") {
+    applyRoomTournamentResult(payload.result || {});
+    return;
+  }
+  if (action === "tournament_result_legacy") {
     const result = payload.result || {};
     log(`联机宗门大比战报：冠军 ${result.champion || "未知"}。${result.text || ""}`, "good");
     render();
@@ -2507,29 +3706,21 @@ function updateRoomAdventureParticipant(playerId, playerName, status = {}) {
 
 function updateMultiplayerWaitingText(players = []) {
   if (!state.waitingForPlayers || !els.waitingText) return;
-  if (state.roomBlockedByForbidden) {
-    els.waitingText.textContent = `${state.roomBlockedByForbidden.name}正在禁地爬塔，第 ${state.roomBlockedByForbidden.floor}/20 层。`;
-    return;
-  }
-  const ready = players.filter((p) => isPlayerReadyForYear(p)).length;
-  const total = Math.max(1, players.length);
-  const forbidden = players.find((p) => p.forbiddenFloor);
+  const eligible = eligibleRoomPlayers(players);
+  const ready = eligible.filter((p) => isPlayerReadyForYear(p)).length;
+  const total = Math.max(1, eligible.length);
+  const forbidden = eligible.filter((p) => p.id !== state.clientId && p.forbiddenFloor).map((p) => `${p.name || "其他玩家"} ${p.forbiddenFloor}/20`).join("、");
   els.waitingText.textContent = forbidden
-    ? `等待其他玩家：${ready}/${total} 已完成。${forbidden.name}正在禁地第 ${forbidden.forbiddenFloor}/20 层。`
+    ? `等待其他玩家：${ready}/${total} 已完成。禁地探索不再锁住房间：${forbidden}。`
     : `等待其他玩家：${ready}/${total} 已完成。`;
 }
 
 function updateForbiddenRoomBlock(players = []) {
-  const blockedBy = players.find((p) => p.id !== state.clientId && Number(p.forbiddenFloor || 0) > 0);
-  state.roomBlockedByForbidden = blockedBy ? {
-    id: blockedBy.id,
-    name: blockedBy.name || "其他玩家",
-    floor: Number(blockedBy.forbiddenFloor || 1),
-  } : null;
-  if (state.roomBlockedByForbidden) {
-    els.waitingOverlay.hidden = false;
-    els.otherReadyDot.classList.remove("ready");
-    els.waitingText.textContent = `${state.roomBlockedByForbidden.name}正在禁地爬塔，第 ${state.roomBlockedByForbidden.floor}/20 层。联机模式下需要等待其退出禁地。`;
+  const active = (players || []).find((p) => p.id !== state.clientId && Number(p.forbiddenFloor || 0) > 0);
+  state.roomBlockedByForbidden = null;
+  if (active && !state.waitingForPlayers) {
+    updateRoomStatus(`${active.name || "其他玩家"}正在禁地第 ${active.forbiddenFloor}/20 层，房间年进度不再被禁地阻塞。`, "online");
+    els.waitingOverlay.hidden = true;
   } else if (!state.waitingForPlayers) {
     els.waitingOverlay.hidden = true;
   }
@@ -2572,6 +3763,10 @@ function createSharedWorldSnapshot() {
     lastTournamentYear: state.lastTournamentYear,
     nextWorldAdventureYear: state.nextWorldAdventureYear,
     roomAlliances: state.roomAlliances || {},
+    roomAuction: state.roomAuction ? { ...state.roomAuction, afterClose: null } : null,
+    roomCouncil: state.roomCouncil || null,
+    roomTournament: state.roomTournament || null,
+    roomWorldAdventureId: state.roomWorldAdventureId || "",
   };
 }
 
@@ -2590,6 +3785,10 @@ function applySharedWorldSnapshot(snapshot) {
   state.lastTournamentYear = Number(snapshot.lastTournamentYear || state.lastTournamentYear || 0);
   state.nextWorldAdventureYear = Number(snapshot.nextWorldAdventureYear || state.nextWorldAdventureYear || 0);
   state.roomAlliances = snapshot.roomAlliances || state.roomAlliances || {};
+  state.roomAuction = snapshot.roomAuction || state.roomAuction || null;
+  state.roomCouncil = snapshot.roomCouncil || state.roomCouncil || null;
+  state.roomTournament = snapshot.roomTournament || state.roomTournament || null;
+  state.roomWorldAdventureId = snapshot.roomWorldAdventureId || state.roomWorldAdventureId || "";
   log("已同步联机房间的大世界状态。", "good");
   render();
 }
@@ -2602,17 +3801,295 @@ function syncPublicState() {
   if (state.multiplayer && state.roomConnected) sendNet("public_state", { player: getPublicPlayerState() });
 }
 
-function remoteBattle(target, mode = "raid") {
-  if (!state.founded || !target) return;
+function combatDiscipleSnapshot(d) {
+  if (!d) return null;
+  normalizeDiscipleProgression(d);
+  const copyMethods = Array.isArray(d.methods) ? d.methods.map((method) => ({ ...method })) : [];
+  return {
+    id: d.id,
+    name: d.name,
+    realm: Number(d.realm || 0),
+    hp: Number(d.hp || 1),
+    atk: Number(d.atk || 1),
+    def: Number(d.def || 0),
+    speed: Number(d.speed || 1),
+    temper: Number(d.temper || 0),
+    aptitude: Number(d.aptitude || 0),
+    luck: Number(d.luck || 0),
+    charm: Number(d.charm || 0),
+    arrayLevel: Number(d.arrayLevel || 0),
+    mind: Number(d.mind || 0),
+    core: Boolean(d.core),
+    damagePct: Number(d.damagePct || 0),
+    reducePct: Number(d.reducePct || 0),
+    critPct: Number(d.critPct || 0),
+    critDamage: Number(d.critDamage || 0),
+    lifeSteal: Number(d.lifeSteal || 0),
+    pierce: Number(d.pierce || 0),
+    shieldPower: Number(d.shieldPower || 0),
+    elementDamage: { ...(d.elementDamage || {}) },
+    methods: copyMethods,
+    activeMethods: Array.isArray(d.activeMethods) ? [...d.activeMethods] : copyMethods.slice(0, 5).map((method) => method.id),
+  };
+}
+
+function roomPlayerById(id) {
+  return roomPlayers().find((player) => player.id === id) || null;
+}
+
+function roomPvpModeName(mode) {
+  return mode === "steal" ? "抢徒切磋" : "宗门劫掠";
+}
+
+function pvpDuelRosterOptions(name = "room-pvp-disciple") {
+  const roster = (state.sect?.disciples || []).slice().sort((a, b) => discipleBattleScore(b) - discipleBattleScore(a));
+  return roster.map((d, index) => `<label class="adventure-candidate ${d.core ? "is-core" : ""}">
+    <input type="radio" name="${name}" value="${tradeEscape(d.id)}" ${index === 0 ? "checked" : ""}>
+    <div><strong>${d.core ? "核心·" : ""}${tradeEscape(d.name)}</strong><span>${tradeEscape(realms[d.realm] || "")} · 战力 ${Math.round(discipleBattleScore(d))} · 功法 ${(d.activeMethods || []).length || 0}/5</span></div>
+  </label>`).join("");
+}
+
+function openRoomPvpDuelRequest(target, mode = "raid") {
+  if (!state.founded || !target?.id || !state.roomConnected) return;
   if (arePlayersAllied(state.clientId, target.id)) {
     log("玩家盟友之间不能通过快捷按钮互相掠夺或抢徒。", "warn");
     render();
     return;
   }
+  const roster = pvpDuelRosterOptions("room-pvp-attacker");
+  if (!roster) {
+    log("没有可出战弟子。", "warn");
+    return;
+  }
+  showModal({
+    kicker: "联机斗法房间",
+    title: `${roomPvpModeName(mode)}：挑战 ${tradeEscape(target.name || "联机宗门")}`,
+    body: `
+      <p>这次不再挑战公共投影。你先派出一名弟子发起挑战，对方收到请求后选择守擂弟子并确认，随后双方播放同一份实时战斗结算。</p>
+      <div class="stat-list">
+        <span>对方战力 ${Math.round(target.power || 0)}</span>
+        <span>对方灵石 ${Math.round(target.stones || 0)}</span>
+      </div>
+      <div class="adventure-roster">${roster}</div>
+    `,
+    actions: [
+      { label: "发起挑战", handler: () => {
+        const discipleId = els.modalBody.querySelector("input[name='room-pvp-attacker']:checked")?.value;
+        const disciple = state.sect.disciples.find((d) => d.id === discipleId);
+        if (!disciple) return;
+        if (!spendAction(1, mode === "steal" ? "联机抢徒" : "联机劫掠")) return;
+        const duel = {
+          id: `pvp-${state.clientId}-${target.id}-${Date.now()}`,
+          year: state.year,
+          mode,
+          attackerId: state.clientId,
+          attackerName: state.sect.name,
+          targetId: target.id,
+          targetName: target.name || "联机宗门",
+          targetStones: Math.round(target.stones || 0),
+          attackerDisciple: combatDiscipleSnapshot(disciple),
+          status: "request",
+        };
+        state.roomPvpDuel = duel;
+        sendRoomFeature("pvp_duel_request", { duel });
+        log(`已向${duel.targetName}发起${roomPvpModeName(mode)}，等待对方选择守擂弟子。`, "good");
+        closeModal();
+        showModal({
+          kicker: "联机斗法房间",
+          title: "等待对方确认",
+          body: `<p>${tradeEscape(duel.targetName)}正在选择守擂弟子。若对方拒绝或离线，本次行动点会返还。</p>`,
+          actions: [{ label: "先关闭", handler: closeModal }],
+        });
+        syncPublicState();
+        render();
+      } },
+      { label: "暂不挑战", handler: closeModal },
+    ],
+  });
+}
+
+function remoteBattle(target, mode = "raid") {
+  if (!state.founded || !target) return;
+  if (state.multiplayer && state.roomConnected) {
+    openRoomPvpDuelRequest(target, mode);
+    return;
+  }
+  if (arePlayersAllied(state.clientId, target.id)) {
+    log("玩家盟友之间不能通过快捷按钮互相掠夺或抢徒。", "warn");
+    render();
+    return;
+  }
+  const d = state.sect.disciples.slice().sort((a, b) => discipleBattleScore(b) - discipleBattleScore(a))[0];
+  if (!d) {
+    log("没有可出战弟子。", "warn");
+    render();
+    return;
+  }
   if (!spendAction(1, mode === "steal" ? "联机抢徒" : "联机掠夺")) return;
-  const our = expeditionPower(mode, mode === "steal" ? "ambush" : "assault");
   const enemy = (target.power || 0) * (mode === "steal" ? 0.96 : 1.06) + rand(120, 460);
-  const won = our >= enemy;
+  const guardian = syntheticGuardian(`${(target.name || "联机").slice(0, 2)}守`, enemy, `${target.id}:${mode}:${state.year}:remote`);
+  const duel = simulateOneVsOneBattle(d, guardian, { mode });
+  const our = discipleBattleScore(d);
+  showRealtimeDuelModal({
+    kicker: mode === "steal" ? "联机抢徒" : "联机掠夺",
+    title: `${d.name} 挑战 ${target.name}`,
+    duel,
+    leftLabel: state.sect.name,
+    rightLabel: target.name,
+    scores: { our, enemy },
+    onComplete: () => applyRemoteBattleOutcome(target, mode, d, duel, our, enemy),
+  });
+}
+
+function handleRoomPvpDuelRequest(duel, sourceName = "") {
+  if (!duel || duel.targetId !== state.clientId || !state.founded || duel.year !== state.year) return;
+  if (arePlayersAllied(state.clientId, duel.attackerId)) {
+    sendRoomFeature("pvp_duel_reject", { duelId: duel.id, attackerId: duel.attackerId, targetId: state.clientId, reason: "allied" });
+    return;
+  }
+  const roster = pvpDuelRosterOptions("room-pvp-defender");
+  showModal({
+    kicker: "联机斗法挑战",
+    title: `${tradeEscape(sourceName || duel.attackerName || "联机宗门")}发起${roomPvpModeName(duel.mode)}`,
+    body: `
+      <p>对方已派出 <strong>${tradeEscape(duel.attackerDisciple?.name || "挑战弟子")}</strong>。请选择一名守擂弟子确认开战；确认后双方会播放同一场实时斗法。</p>
+      <div class="adventure-roster">${roster || "<p>暂无可出战弟子。</p>"}</div>
+    `,
+    actions: [
+      { label: "确认迎战", disabled: !roster, handler: () => {
+        const discipleId = els.modalBody.querySelector("input[name='room-pvp-defender']:checked")?.value;
+        const disciple = state.sect.disciples.find((d) => d.id === discipleId);
+        if (!disciple) return;
+        const accepted = {
+          ...duel,
+          defenderId: state.clientId,
+          defenderName: state.sect.name,
+          defenderDisciple: combatDiscipleSnapshot(disciple),
+          status: "accepted",
+        };
+        state.roomPvpDuel = accepted;
+        sendRoomFeature("pvp_duel_accept", { duel: accepted });
+        log(`已接受${accepted.attackerName}的${roomPvpModeName(accepted.mode)}挑战。`, "good");
+        closeModal();
+        showModal({
+          kicker: "联机斗法房间",
+          title: "等待战斗结算",
+          body: `<p>发起方正在统一生成战斗回放。稍后双方会进入同一场实时斗法。</p>`,
+          actions: [{ label: "先关闭", handler: closeModal }],
+        });
+        syncPublicState();
+      } },
+      { label: "拒绝挑战", handler: () => {
+        sendRoomFeature("pvp_duel_reject", { duelId: duel.id, attackerId: duel.attackerId, targetId: state.clientId, reason: "reject" });
+        log(`已拒绝${duel.attackerName || "联机宗门"}的挑战。`, "warn");
+        closeModal();
+      } },
+    ],
+  });
+}
+
+function handleRoomPvpDuelAccept(duel) {
+  if (!duel || duel.attackerId !== state.clientId || !state.founded) return;
+  if (!state.roomPvpDuel || state.roomPvpDuel.id !== duel.id) state.roomPvpDuel = duel;
+  const battle = simulateOneVsOneBattle(duel.attackerDisciple, duel.defenderDisciple, { mode: duel.mode });
+  const our = discipleBattleScore(duel.attackerDisciple);
+  const enemy = discipleBattleScore(duel.defenderDisciple);
+  const result = {
+    id: duel.id,
+    year: state.year,
+    duel,
+    battle,
+    attackerWon: Boolean(battle.won),
+    winnerId: battle.won ? duel.attackerId : duel.targetId,
+    gain: battle.won ? Math.min(Math.max(120, Number(duel.targetStones || 240)), rand(90, duel.mode === "steal" ? 230 : 190)) : 0,
+    scores: { our: Math.round(our), enemy: Math.round(enemy) },
+  };
+  sendRoomFeature("pvp_duel_result", { result });
+  applyRoomPvpDuelResult(result);
+}
+
+function handleRoomPvpDuelReject(payload = {}) {
+  if (payload.attackerId !== state.clientId) return;
+  state.actionPoints = Math.min(state.maxActionPoints || 10, Number(state.actionPoints || 0) + 1);
+  state.roomPvpDuel = null;
+  closeModal();
+  log(payload.reason === "allied" ? "对方已是盟友，挑战取消并返还行动点。" : "对方拒绝挑战，已返还 1 点行动点。", "warn");
+  render();
+}
+
+function applyRoomPvpDuelResult(result) {
+  if (!result?.id || !result.duel || !result.battle) return;
+  const duel = result.duel;
+  const involved = duel.attackerId === state.clientId || duel.targetId === state.clientId;
+  if (!involved) {
+    log(`联机斗法：${duel.attackerName} ${result.attackerWon ? "击败" : "败给"} ${duel.targetName}。`, result.attackerWon ? "warn" : "good");
+    render();
+    return;
+  }
+  const isAttacker = duel.attackerId === state.clientId;
+  const battle = result.battle;
+  showRealtimeDuelModal({
+    kicker: roomPvpModeName(duel.mode),
+    title: `${duel.attackerName} 对阵 ${duel.targetName}`,
+    duel: battle,
+    leftLabel: duel.attackerName,
+    rightLabel: duel.targetName,
+    scores: result.scores || null,
+    onComplete: () => finalizeRoomPvpDuelResult(result, isAttacker),
+  });
+}
+
+function finalizeRoomPvpDuelResult(result, isAttacker) {
+  if (!result?.id || state.appliedRoomPvpResults?.[result.id]) {
+    render();
+    return;
+  }
+  ensureSectDefaults();
+  state.appliedRoomPvpResults[result.id] = true;
+  const duel = result.duel;
+  const won = isAttacker ? result.attackerWon : !result.attackerWon;
+  const localDiscipleId = isAttacker ? duel.attackerDisciple?.id : duel.defenderDisciple?.id;
+  const localDisciple = state.sect.disciples.find((d) => d.id === localDiscipleId);
+  if (isAttacker) {
+    if (result.attackerWon) {
+      state.sect.stones += result.gain || 0;
+      state.sect.diplomacy.infamy += duel.mode === "steal" ? 5 : 4;
+      if (localDisciple) {
+        localDisciple.exp += 14;
+        localDisciple.status = "联机斗法胜";
+      }
+      log(`联机斗法取胜，获得 ${result.gain || 0} 灵石。`, "good");
+    } else {
+      const lost = Math.min(state.sect.stones, rand(40, 110));
+      state.sect.stones -= lost;
+      if (localDisciple) {
+        adjustMind(localDisciple, 5, "联机斗法失利");
+        localDisciple.hp = Math.max(18, localDisciple.hp - rand(3, 9));
+      }
+      log(`联机斗法失利，整备损耗 ${lost} 灵石。`, "warn");
+    }
+  } else {
+    if (result.attackerWon) {
+      const loss = Math.min(state.sect.stones, result.gain || 0);
+      state.sect.stones -= loss;
+      if (localDisciple) localDisciple.hp = Math.max(20, localDisciple.hp - rand(2, 8));
+      log(`${duel.attackerName}挑战成功，本宗灵石 -${loss}。`, "warn");
+    } else {
+      state.sect.prestige += 26;
+      if (localDisciple) {
+        localDisciple.exp += 16;
+        localDisciple.status = "守擂得胜";
+      }
+      log(`守住${duel.attackerName}的挑战，声望 +26。`, "good");
+    }
+  }
+  state.roomPvpDuel = null;
+  syncPublicState();
+  render();
+}
+
+function applyRemoteBattleOutcome(target, mode, d, duel, our, enemy) {
+  const won = duel.won;
   const gain = won ? Math.min(target.stones || 240, rand(80, 180)) : 0;
   if (won) {
     state.sect.stones += gain;
@@ -2620,6 +4097,8 @@ function remoteBattle(target, mode = "raid") {
   } else {
     const lost = Math.min(state.sect.stones, rand(50, 130));
     state.sect.stones -= lost;
+    adjustMind(d, 6, "联机斗法失利");
+    d.hp = Math.max(18, d.hp - rand(3, 10));
   }
   const report = {
     attackerId: state.clientId,
@@ -2633,7 +4112,7 @@ function remoteBattle(target, mode = "raid") {
     enemy: Math.round(enemy),
   };
   sendNet("pvp_report", { report });
-  showBattleModal({ name: target.name, grudges: 0 }, won, won ? `联机掠夺成功，获得 ${gain} 灵石。` : "联机远征失利，未能夺得资源。", { our, enemy });
+  showBattleModal({ name: target.name, grudges: 0 }, won, won ? `${d.name}击破对方驻守投影，联机掠夺成功，获得 ${gain} 灵石。` : `${d.name}未能攻破对方守势，联机远征失利。`, { our, enemy });
   log(`${won ? "击败" : "败给"}联机宗门${target.name}，战报已发送房间。`, won ? "good" : "warn");
   syncPublicState();
   render();
@@ -2664,6 +4143,7 @@ function handlePvpReport(report) {
 }
 
 function showModal({ kicker = "事件", title = "山门传讯", body = "", actions = [{ label: "知道了", handler: closeModal }] }) {
+  clearTutorialHighlight();
   els.modalCloseBtn.onclick = null;
   els.modalProgress.hidden = true;
   els.modalKicker.textContent = kicker;
@@ -2687,6 +4167,7 @@ function closeModal() {
   els.eventModal.hidden = true;
   els.modalBody.innerHTML = "";
   els.modalActions.innerHTML = "";
+  setTimeout(maybeShowTutorialStep, 0);
 }
 
 function showBattleModal(target, won, detail, scores = null) {
@@ -2704,6 +4185,7 @@ function showBattleModal(target, won, detail, scores = null) {
         <div><span>敌宗守备</span><strong>${Math.round(scores.enemy)}</strong></div>
         <div><span>敌宗戒备</span><strong>${target.grudges || 0}</strong></div>
       </div>` : ""}
+      ${scores?.duel?.html || ""}
       <p><strong>${won ? "胜" : "败"}</strong>：${detail}</p>
     `,
   });
@@ -2727,6 +4209,7 @@ function showResourceBattleModal(resource, holder, won, detail, scores) {
         <div><span>${holder ? "守方宗门实力" : "野外守势"}</span><strong>${Math.round(scores.enemy)}</strong></div>
         <div><span>资源价值</span><strong>${resource.value}</strong></div>
       </div>
+      ${scores?.duel?.html || ""}
       <p><strong>${won ? "夺点成功" : "争夺失利"}</strong>：${detail}</p>
     `,
   });
@@ -2871,6 +4354,8 @@ function openBuildMenu() {
     { key: "trainingHall", name: "演武场", text: "每年弟子额外获得修为，战斗略强。", cost: 430 },
     { key: "market", name: "山门市集", text: "解锁市集投机，略增年度灵石收入并降低炼制压力。", cost: 420 },
     { key: "scoutTower", name: "观星楼", text: "探索收益提升，并降低被偷袭概率。", cost: 420 },
+    { key: "insightRoom", name: "参悟室", text: "可安排弟子专心参悟，提高携带功法熟练度。", cost: 520 },
+    { key: "spiritArray", name: "灵气阵", text: "提高弟子年度修行和参悟室收益，受选址灵气影响。", cost: 620 },
   ];
   showModal({
     kicker: "宗门建设",
@@ -2883,6 +4368,7 @@ function openBuildMenu() {
       { label: "演武集训", handler: trainingDrill },
       { label: "观星侦察", handler: scoutForEvent },
       { label: "市集换材", handler: marketTrade },
+      { label: "参悟室修行", handler: openInsightRoom, disabled: state.sect.buildings.insightRoom < 1 || state.actionPoints < 1 },
       { label: "暂不建设", handler: closeModal },
     ]),
   });
@@ -2987,6 +4473,446 @@ function bondLabel(bond) {
 
 function bondPowerBonus(d) {
   return discipleBonds(d).reduce((sum, bond) => sum + bond.level * (bond.type === "竞争" ? 5 : 8), 0);
+}
+
+function mentorOf(d) {
+  return state.sect?.disciples.find((item) => item.id === d?.mentorId) || null;
+}
+
+function discipleCultivationGrowth(d) {
+  const heart = daoHeartOf(d);
+  const spec = specializationOf(d);
+  const mentor = mentorOf(d);
+  const con = constitutionOf(d);
+  const seclusion = d.seclusion ? 0.22 : 0;
+  const mentorBoost = mentor ? 0.06 + Math.max(0, mentor.realm - d.realm) * 0.035 : 0;
+  const specBoost = (d.specializationLevel || 0) * 0.012;
+  const conBoost = con?.id === "mortalFate" ? 0.08 + d.realm * 0.02 : con ? 0.04 : 0;
+  const heartBoost = Number(heart?.growth || 0);
+  const roomBoost = (state.sect?.buildings?.spiritArray || 0) * 0.035 + (state.sect?.buildings?.insightRoom || 0) * 0.02;
+  return 1 + heartBoost + mentorBoost + specBoost + conBoost + seclusion + roomBoost + (spec?.id === "alchemy" && heart?.id === "alchemy" ? 0.03 : 0);
+}
+
+function gainSpecializationExp(d, amount, reason = "修行") {
+  if (!d || amount <= 0) return;
+  const before = Number(d.specializationLevel || 0);
+  d.specializationExp = Number(d.specializationExp || 0) + Math.round(amount);
+  while (d.specializationLevel < 20 && d.specializationExp >= (d.specializationLevel + 1) * 100) {
+    d.specializationLevel += 1;
+    applyDiscipleTemplateStats(d, specializationOf(d), 1);
+  }
+  if (d.specializationLevel > before) {
+    log(`${d.name}的${specializationOf(d)?.name || "专精"}提升至 Lv.${d.specializationLevel}，来源：${reason}。`, "good");
+  }
+}
+
+function processDiscipleSeclusionYear(d) {
+  if (!d?.seclusion) return 0;
+  const focus = d.seclusion.focus || "exp";
+  const aura = state.sect?.site?.aura || 40;
+  const gain = 9 + Math.floor(aura / 18) + (state.sect?.buildings?.insightRoom || 0) * 4 + (state.sect?.buildings?.spiritArray || 0) * 3;
+  if (focus === "method") {
+    for (const id of d.activeMethods || []) {
+      const method = d.methods.find((item) => item.id === id);
+      if (method) method.proficiency = clamp((method.proficiency || 0) + 5 + Math.floor(aura / 28), 0, 100);
+    }
+    gainSpecializationExp(d, 10, "闭关参悟");
+  } else if (focus === "mind") {
+    d.mind = Math.max(0, (d.mind || 0) - 8 - Math.floor(aura / 25));
+    d.temper += 1;
+    gainSpecializationExp(d, 7, "闭关问心");
+  } else {
+    d.exp += gain;
+    gainSpecializationExp(d, 8, "闭关修行");
+  }
+  d.seclusion.yearsLeft -= 1;
+  d.status = `闭关${d.seclusion.focusName || "修行"} ${Math.max(0, d.seclusion.yearsLeft)}年`;
+  if (d.seclusion.yearsLeft <= 0) {
+    d.status = "闭关出关";
+    d.personalFame = Number(d.personalFame || 0) + 4;
+    log(`${d.name}闭关圆满出关，修为、专精或心境有所提升。`, "good");
+    d.seclusion = null;
+  }
+  return gain;
+}
+
+function cultivationSummaryHtml(d) {
+  const heart = daoHeartOf(d);
+  const con = constitutionOf(d);
+  const spec = specializationOf(d);
+  const mentor = mentorOf(d);
+  const titles = discipleTitleNames(d);
+  const artifact = d.bondedArtifact;
+  return `
+    <div class="cultivation-summary">
+      <article><span>道心</span><strong>${heart?.name || "未定"}</strong><em>${heart?.text || ""}</em></article>
+      <article><span>体质</span><strong>${con ? con.name : "凡骨未显"}</strong><em>${con ? con.text : "特殊体质刷新率很低，可用洗髓探体尝试觉醒。"}</em></article>
+      <article><span>专精</span><strong>${spec?.name || "未定"} Lv.${d.specializationLevel || 0}</strong><em>熟练 ${d.specializationExp || 0}/${Math.min(20, (d.specializationLevel || 0) + 1) * 100}</em></article>
+      <article><span>师承</span><strong>${mentor ? mentor.name : "未拜师"}</strong><em>${mentor ? `${realms[mentor.realm]}，每年提供修行与专精经验` : "高境界弟子可作为师父传承经验"}</em></article>
+      <article><span>本命法宝</span><strong>${artifact ? `${artifact.name} Lv.${artifact.level}` : "未炼成本命法宝"}</strong><em>${artifact ? `战力 +${Math.round((artifact.power || 0) + artifact.level * 38)}` : "消耗器材和洗练材料打造，可长期升级"}</em></article>
+      <article><span>称号</span><strong>${titles.length ? titles.join("、") : "暂无称号"}</strong><em>达成条件后自动获得，提供永久属性</em></article>
+    </div>
+  `;
+}
+
+function openDiscipleCultivationPanel(d) {
+  if (!d) return;
+  normalizeDiscipleProgression(d);
+  refreshDiscipleTitles(d);
+  const heart = daoHeartOf(d);
+  const con = constitutionOf(d);
+  const spec = specializationOf(d);
+  showModal({
+    kicker: "弟子养成",
+    title: `${d.name}的修行路线`,
+    body: `
+      ${cultivationSummaryHtml(d)}
+      <div class="cultivation-grid">
+        <article class="cultivation-card"><strong>路线成长</strong><span>${heart?.name}提供 ${(Number(heart?.growth || 0) * 100).toFixed(0)}% 年度修行加成；当前综合养成战力 +${Math.round(cultivationPowerBonus(d))}。</span></article>
+        <article class="cultivation-card"><strong>体质规则</strong><span>新弟子约 5.5% 概率天生特殊体质。未显体质可消耗行动和材料洗髓探体，但成功率依旧较低。</span></article>
+        <article class="cultivation-card"><strong>专精定位</strong><span>${spec?.text || "专精会影响战力、炼制、阵法和属性伤害。"} 专精参与战斗、闭关、试炼都会成长。</span></article>
+        <article class="cultivation-card"><strong>闭关状态</strong><span>${d.seclusion ? `正在闭关：${d.seclusion.focusName}，剩余 ${d.seclusion.yearsLeft} 年。` : "可安排短期闭关，提高修为、功法熟练度或降低心魔。"}</span></article>
+      </div>
+    `,
+    actions: [
+      { label: "选择专精", handler: () => openSpecializationPanel(d), disabled: state.actionPoints < 1 },
+      { label: "师徒传承", handler: () => openMentorPanel(d), disabled: state.sect.disciples.length < 2 },
+      { label: d.seclusion ? "闭关中" : "安排闭关", handler: () => openSeclusionPanel(d), disabled: Boolean(d.seclusion) || state.actionPoints < 1 },
+      { label: "本命法宝", handler: () => openNatalArtifactPanel(d), disabled: state.actionPoints < 1 },
+      { label: "突破试炼", handler: () => openBreakthroughTrialPanel(d), disabled: state.actionPoints < 1 },
+      { label: con ? "体质已显" : "洗髓探体", handler: () => attemptConstitutionAwakening(d), disabled: Boolean(con) || state.actionPoints < 1 },
+      { label: "个人事件", handler: () => openDisciplePersonalEvent(d, true), disabled: state.actionPoints < 1 || d.lastPersonalEventYear === state.year },
+      { label: "关闭", handler: closeModal },
+    ],
+  });
+}
+
+function openSpecializationPanel(d) {
+  showModal({
+    kicker: "弟子专精",
+    title: `${d.name}选择修行定位`,
+    body: `
+      <p>改修专精会消耗 1 行动点和少量参悟，保留既有专精等级，但后续成长改走新路线。</p>
+      <div class="method-list">
+        ${specializationCatalog.map((spec) => `<label class="method-card ${d.specialization === spec.id ? "is-active" : ""}">
+          <strong>${spec.name}</strong>
+          <span>${spec.text}</span>
+          <em>每级战力 +${spec.battlePerLevel || 10}${spec.craft ? "，并强化对应炼制/阵法" : ""}</em>
+          <input type="radio" name="spec-pick" value="${spec.id}" ${d.specialization === spec.id ? "checked" : ""}>
+        </label>`).join("")}
+      </div>
+    `,
+    actions: [
+      { label: "确认改修", handler: () => chooseSpecialization(d) },
+      { label: "返回", handler: () => openDiscipleCultivationPanel(d) },
+    ],
+  });
+}
+
+function chooseSpecialization(d) {
+  const picked = els.modalBody.querySelector('input[name="spec-pick"]:checked')?.value;
+  const spec = catalogById(specializationCatalog, picked);
+  if (!spec) return;
+  if (!spendAction(1, "改修专精")) return;
+  const cost = 45 + (d.specializationLevel || 0) * 12;
+  if (state.sect.insight < cost) {
+    state.actionPoints += 1;
+    log(`改修专精需要 ${cost} 参悟。`, "warn");
+    render();
+    return;
+  }
+  state.sect.insight -= cost;
+  d.specialization = spec.id;
+  d.status = `改修${spec.name}`;
+  gainSpecializationExp(d, 35, "改修定路");
+  log(`${d.name}改修${spec.name}，后续成长会偏向该定位。`, "good");
+  closeModal();
+  render();
+}
+
+function openMentorPanel(d) {
+  const candidates = state.sect.disciples.filter((item) => item.id !== d.id && item.realm >= d.realm);
+  showModal({
+    kicker: "师徒传承",
+    title: `${d.name}选择师承`,
+    body: `
+      <p>师父境界越高，徒弟每年获得的修行和专精经验越多。师徒只是传承系统，不开启羁绊组合。</p>
+      <div class="adventure-roster">
+        ${candidates.length ? candidates.map((m) => `<article class="adventure-candidate">
+          <div><strong>${m.name}</strong><span>${realms[m.realm]} / 战力 ${Math.round(discipleBattleScore(m))} / ${specializationOf(m)?.name || "未定"}</span></div>
+          <button class="mentor-pick" data-id="${m.id}">${d.mentorId === m.id ? "当前师父" : "拜师"}</button>
+        </article>`).join("") : `<p>暂无境界不低于 ${d.name} 的可拜师弟子。</p>`}
+      </div>
+    `,
+    actions: [
+      { label: "解除师承", handler: () => { d.mentorId = ""; log(`${d.name}暂时不再跟随师承修行。`); closeModal(); render(); }, disabled: !d.mentorId },
+      { label: "返回", handler: () => openDiscipleCultivationPanel(d) },
+    ],
+  });
+  for (const btn of els.modalBody.querySelectorAll(".mentor-pick")) {
+    btn.addEventListener("click", () => {
+      d.mentorId = btn.dataset.id;
+      const mentor = mentorOf(d);
+      d.status = `拜师${mentor?.name || ""}`;
+      log(`${d.name}拜入${mentor?.name || "同门"}门下，开始接受传承。`, "good");
+      closeModal();
+      render();
+    });
+  }
+}
+
+function openSeclusionPanel(d) {
+  const options = [
+    { years: 1, focus: "exp", focusName: "修为", cost: 40, text: "提高修为，适合临近突破。" },
+    { years: 3, focus: "method", focusName: "功法", cost: 95, text: "提高携带功法熟练度和专精经验。" },
+    { years: 5, focus: "mind", focusName: "问心", cost: 150, text: "降低心魔，提升心性，适合高境界弟子。" },
+  ];
+  showModal({
+    kicker: "闭关修行",
+    title: `${d.name}闭关安排`,
+    body: `
+      <p>闭关消耗 1 行动点。闭关期间每年自动结算收益，时间越长收益越稳，但该弟子不适合频繁外派。</p>
+      <div class="system-grid">
+        ${options.map((item) => `<article class="system-card">
+          <strong>${item.years}年闭关：${item.focusName}</strong>
+          <span>${item.text}</span>
+          <em>消耗参悟 ${item.cost}</em>
+          <button class="seclusion-pick" data-focus="${item.focus}" data-years="${item.years}" data-cost="${item.cost}" data-name="${item.focusName}">开始</button>
+        </article>`).join("")}
+      </div>
+    `,
+    actions: [{ label: "返回", handler: () => openDiscipleCultivationPanel(d) }],
+  });
+  for (const btn of els.modalBody.querySelectorAll(".seclusion-pick")) {
+    btn.addEventListener("click", () => startSeclusion(d, btn.dataset));
+  }
+}
+
+function startSeclusion(d, data) {
+  if (!spendAction(1, "安排闭关")) return;
+  const cost = Number(data.cost || 0);
+  if (state.sect.insight < cost) {
+    state.actionPoints += 1;
+    log(`闭关需要 ${cost} 参悟。`, "warn");
+    render();
+    return;
+  }
+  state.sect.insight -= cost;
+  d.seclusion = { yearsLeft: Number(data.years || 1), total: Number(data.years || 1), focus: data.focus || "exp", focusName: data.name || "修行" };
+  d.status = `闭关${d.seclusion.focusName}`;
+  log(`${d.name}开始${d.seclusion.yearsLeft}年闭关，方向：${d.seclusion.focusName}。`, "good");
+  closeModal();
+  render();
+}
+
+function openNatalArtifactPanel(d) {
+  const artifact = d.bondedArtifact;
+  const baseCost = artifact ? 2 + artifact.level : 3;
+  const stoneCost = artifact ? 160 + artifact.level * 110 : 260;
+  showModal({
+    kicker: "本命法宝",
+    title: `${d.name}${artifact ? `的${artifact.name}` : "炼制本命法宝"}`,
+    body: `
+      <div class="cultivation-grid">
+        <article class="cultivation-card"><strong>当前法宝</strong><span>${artifact ? `${artifact.name} Lv.${artifact.level}，战力 +${Math.round((artifact.power || 0) + artifact.level * 38)}` : "尚未拥有本命法宝。"}</span></article>
+        <article class="cultivation-card"><strong>本次消耗</strong><span>灵石 ${stoneCost}，器材 ${baseCost}，洗练灵砂 ${artifact ? 1 : 2}。</span></article>
+      </div>
+      <p>本命法宝不占装备栏，绑定弟子后长期成长。器修和高品质装备会略微提高法宝初始威能。</p>
+    `,
+    actions: [
+      { label: artifact ? "升级法宝" : "炼成本命法宝", handler: () => refineNatalArtifact(d, { baseCost, stoneCost }) },
+      { label: "返回", handler: () => openDiscipleCultivationPanel(d) },
+    ],
+  });
+}
+
+function refineNatalArtifact(d, costs) {
+  if (!spendAction(1, "炼制本命法宝")) return;
+  const refineCost = d.bondedArtifact ? 1 : 2;
+  if (state.sect.stones < costs.stoneCost || state.sect.forgingMats < costs.baseCost || itemCount("refineStone") < refineCost) {
+    state.actionPoints += 1;
+    log(`本命法宝材料不足：需要灵石 ${costs.stoneCost}、器材 ${costs.baseCost}、洗练灵砂 ${refineCost}。`, "warn");
+    render();
+    return;
+  }
+  state.sect.stones -= costs.stoneCost;
+  state.sect.forgingMats -= costs.baseCost;
+  consumeItemCount("refineStone", refineCost);
+  const spec = specializationOf(d);
+  if (!d.bondedArtifact) {
+    d.bondedArtifact = {
+      id: uid(),
+      name: `${d.name.slice(0, 1)}氏${spec?.name || "灵"}宝`,
+      level: 1,
+      type: spec?.id || "sword",
+      power: 90 + (d.realm || 0) * 28 + (d.specializationLevel || 0) * 8 + traitCraftBonus(d, "forging") * 0.4,
+    };
+    d.status = "本命法宝初成";
+    log(`${d.name}炼成本命法宝${d.bondedArtifact.name}。`, "good");
+  } else {
+    d.bondedArtifact.level += 1;
+    d.bondedArtifact.power += 38 + (d.specializationLevel || 0) * 4;
+    d.status = "温养本命法宝";
+    log(`${d.name}温养本命法宝至 Lv.${d.bondedArtifact.level}。`, "good");
+  }
+  gainSpecializationExp(d, 18, "本命法宝");
+  closeModal();
+  render();
+}
+
+function openBreakthroughTrialPanel(d) {
+  const trials = [
+    { id: "heart", name: "问心试炼", text: "降低下一次渡劫风险，失败会增加心魔。", stat: "temper", boost: 9 },
+    { id: "thunder", name: "引雷淬体", text: "提升体魄和雷抗，失败会受伤。", stat: "hp", boost: 8 },
+    { id: "blade", name: "杀伐试剑", text: "提升攻击和专精经验，失败会损失修为。", stat: "atk", boost: 8 },
+    { id: "wander", name: "红尘问道", text: "提升气运和身法，失败会耗费灵石。", stat: "luck", boost: 7 },
+  ];
+  showModal({
+    kicker: "突破试炼",
+    title: `${d.name}冲关前准备`,
+    body: `
+      <p>突破试炼消耗 1 行动点，可在正式渡劫前积累渡劫加成。试炼不直接升境界，但能明显提高下一次成功率。</p>
+      <div class="system-grid">
+        ${trials.map((trial) => `<article class="system-card">
+          <strong>${trial.name}</strong>
+          <span>${trial.text}</span>
+          <em>当前成功参考：${clamp(Math.round(44 + d.realm * 3 + d.temper * 0.25 + d.luck * 0.2 + (d.specializationLevel || 0) * 1.4), 28, 88)}%</em>
+          <button class="trial-pick" data-id="${trial.id}">开始</button>
+        </article>`).join("")}
+      </div>
+    `,
+    actions: [{ label: "返回", handler: () => openDiscipleCultivationPanel(d) }],
+  });
+  for (const btn of els.modalBody.querySelectorAll(".trial-pick")) {
+    btn.addEventListener("click", () => runBreakthroughTrial(d, trials.find((item) => item.id === btn.dataset.id)));
+  }
+}
+
+function runBreakthroughTrial(d, trial) {
+  if (!trial || !spendAction(1, "突破试炼")) return;
+  const cost = 60 + d.realm * 28;
+  if (state.sect.insight < cost) {
+    state.actionPoints += 1;
+    log(`突破试炼需要 ${cost} 参悟。`, "warn");
+    render();
+    return;
+  }
+  state.sect.insight -= cost;
+  const chance = clamp(44 + d.realm * 3 + d.temper * 0.25 + d.luck * 0.2 + (d.specializationLevel || 0) * 1.4 + cultivationPowerBonus(d) / 180, 28, 88);
+  const success = rand(1, 100) <= chance;
+  if (success) {
+    d.tribBoost = Number(d.tribBoost || 0) + trial.boost;
+    mutateDiscipleStat(d, trial.stat, 3 + d.realm);
+    gainSpecializationExp(d, 22, trial.name);
+    d.status = `${trial.name}成功`;
+    log(`${d.name}完成${trial.name}，下一次渡劫加成 +${trial.boost}。`, "good");
+  } else {
+    d.tribBoost = Math.max(0, Number(d.tribBoost || 0) + Math.floor(trial.boost / 3));
+    d.exp = Math.max(0, d.exp - rand(4, 14));
+    adjustMind(d, 6 + d.realm, `${trial.name}失败`);
+    d.status = `${trial.name}受挫`;
+    log(`${d.name}${trial.name}受挫，但仍积累少量渡劫经验。`, "warn");
+  }
+  closeModal();
+  render();
+}
+
+function attemptConstitutionAwakening(d) {
+  if (!d || d.constitution) return;
+  if (!spendAction(1, "洗髓探体")) return;
+  const stoneCost = 180 + d.realm * 80;
+  const matCost = 2 + Math.floor(d.realm / 2);
+  if (state.sect.stones < stoneCost || state.sect.alchemyMats < matCost) {
+    state.actionPoints += 1;
+    log(`洗髓探体需要灵石 ${stoneCost}、丹材 ${matCost}。`, "warn");
+    render();
+    return;
+  }
+  state.sect.stones -= stoneCost;
+  state.sect.alchemyMats -= matCost;
+  const chance = clamp(7 + Math.floor(d.luck / 12) + Math.floor(d.aptitude / 35), 7, 18);
+  if (rand(1, 100) <= chance) {
+    const con = rollConstitution(true);
+    d.constitution = con.id;
+    d.constitutionAwakened = true;
+    applyDiscipleTemplateStats(d, con, 1);
+    d.status = `觉醒${con.name}`;
+    log(`${d.name}洗髓成功，觉醒特殊体质：${con.name}。`, "good");
+  } else {
+    d.exp += 5;
+    d.temper += 1;
+    d.status = "洗髓未显";
+    log(`${d.name}洗髓后未显特殊体质，只稳固了经脉。`, "warn");
+  }
+  closeModal();
+  render();
+}
+
+function openDisciplePersonalEvent(d, manual = false) {
+  if (!d) return;
+  const heart = daoHeartOf(d);
+  const events = [
+    { id: "wander", title: "下山历练", text: "获得修为、气运和少量资源，风险较低。", action: "历练" },
+    { id: "debate", title: "同门论道", text: "提升专精与功法熟练度，可能增加心魔。", action: "论道" },
+    { id: "trial", title: `${heart?.name || "道心"}考验`, text: "按道心定位获得对应属性成长，失败会受挫。", action: "问道" },
+  ];
+  showModal({
+    kicker: "弟子个人事件",
+    title: `${d.name}的道途抉择`,
+    body: `
+      <p>个人事件每名弟子每年最多主动触发一次，也可能在年度结算中自然发生。选择会影响属性、心魔、专精和资源。</p>
+      <div class="system-grid">
+        ${events.map((event) => `<article class="system-card">
+          <strong>${event.title}</strong>
+          <span>${event.text}</span>
+          <button class="personal-event-pick" data-id="${event.id}">${event.action}</button>
+        </article>`).join("")}
+      </div>
+    `,
+    actions: [{ label: "返回", handler: () => openDiscipleCultivationPanel(d) }],
+  });
+  for (const btn of els.modalBody.querySelectorAll(".personal-event-pick")) {
+    btn.addEventListener("click", () => resolveDisciplePersonalEvent(d, btn.dataset.id, manual));
+  }
+}
+
+function resolveDisciplePersonalEvent(d, eventId, manual = false) {
+  if (manual && !spendAction(1, "弟子个人事件")) return;
+  const score = d.temper + d.luck * 0.7 + (d.specializationLevel || 0) * 6 + rand(1, 80);
+  const success = score > 70 + d.realm * 5;
+  d.lastPersonalEventYear = state.year;
+  if (eventId === "wander") {
+    d.exp += success ? 14 : 6;
+    d.luck += success ? 3 : 1;
+    state.sect.stones += success ? 80 + d.realm * 40 : 30;
+    d.status = success ? "历练有成" : "历练归来";
+  } else if (eventId === "debate") {
+    gainSpecializationExp(d, success ? 34 : 16, "同门论道");
+    for (const id of d.activeMethods || []) {
+      const method = d.methods.find((item) => item.id === id);
+      if (method) method.proficiency = clamp((method.proficiency || 0) + (success ? 7 : 3), 0, 100);
+    }
+    if (!success) adjustMind(d, 5, "论道受挫");
+    d.status = success ? "论道胜出" : "论道受挫";
+  } else {
+    const heart = daoHeartOf(d);
+    applyDiscipleTemplateStats(d, heart, success ? 0.45 : 0.18);
+    gainSpecializationExp(d, success ? 26 : 10, "道心考验");
+    if (heart?.mindRisk && !success) adjustMind(d, heart.mindRisk + 4, "道心考验");
+    d.status = success ? "道心更坚" : "道心微澜";
+  }
+  refreshDiscipleTitles(d);
+  log(`${d.name}完成个人事件：${d.status}。`, success ? "good" : "warn");
+  closeModal();
+  render();
+}
+
+function maybeTriggerDisciplePersonalEvent() {
+  if (!state.sect?.disciples?.length || Math.random() > 0.18) return;
+  const candidates = state.sect.disciples.filter((d) => d.lastPersonalEventYear !== state.year && !d.seclusion);
+  const d = pick(candidates.length ? candidates : state.sect.disciples);
+  const eventId = pick(["wander", "debate", "trial"]);
+  resolveDisciplePersonalEvent(d, eventId, false);
 }
 
 function adjustMind(d, amount, reason = "") {
@@ -3260,6 +5186,8 @@ function serializeState() {
     particles: [],
     worldAdventure: null,
     forbiddenRun: null,
+    roomPvpDuel: null,
+    roomBossLobby: null,
     waitingForPlayers: false,
   };
 }
@@ -3273,14 +5201,225 @@ function hydrateState(data) {
   state.roomHost = false;
   state.readyPlayers = [];
   state.remotePlayers = [];
+  state.roomPvpDuel = null;
+  state.roomBossLobby = null;
   ensureSectDefaults();
 }
 
-function saveGame() {
+function roomSaveKey(room = state.roomCode || roomCodeValue()) {
+  const code = String(room || "ZIHE01").trim().toUpperCase() || "ZIHE01";
+  return `${ROOM_SAVE_PREFIX}${code}`;
+}
+
+function readRoomSave(room = state.roomCode || roomCodeValue()) {
+  const raw = localStorage.getItem(roomSaveKey(room));
+  if (!raw) return null;
+  try {
+    return { raw, data: JSON.parse(raw) };
+  } catch {
+    return { raw, data: null, broken: true };
+  }
+}
+
+function roomSaveSummary(room = state.roomCode || roomCodeValue()) {
+  const saved = readRoomSave(room);
+  if (!saved?.data?.state) return "暂无联机房间存档";
+  const data = saved.data.state;
+  const time = saved.data.savedAt ? new Date(saved.data.savedAt).toLocaleString() : "";
+  return `${data.sect?.name || "未立宗门"} · 太初 ${data.year || 1} 年 · 房间 ${saved.data.roomCode || room}${time ? ` · ${time}` : ""}`;
+}
+
+function saveMultiplayerRoomProgress(reason = "联机进度保存") {
+  if (!state.multiplayer && !state.roomCode) return false;
   try {
     ensureSectDefaults();
-    localStorage.setItem(SAVE_KEY, JSON.stringify(serializeState()));
-    log(`已保存存档：太初 ${state.year} 年。`, "good");
+    const roomCode = state.roomCode || roomCodeValue();
+    const payload = {
+      version: 1,
+      roomCode,
+      clientId: state.clientId,
+      hostId: state.roomHost ? state.clientId : "",
+      savedAt: Date.now(),
+      reason,
+      snapshot: createSharedWorldSnapshot(),
+      state: serializeState(),
+      players: net.lastPlayers || roomPopulationSnapshot(),
+    };
+    localStorage.setItem(roomSaveKey(roomCode), JSON.stringify(payload));
+    log(`${reason}：已保存房间 ${roomCode} 的本宗进度。`, "good");
+    return true;
+  } catch (err) {
+    log("联机存档失败：浏览器本地存储不可用。", "warn");
+    return false;
+  }
+}
+
+function disconnectMultiplayerRoom(statusText = "已退出联机房间") {
+  clearTimeout(net.reconnectTimer);
+  net.reconnecting = false;
+  net.reconnectAttempts = 0;
+  net.manualClose = true;
+  if (net.ws) {
+    try { net.ws.close(); } catch {}
+    net.ws = null;
+  }
+  state.roomConnected = false;
+  state.roomHost = false;
+  state.multiplayer = false;
+  state.roomLobbyReady = false;
+  if (els.multiplayerToggle) els.multiplayerToggle.checked = false;
+  state.waitingForPlayers = false;
+  state.remotePlayers = [];
+  state.readyPlayers = [];
+  state.roomAuction = null;
+  state.roomCouncil = null;
+  state.roomTournament = null;
+  state.roomAdventureLobby = null;
+  state.roomBlockedByForbidden = null;
+  net.lastPlayers = [];
+  els.waitingOverlay.hidden = true;
+  updateRoomStatus(statusText, "warn");
+  updateRoomPopulation([]);
+}
+
+function closeMultiplayerRoomAndSave() {
+  if (!state.multiplayer || !state.roomConnected) {
+    saveMultiplayerRoomProgress("联机进度保存");
+    closeModal();
+    return;
+  }
+  const snapshot = createSharedWorldSnapshot();
+  saveMultiplayerRoomProgress(state.roomHost ? "房主关闭房间并保存" : "联机进度保存");
+  if (state.roomHost) {
+    sendRoomFeature("room_close_save", {
+      roomCode: state.roomCode,
+      hostId: state.clientId,
+      hostName: state.sect?.name || "房主宗门",
+      year: state.year,
+      savedAt: Date.now(),
+      snapshot,
+    });
+  }
+  handleRoomCloseSave({ roomCode: state.roomCode, hostId: state.clientId, hostName: state.sect?.name, year: state.year, savedAt: Date.now(), snapshot }, state.sect?.name);
+}
+
+function handleRoomCloseSave(payload = {}, sourceName = "房主") {
+  if (payload.snapshot && state.multiplayer) applySharedWorldSnapshot(payload.snapshot);
+  saveMultiplayerRoomProgress("房间关闭自动保存");
+  disconnectMultiplayerRoom(`房间已由${sourceName || "房主"}关闭并保存`);
+  closeModal();
+  showStartScreen();
+  flashFeedback("房间已关闭，本地联机存档已保存。", "good");
+  render();
+}
+
+function loadMultiplayerRoomProgress(room = roomCodeValue()) {
+  const saved = readRoomSave(room);
+  if (!saved?.data?.state) {
+    log(`房间 ${room} 暂无本地联机存档。`, "warn");
+    return;
+  }
+  try {
+    hydrateState(saved.data.state);
+    state.multiplayer = true;
+    state.roomCode = saved.data.roomCode || room;
+    if (saved.data.snapshot) applySharedWorldSnapshot(saved.data.snapshot);
+    if (els.multiplayerToggle) els.multiplayerToggle.checked = true;
+    if (els.roomCodeInput) els.roomCodeInput.value = state.roomCode;
+    if (state.founded) showGameShell();
+    else showStartScreen();
+    closeModal();
+    connectMultiplayerRoom(state.roomCode);
+    log(`已读取联机房间存档：${roomSaveSummary(state.roomCode)}。`, "good");
+    render();
+  } catch (err) {
+    log("读取联机房间存档失败：存档数据损坏。", "warn");
+  }
+}
+
+function maybeOfferRoomSaveOnJoin() {
+  const room = state.roomCode || roomCodeValue();
+  const saved = readRoomSave(room);
+  if (!saved?.data?.state || state.founded) return;
+  showModal({
+    kicker: "联机存档",
+    title: `检测到房间 ${room} 的本地存档`,
+    body: `<p>${tradeEscape(roomSaveSummary(room))}</p><p>读取后会恢复你上次在该房间的宗门进度，并重新连接房间。</p>`,
+    actions: [
+      { label: "读取联机存档", handler: () => loadMultiplayerRoomProgress(room) },
+      { label: "跳过，重新开始", handler: closeModal },
+    ],
+  });
+}
+
+function saveSlotKey(slot) {
+  return `${SAVE_SLOT_PREFIX}${slot}`;
+}
+
+function readSaveSlot(slot) {
+  const raw = localStorage.getItem(saveSlotKey(slot)) || (slot === 1 ? localStorage.getItem(SAVE_KEY) : null);
+  if (!raw) return null;
+  try {
+    const data = JSON.parse(raw);
+    return { raw, data };
+  } catch {
+    return { raw, data: null, broken: true };
+  }
+}
+
+function saveSlotSummary(slot) {
+  const saved = readSaveSlot(slot);
+  if (!saved?.data) return "空档";
+  const data = saved.data;
+  const name = data.sect?.name || "未立宗门";
+  const mode = data.multiplayer ? "联机" : "单机";
+  return `${name} · 太初 ${data.year || 1} 年 · ${mode}`;
+}
+
+function openSaveSlotModal(mode = "save") {
+  const saving = mode === "save";
+  const room = state.roomCode || roomCodeValue();
+  const roomActions = saving
+    ? [
+      { label: state.roomHost ? "保存并关闭联机房间" : "保存联机进度", disabled: !state.multiplayer, handler: () => state.roomHost ? closeMultiplayerRoomAndSave() : (saveMultiplayerRoomProgress("联机进度保存"), closeModal()) },
+    ]
+    : [
+      { label: "读取联机房间存档", disabled: !readRoomSave(room)?.data?.state, handler: () => loadMultiplayerRoomProgress(room) },
+    ];
+  showModal({
+    kicker: saving ? "保存进度" : "读取进度",
+    title: saving ? "选择一个存档栏位" : "选择要读取的存档",
+    body: `
+      <p>${saving ? "当前进度会写入所选栏位，并保留另外两个栏位。" : "读取后会覆盖当前局面；旧单档存档会显示在 1 号档。"}</p>
+      ${state.multiplayer || readRoomSave(room)?.data?.state ? `<p>联机房间存档：${tradeEscape(roomSaveSummary(room))}</p>` : ""}
+      <div class="system-grid">
+        ${Array.from({ length: SAVE_SLOT_COUNT }, (_, i) => `<article class="system-card"><strong>${i + 1} 号档</strong><span>${tradeEscape(saveSlotSummary(i + 1))}</span></article>`).join("")}
+      </div>
+    `,
+    actions: Array.from({ length: SAVE_SLOT_COUNT }, (_, i) => {
+      const slot = i + 1;
+      const hasData = Boolean(readSaveSlot(slot)?.data);
+      return {
+        label: saving ? `保存到 ${slot} 号档` : `读取 ${slot} 号档`,
+        disabled: !saving && !hasData,
+        handler: () => saving ? saveGame(slot) : loadGame(slot),
+      };
+    }).concat(roomActions, [{ label: "取消", handler: closeModal }]),
+  });
+}
+
+function saveGame(slot = null) {
+  if (!Number.isInteger(Number(slot))) {
+    openSaveSlotModal("save");
+    return;
+  }
+  try {
+    ensureSectDefaults();
+    const data = JSON.stringify(serializeState());
+    localStorage.setItem(saveSlotKey(Number(slot)), data);
+    if (Number(slot) === 1) localStorage.setItem(SAVE_KEY, data);
+    closeModal();
+    log(`已保存到 ${Number(slot)} 号档：太初 ${state.year} 年。`, "good");
   } catch (err) {
     log("保存失败：浏览器存储空间不可用。", "warn");
   }
@@ -3464,20 +5603,24 @@ function marketSell(id, qty = 1) {
   render();
 }
 
-function loadGame() {
-  const raw = localStorage.getItem(SAVE_KEY);
-  if (!raw) {
-    log("暂无存档。", "warn");
+function loadGame(slot = null) {
+  if (!Number.isInteger(Number(slot))) {
+    openSaveSlotModal("load");
+    return;
+  }
+  const saved = readSaveSlot(Number(slot));
+  if (!saved?.raw) {
+    log(`${Number(slot)} 号档暂无存档。`, "warn");
     return;
   }
   try {
-    hydrateState(JSON.parse(raw));
+    hydrateState(saved.data || JSON.parse(saved.raw));
     if (state.founded) showGameShell();
     else showStartScreen();
     updateRoomPopulation([]);
     els.waitingOverlay.hidden = true;
     closeModal();
-    log(`已读取存档：太初 ${state.year} 年。`, "good");
+    log(`已读取 ${Number(slot)} 号档：太初 ${state.year} 年。`, "good");
     syncPublicState();
     render();
   } catch (err) {
@@ -3516,6 +5659,46 @@ function trainingDrill() {
     d.atk += state.sect.buildings.trainingHall;
   }
   log("演武场开阵集训，全体弟子获得修为与攻伐提升。", "good");
+  closeModal();
+  render();
+}
+
+function openInsightRoom() {
+  if (state.sect.buildings.insightRoom < 1) {
+    log("需要先建设参悟室。", "warn");
+    return;
+  }
+  const roster = state.sect.disciples.filter((d) => (d.activeMethods || []).length);
+  showModal({
+    kicker: "参悟室",
+    title: "选择弟子参悟功法",
+    body: `
+      <p>参悟室消耗 1 点行动，提升该弟子已携带功法熟练度。收益受参悟室、灵气阵和山门灵气影响。</p>
+      <div class="tournament-table">
+        ${roster.length ? roster.map((d, index) => `<label class="match-row"><span>${d.name}<div class="hp-line"><i style="width:${clamp(d.temper, 0, 160) / 1.6}%"></i></div></span><strong>${(d.activeMethods || []).map((id) => methodCatalog[id]?.name).filter(Boolean).join(" / ")}</strong><input type="radio" name="insight-disciple" value="${d.id}" ${index === 0 ? "checked" : ""}></label>`).join("") : `<div class="target-detail">暂无携带功法的弟子，请先在弟子详情中参悟并携带功法。</div>`}
+      </div>
+    `,
+    actions: [
+      { label: "开始参悟", disabled: !roster.length, handler: () => {
+        const id = els.modalBody.querySelector("input[name='insight-disciple']:checked")?.value;
+        trainMethodInInsightRoom(id);
+      } },
+      { label: "关闭", handler: closeModal },
+    ],
+  });
+}
+
+function trainMethodInInsightRoom(discipleId) {
+  const d = state.sect.disciples.find((item) => item.id === discipleId);
+  if (!d || !(d.activeMethods || []).length) return;
+  if (!spendAction(1, "参悟室修行")) return;
+  const gain = Math.round(6 + state.sect.buildings.insightRoom * 5 + state.sect.buildings.spiritArray * 3 + (state.sect.aura || 0) / 24);
+  for (const id of d.activeMethods) {
+    const method = d.methods.find((item) => item.id === id);
+    if (method) method.proficiency = clamp((method.proficiency || 0) + gain, 0, 100);
+  }
+  d.status = "参悟功法";
+  log(`${d.name}在参悟室静修，携带功法熟练度 +${gain}。`, "good");
   closeModal();
   render();
 }
@@ -3616,6 +5799,8 @@ function resolveYearAdvance() {
   const alchemyIncome = owned.reduce((s, r) => s + resourceYield(r, "alchemyMats"), 0);
   const forgingIncome = owned.reduce((s, r) => s + resourceYield(r, "forgingMats"), 0);
   const arrayIncome = owned.reduce((s, r) => s + resourceYield(r, "arrayMats"), 0);
+  const refineIncome = owned.reduce((s, r) => s + resourceYield(r, "refineStone"), 0);
+  const lockIncome = owned.reduce((s, r) => s + resourceYield(r, "affixLock"), 0);
   const springBoost = owned.filter((r) => r.kind === "spring").reduce((s, r) => s + r.value, 0);
   const wealthBoost = (state.yearlyBoon?.key === "wealthBonus" ? 45 : 0) + state.sect.buildings.market * 28;
   const stoneIncome = Math.round((95 + wealthBoost + state.sect.resource * 1.35 + mineIncome * 1.75 + traitBonus("stones")) * stoneIncomeMultiplier());
@@ -3624,6 +5809,8 @@ function resolveYearAdvance() {
   state.sect.alchemyMats += 2 + alchemyIncome;
   state.sect.forgingMats += 1 + forgingIncome;
   state.sect.arrayMats += arrayIncome;
+  if (refineIncome) addItem("refineStone", refineIncome, 0);
+  if (lockIncome) addItem("affixLock", lockIncome, 0);
   state.sect.insight += 10 + state.sect.buildings.scoutTower * 3 + Math.floor(state.sect.prestige / 180);
   state.sect.barrier = clamp(state.sect.barrier + Math.round(7 + traitBonus("barrier") / 16), 0, 100);
   state.worldCrisis = rollWorldCrisis();
@@ -3632,13 +5819,18 @@ function resolveYearAdvance() {
 
   for (const d of state.sect.disciples) {
     const fatiguePenalty = Math.min(12, (d.pillFatigue || 0) * 2);
-    d.exp += Math.round(5 + state.sect.aura / 26 + d.grow / 13 + d.aptitude / 52 + springBoost / 85 + state.sect.buildings.trainingHall * 2 + Math.floor(elderBonus("train") / 3) - fatiguePenalty - Math.floor((d.mind || 0) / 18));
+    processDiscipleSeclusionYear(d);
+    const baseGrowth = 5 + state.sect.aura / 26 + d.grow / 13 + d.aptitude / 52 + springBoost / 85 + state.sect.buildings.trainingHall * 2 + state.sect.buildings.spiritArray * 2 + Math.floor(elderBonus("train") / 3) - fatiguePenalty - Math.floor((d.mind || 0) / 18);
+    d.exp += Math.round(baseGrowth * discipleCultivationGrowth(d));
+    gainSpecializationExp(d, 5 + d.realm * 2 + Math.floor((d.activeMethods?.length || 0) * 1.5), "年度修行");
+    refreshDiscipleTitles(d);
     if (d.exp >= 100 && d.realm < realms.length - 1) maybeAutoTribulation(d);
   }
 
   runAiTurns();
   processMindAndLegacy();
   maybeCreateYearlyBond();
+  maybeTriggerDisciplePersonalEvent();
 
   if (Math.random() < 0.42) randomEvent();
   const worldAdventureDue = state.year >= state.nextWorldAdventureYear;
@@ -3701,6 +5893,23 @@ function showAiReportModal(afterClose = null) {
 function maybeStartWorldAdventure(afterClose) {
   if (!state.founded || state.year < state.nextWorldAdventureYear || state.sect.disciples.length === 0) return false;
   if (state.multiplayer && state.roomConnected) {
+    state.pendingAdventureAfterClose = afterClose;
+    if (!state.roomHost) {
+      const continueQueue = () => {
+        state.pendingAdventureAfterClose = null;
+        closeModal();
+        afterClose?.();
+        render();
+      };
+      showModal({
+        kicker: "世界奇遇",
+        title: "等待房主同步奇遇",
+        body: `<p>联机模式下世界奇遇由房主统一生成，保证所有玩家同一年、同主题、同排行。</p>`,
+        actions: [{ label: "先继续年度结算", handler: continueQueue }],
+      });
+      els.modalCloseBtn.onclick = continueQueue;
+      return true;
+    }
     const setup = createRoomWorldAdventureSetup();
     if (state.roomWorldAdventureId === setup.id) return false;
     state.roomWorldAdventureId = setup.id;
@@ -3717,9 +5926,10 @@ function maybeStartWorldAdventure(afterClose) {
 function runYearStartEvents(endingBoonKey = "") {
   const queue = [
     { check: () => state.year >= state.nextWorldAdventureYear, run: (next) => { if (!maybeStartWorldAdventure(next)) next(); } },
-    { check: () => state.year % 3 === 0 && state.lastTournamentYear !== state.year, run: (next) => openTournamentPicker(true, next) },
+    { check: () => state.year % 10 === 0 && state.lastTournamentYear !== state.year, run: (next) => openTournamentPicker(true, next) },
     { check: () => shouldOpenCouncilMeeting(endingBoonKey), run: (next) => openCouncilMeeting(next) },
     { check: () => shouldOpenAuction(endingBoonKey), run: (next) => openAuction(next, endingBoonKey) },
+    { check: () => shouldOpenWanderingMerchant(), run: (next) => openWanderingMerchant(next) },
   ];
   runEventQueue(queue, () => offerYearlyBoons());
 }
@@ -3749,7 +5959,92 @@ function shouldOpenAuction(endingBoonKey = "") {
   return endingBoonKey === "auctionBonus" && Math.random() < 0.48;
 }
 
+function shouldOpenWanderingMerchant() {
+  if (!state.founded || state.year < 3 || state.lastMerchantYear === state.year) return false;
+  if (state.year - state.lastMerchantYear >= 5) return true;
+  return Math.random() < 0.22;
+}
+
+function merchantGoodsForYear() {
+  const goods = [];
+  const pools = [
+    ...["qiPill", "marrowPill", "heartLotus", "tribPill", "minorHealPill", "midHealPill"],
+    ...methodItemIds,
+    ...equipmentItemIds,
+    "refineStone",
+    "affixLock",
+  ];
+  const count = 5 + Math.min(3, Math.floor(state.year / 12));
+  for (let i = 0; i < count; i += 1) {
+    const id = pick(pools);
+    const item = itemCatalog[id];
+    const quality = item?.material ? 0 : clamp(Math.floor(Math.random() * 5) - (Math.random() < 0.55 ? 1 : 0), 0, 4);
+    const price = Math.round((item?.equipment ? 360 : methodCatalog[id] ? 300 : item?.material ? 120 : 180) * (1 + quality * 0.55) * (0.9 + Math.random() * 0.35));
+    goods.push({ id, quality, price, stock: item?.material ? rand(1, 3) : 1 });
+  }
+  return goods;
+}
+
+function openWanderingMerchant(afterClose = null) {
+  state.lastMerchantYear = state.year;
+  const goods = merchantGoodsForYear();
+  showModal({
+    kicker: "流浪商人",
+    title: "云游仙商到访山门",
+    body: `
+      <p>流浪商人不消耗行动点。联机模式下所有玩家同年遇到商人，但货架各不相同。</p>
+      <p>当前灵石：<strong>${Math.round(state.sect.stones)}</strong></p>
+      <div class="system-grid">
+        ${goods.map((good, index) => {
+          const item = itemCatalog[good.id];
+          const label = item.material ? item.name : `${gearTierName(good.quality)}${item.name}`;
+          return `<article class="system-card"><strong>${label}</strong><span>${item.kind} · ${item.text}</span><em>${good.price} 灵石 / 库存 ${good.stock}</em><button class="merchant-buy" data-index="${index}" ${state.sect.stones < good.price ? "disabled" : ""}>购买</button></article>`;
+        }).join("")}
+      </div>
+    `,
+    actions: [{ label: "离开", handler: () => { closeModal(); afterClose?.(); render(); } }],
+  });
+  els.modalBody.querySelectorAll(".merchant-buy").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const good = goods[Number(btn.dataset.index)];
+      if (!good || good.stock <= 0 || state.sect.stones < good.price) return;
+      state.sect.stones -= good.price;
+      good.stock -= 1;
+      addItem(good.id, 1, good.quality);
+      log(`从流浪商人处购得${itemCatalog[good.id].material ? "" : gearTierName(good.quality)}${itemCatalog[good.id].name}。`, "good");
+      btn.disabled = true;
+      syncPublicState();
+      render();
+    });
+  });
+}
+
 function openCouncilMeeting(afterClose = null) {
+  if (state.multiplayer && state.roomConnected) {
+    state.pendingCouncilAfterClose = afterClose;
+    state.lastCouncilYear = state.year;
+    if (state.roomCouncil?.year === state.year) {
+      // Continue into the shared ballot below.
+    } else if (state.roomHost) {
+      state.roomCouncil = createRoomCouncilState();
+      sendRoomFeature("council_open", { council: state.roomCouncil });
+    } else {
+      const continueQueue = () => {
+        state.pendingCouncilAfterClose = null;
+        closeModal();
+        afterClose?.();
+        render();
+      };
+      showModal({
+        kicker: "仙盟会议",
+        title: "等待房主召集议题",
+        body: `<p>本年仙盟会议由房主统一生成议题。议题同步后，所有玩家会看到相同投票选项。</p>`,
+        actions: [{ label: "先继续年度结算", handler: continueQueue }],
+      });
+      els.modalCloseBtn.onclick = continueQueue;
+      return;
+    }
+  }
   state.lastCouncilYear = state.year;
   let topics = state.roomCouncil?.year === state.year && Array.isArray(state.roomCouncil.topics)
     ? state.roomCouncil.topics
@@ -3887,6 +6182,36 @@ function showCouncilResultModal(topic, voteCounts, afterClose = null) {
 }
 
 function openAuction(afterClose = null, endingBoonKey = "") {
+  if (state.multiplayer && state.roomConnected) {
+    state.pendingAuctionAfterClose = afterClose;
+    state.lastAuctionYear = state.year;
+    if (state.roomAuction?.year === state.year) {
+      state.roomAuction.afterClose = afterClose;
+      showInteractiveAuctionRound();
+      return;
+    }
+    if (state.roomHost) {
+      state.roomAuction = createRoomAuctionState(afterClose, endingBoonKey);
+      sendRoomFeature("auction_open", { auction: { ...state.roomAuction, afterClose: null } });
+      sendNet("player_event", { text: `${state.sect.name}开启了联机拍卖：${state.roomAuction.lot.name}。`, tone: "good" });
+      showInteractiveAuctionRound();
+      return;
+    }
+    const continueQueue = () => {
+      state.pendingAuctionAfterClose = null;
+      closeModal();
+      afterClose?.();
+      render();
+    };
+    showModal({
+      kicker: "联机拍卖",
+      title: "等待房主开拍",
+      body: `<p>本年拍卖由房主统一生成拍品和轮次。房主开拍后，所有玩家会进入同一个竞价弹框。</p>`,
+      actions: [{ label: "先继续年度结算", handler: continueQueue }],
+    });
+    els.modalCloseBtn.onclick = continueQueue;
+    return;
+  }
   state.lastAuctionYear = state.year;
   const lots = auctionLotCatalog
     .map((lot) => {
@@ -3955,7 +6280,7 @@ function showInteractiveAuctionRound() {
     actions: [
       { label: `加价到 ${nextBid}`, disabled: state.sect.stones < nextBid || auction.passed?.[state.clientId], handler: () => placeInteractiveAuctionBid(nextBid) },
       { label: "放弃本件", disabled: auction.passed?.[state.clientId], handler: () => passInteractiveAuction() },
-      { label: "落槌结算", disabled: !auction.leaderName, handler: () => closeInteractiveAuction() },
+      { label: "落槌结算", disabled: !auction.leaderName || (state.multiplayer && state.roomConnected && !state.roomHost), handler: () => closeInteractiveAuction() },
     ],
   });
 }
@@ -4087,7 +6412,7 @@ function buyAuctionLot(lot, afterClose = null) {
   const rewards = [];
   if (lot.item) {
     addItem(lot.item, 1, lot.quality || 0);
-    rewards.push(`${qualityNames[lot.quality || 0]}${itemCatalog[lot.item].name}`);
+    rewards.push(`${gearTierName(lot.quality || 0)}${itemCatalog[lot.item].name}`);
     if (lot.item === "swordManual") state.sect.insight += 35;
   }
   if (lot.recipe) {
@@ -4164,6 +6489,39 @@ function stableHash(text = "") {
 function stableRange(seed, min, max) {
   const span = Math.max(1, max - min + 1);
   return min + (stableHash(seed) % span);
+}
+
+function createRoomAuctionState(afterClose = null, endingBoonKey = "") {
+  const base = `${state.roomCode || "solo"}:${state.year}:auction`;
+  const discount = endingBoonKey === "auctionBonus" ? 0.84 : 1;
+  const lotIndex = stableHash(base) % auctionLotCatalog.length;
+  const rawLot = auctionLotCatalog[lotIndex];
+  const lot = {
+    ...rawLot,
+    price: Math.round(rawLot.base * discount * (0.9 + stableRange(`${base}:price`, 0, 24) / 100)),
+  };
+  return {
+    id: `${state.roomCode || "ROOM"}-${state.year}-auction-${lotIndex}`,
+    year: state.year,
+    lot,
+    currentPrice: lot.price,
+    leaderId: null,
+    leaderName: "",
+    round: 1,
+    passed: {},
+    history: [],
+    afterClose,
+  };
+}
+
+function createRoomCouncilState() {
+  const base = `${state.roomCode || "solo"}:${state.year}:council`;
+  const topics = councilTopics
+    .map((topic, index) => ({ topic, roll: stableHash(`${base}:${index}:${topic.key}`) }))
+    .sort((a, b) => a.roll - b.roll)
+    .slice(0, 3)
+    .map((item) => item.topic);
+  return { year: state.year, topics, votes: {}, resolved: false };
 }
 
 function createRoomWorldAdventureSetup() {
@@ -4277,22 +6635,212 @@ function showCoopAdventureChoice(theme, disciple, aiTeams, afterClose) {
     `,
     actions: [
       { label: "邀请盟友共同探索", handler: () => {
-        const participants = allies.map((player) => ({ id: player.id, name: player.name, disciple: "待同步弟子", danger: 0, hp: 0 }));
+        const lobby = createAdventureLobby(theme, disciple, aiTeams, allies);
+        state.roomAdventureLobby = lobby;
+        state.pendingAdventureAfterClose = afterClose;
+        sendRoomFeature("adventure_lobby_open", { lobby });
         closeModal();
-        startWorldAdventure(theme, disciple, aiTeams, afterClose, participants);
-        sendRoomFeature("adventure_progress", { status: { disciple: disciple.name, danger: 0, hp: disciple.hp, step: 0 } });
+        showAdventureLobbyModal(lobby, afterClose);
       } },
       { label: "本宗单独探索", handler: () => { closeModal(); startWorldAdventure(theme, disciple, aiTeams, afterClose); } },
     ],
   });
 }
 
-function startWorldAdventure(theme, disciple, aiTeams, afterClose, extraParticipants = []) {
+function adventureThemeIndex(theme) {
+  return Math.max(0, worldAdventureThemes.findIndex((item) => item.name === theme?.name));
+}
+
+function publicAdventureParticipant(disciple) {
+  return {
+    id: state.clientId,
+    playerId: state.clientId,
+    name: state.sect.name,
+    playerName: state.sect.name,
+    discipleId: disciple.id,
+    disciple: disciple.name,
+    realm: disciple.realm,
+    hp: disciple.hp,
+    danger: 0,
+    step: 0,
+    ready: true,
+  };
+}
+
+function createAdventureLobby(theme, disciple, aiTeams, allies = []) {
+  const themeIndex = adventureThemeIndex(theme);
+  const expectedIds = [state.clientId, ...allies.map((player) => player.id)].filter(Boolean);
+  const participants = {};
+  participants[state.clientId] = publicAdventureParticipant(disciple);
+  return {
+    id: `${state.roomCode || "solo"}-${state.year}-adventure-lobby-${themeIndex}`,
+    year: state.year,
+    hostId: state.clientId,
+    hostName: state.sect.name,
+    themeIndex,
+    aiTeams,
+    expectedIds,
+    expectedNames: Object.fromEntries([[state.clientId, state.sect.name], ...allies.map((player) => [player.id, player.name])]),
+    participants,
+    declined: {},
+    started: false,
+  };
+}
+
+function normalizeAdventureLobby(lobby) {
+  if (!lobby) return null;
+  const themeIndex = Number(lobby.themeIndex || 0);
+  return {
+    ...lobby,
+    themeIndex,
+    theme: worldAdventureThemes[themeIndex] || worldAdventureThemes[0],
+    aiTeams: Array.isArray(lobby.aiTeams) ? lobby.aiTeams : [],
+    expectedIds: Array.isArray(lobby.expectedIds) ? lobby.expectedIds : [],
+    expectedNames: lobby.expectedNames || {},
+    participants: lobby.participants || {},
+    declined: lobby.declined || {},
+  };
+}
+
+function showAdventureLobbyModal(lobby, afterClose = null) {
+  const data = normalizeAdventureLobby(lobby);
+  if (!data) return;
+  state.roomAdventureLobby = data;
+  const expected = data.expectedIds.length ? data.expectedIds : Object.keys(data.participants || {});
+  const rows = expected.map((id) => {
+    const p = data.participants?.[id];
+    const declined = data.declined?.[id];
+    const name = p?.name || data.expectedNames?.[id] || "盟友宗门";
+    const status = p?.ready ? `已准备：${p.disciple}` : declined ? "已婉拒" : "等待选择弟子";
+    return `<article class="system-card ${p?.ready ? "is-winner" : ""}"><strong>${tradeEscape(name)}</strong><span>${tradeEscape(status)}</span></article>`;
+  }).join("");
+  const allResponded = expected.every((id) => data.participants?.[id]?.ready || data.declined?.[id]);
+  const readyCount = Object.values(data.participants || {}).filter((p) => p.ready).length;
+  const isHost = data.hostId === state.clientId;
+  showModal({
+    kicker: "协作奇遇准备",
+    title: `${data.theme.name}：等待盟友`,
+    body: `
+      <p>所有受邀玩家响应后，由发起者统一开启世界奇遇。参与者越多，难度小幅提高，但可互相护持降低危险。</p>
+      <div class="system-grid">${rows}</div>
+    `,
+    actions: [
+      { label: "刷新状态", handler: () => showAdventureLobbyModal(state.roomAdventureLobby, afterClose) },
+      { label: "开始协作奇遇", disabled: !isHost || !allResponded || readyCount < 1, handler: () => startAdventureLobbyFromHost(afterClose) },
+      { label: "取消邀请", disabled: !isHost, handler: () => cancelAdventureLobby(afterClose) },
+    ],
+  });
+}
+
+function showAdventureLobbyInvite(lobby) {
+  const data = normalizeAdventureLobby(lobby);
+  if (!data || !state.founded || !data.expectedIds.includes(state.clientId) || data.participants?.[state.clientId] || data.declined?.[state.clientId]) return;
+  const roster = state.sect.disciples.slice().sort((a, b) => discipleBattleScore(b) - discipleBattleScore(a));
+  showModal({
+    kicker: "盟友邀请",
+    title: `${data.hostName || "盟友"}邀请探索${data.theme.name}`,
+    body: `
+      <p>选择一名弟子加入协作世界奇遇。进入后可看到队友状态，并可消耗本轮操作护持盟友降低危险值。</p>
+      <div class="adventure-roster">
+        ${roster.map((d, index) => `<label class="adventure-candidate ${d.core ? "is-core" : ""}">
+          <input type="radio" name="coop-adventure-disciple" value="${d.id}" ${index === 0 ? "checked" : ""}>
+          <div><strong>${d.core ? "核心·" : ""}${d.name}</strong><span>${realms[d.realm]} · 战力 ${Math.round(discipleBattleScore(d))} · 体 ${d.hp}</span></div>
+        </label>`).join("")}
+      </div>
+    `,
+    actions: [
+      { label: "准备加入", handler: () => {
+        const id = els.modalBody.querySelector("input[name='coop-adventure-disciple']:checked")?.value;
+        const disciple = state.sect.disciples.find((d) => d.id === id);
+        if (!disciple) return;
+        const participant = publicAdventureParticipant(disciple);
+        state.roomAdventureLobby = mergeAdventureLobbyParticipant(data, participant);
+        sendRoomFeature("adventure_lobby_ready", { lobbyId: data.id, participant, lobby: state.roomAdventureLobby });
+        closeModal();
+        showAdventureLobbyModal(state.roomAdventureLobby, state.pendingAdventureAfterClose);
+      } },
+      { label: "婉拒", handler: () => {
+        state.roomAdventureLobby = markAdventureLobbyDeclined(data, state.clientId, state.sect.name);
+        sendRoomFeature("adventure_lobby_decline", { lobbyId: data.id, playerId: state.clientId, playerName: state.sect.name, lobby: state.roomAdventureLobby });
+        closeModal();
+      } },
+    ],
+  });
+}
+
+function mergeAdventureLobbyParticipant(lobby, participant) {
+  const data = normalizeAdventureLobby(lobby);
+  if (!data || (!participant?.playerId && !participant?.id)) return data;
+  const id = participant.playerId || participant.id;
+  data.participants = { ...(data.participants || {}), [id]: { ...participant, id, playerId: id, ready: true } };
+  if (data.declined) delete data.declined[id];
+  return data;
+}
+
+function markAdventureLobbyDeclined(lobby, playerId, playerName = "盟友宗门") {
+  const data = normalizeAdventureLobby(lobby);
+  if (!data || !playerId) return data;
+  data.declined = { ...(data.declined || {}), [playerId]: playerName };
+  if (data.participants) delete data.participants[playerId];
+  return data;
+}
+
+function startAdventureLobbyFromHost(afterClose = null) {
+  const lobby = normalizeAdventureLobby(state.roomAdventureLobby);
+  if (!lobby || lobby.hostId !== state.clientId) return;
+  lobby.started = true;
+  sendRoomFeature("adventure_lobby_start", { lobby });
+  beginAdventureFromLobby(lobby, afterClose);
+}
+
+function cancelAdventureLobby(afterClose = null) {
+  const lobby = normalizeAdventureLobby(state.roomAdventureLobby);
+  if (lobby) sendRoomFeature("adventure_lobby_cancel", { lobbyId: lobby.id });
+  state.roomAdventureLobby = null;
+  closeModal();
+  afterClose?.();
+  render();
+}
+
+function beginAdventureFromLobby(lobby, afterClose = null) {
+  const data = normalizeAdventureLobby(lobby);
+  const mine = data?.participants?.[state.clientId];
+  state.roomAdventureLobby = null;
+  if (!data || !mine) {
+    showModal({
+      kicker: "协作奇遇",
+      title: `${data?.theme?.name || "世界奇遇"}已开始`,
+      body: `<p>本宗未加入本次探索，将作为旁观宗门等待结果。</p>`,
+      actions: [{ label: "知道了", handler: () => { closeModal(); afterClose?.(); render(); } }],
+    });
+    return;
+  }
+  const disciple = state.sect.disciples.find((d) => d.id === mine.discipleId || d.name === mine.disciple);
+  if (!disciple) {
+    log("协作奇遇开始失败：本宗参战弟子不存在。", "warn");
+    return;
+  }
+  const extras = Object.values(data.participants || {})
+    .filter((p) => (p.playerId || p.id) !== state.clientId)
+    .map((p) => ({ id: p.playerId || p.id, name: p.name || p.playerName, disciple: p.disciple, danger: p.danger || 0, hp: p.hp || 0 }));
+  closeModal();
+  startWorldAdventure(data.theme, disciple, data.aiTeams, afterClose, extras, {
+    lockstep: Boolean(state.multiplayer && state.roomConnected),
+    hostId: data.hostId,
+    lobbyId: data.id,
+  });
+  sendRoomFeature("adventure_progress", { status: { disciple: disciple.name, danger: 0, hp: disciple.hp, step: 0 } });
+}
+
+function startWorldAdventure(theme, disciple, aiTeams, afterClose, extraParticipants = [], syncOptions = {}) {
   state.selectedDiscipleId = disciple.id;
   state.worldAdventure = {
     theme,
     discipleId: disciple.id,
     aiTeams,
+    lockstep: Boolean(syncOptions.lockstep),
+    hostId: syncOptions.hostId || state.clientId,
+    lobbyId: syncOptions.lobbyId || "",
     step: 0,
     merit: 0,
     danger: 0,
@@ -4306,17 +6854,34 @@ function startWorldAdventure(theme, disciple, aiTeams, afterClose, extraParticip
   renderWorldAdventureStep();
 }
 
+function worldAdventureStepChoices(adv, stage) {
+  if (!stage?.choices?.length) return [];
+  const seed = `${adv?.lobbyId || adv?.theme?.name || "solo"}:${adv?.step || 0}:${state.roomCode || "local"}`;
+  return stage.choices
+    .map((choice, index) => ({ choice, score: stableHash(`${seed}:${index}:${choice.label}`) }))
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 4)
+    .map((item) => item.choice);
+}
+
+function applyRoomAdventureLockstepChoice(payload = {}, sourceId = "") {
+  const adv = state.worldAdventure;
+  if (!adv?.lockstep || sourceId !== adv.hostId || payload.lobbyId !== adv.lobbyId || payload.step !== adv.step) return;
+  const stage = worldAdventureStages[adv.step];
+  const choices = worldAdventureStepChoices(adv, stage);
+  const choice = choices[payload.choiceIndex] || choices.find((item) => item.label === payload.choiceLabel);
+  if (!choice) return;
+  resolveWorldAdventureChoice(choice, { remote: true });
+}
+
 function renderWorldAdventureStep() {
   const adv = state.worldAdventure;
   const d = state.sect.disciples.find((item) => item.id === adv?.discipleId);
   if (!adv || !d) return;
   const stage = worldAdventureStages[adv.step];
   const participants = adv.participants || [{ id: state.clientId, name: state.sect.name, disciple: d.name, danger: adv.danger, hp: d.hp }];
-  const choices = stage.choices
-    .map((choice) => ({ choice, roll: Math.random() }))
-    .sort((a, b) => a.roll - b.roll)
-    .slice(0, 4)
-    .map((x) => x.choice);
+  const choices = worldAdventureStepChoices(adv, stage);
+  const waitingLockstep = adv.lockstep && adv.hostId && adv.hostId !== state.clientId;
   showModal({
     kicker: adv.theme.name,
     title: `${stage.title}：${d.name}`,
@@ -4333,20 +6898,33 @@ function renderWorldAdventureStep() {
         ${adv.history.slice(-3).map((h) => `<p class="${h.tone}">${h.text}</p>`).join("") || "<p>旅程刚刚开始，所有选择都会留下痕迹。</p>"}
       </div>
     `,
-    actions: choices.map((choice) => ({
+    actions: (waitingLockstep ? [{
+      label: "等待队长推进",
+      disabled: true,
+      handler: () => {},
+    }] : choices.map((choice) => ({
       label: choice.label,
       handler: () => resolveWorldAdventureChoice(choice),
-    })).concat(participants.length > 1 ? [{ label: "护持盟友降险", handler: helpAdventureAllies }] : []),
+    }))).concat(participants.length > 1 ? [{ label: "护持盟友降险", handler: helpAdventureAllies }] : []),
   });
   els.modalProgress.hidden = false;
   els.modalProgress.textContent = `${adv.step + 1}/${worldAdventureStages.length}`;
   els.modalCloseBtn.onclick = () => {};
 }
 
-function resolveWorldAdventureChoice(choice) {
+function resolveWorldAdventureChoice(choice, options = {}) {
   const adv = state.worldAdventure;
   const d = state.sect.disciples.find((item) => item.id === adv?.discipleId);
   if (!adv || !d) return;
+  if (adv.lockstep && adv.hostId && adv.hostId !== state.clientId && !options.remote) {
+    flashFeedback("协作奇遇由队长统一推进，你仍可使用护持降低危险。", "warn");
+    return;
+  }
+  if (adv.lockstep && adv.hostId === state.clientId && state.multiplayer && state.roomConnected && !options.remote) {
+    const choices = worldAdventureStepChoices(adv, worldAdventureStages[adv.step]);
+    const choiceIndex = Math.max(0, choices.findIndex((item) => item.label === choice.label));
+    sendRoomFeature("adventure_lockstep_choice", { lobbyId: adv.lobbyId, step: adv.step, choiceIndex, choiceLabel: choice.label });
+  }
   const coopSize = Math.max(1, adv.participants?.length || 1);
   const coopDifficulty = Math.max(0, coopSize - 1) * 4;
   const coopSupport = Math.max(0, coopSize - 1) * 6;
@@ -4425,18 +7003,52 @@ function killAdventureDisciple(d, choice) {
   els.modalProgress.textContent = `${Math.min(adv.step + 1, worldAdventureStages.length)}/${worldAdventureStages.length}`;
 }
 
+function buildWorldAdventureLeaderboard(adv, finalScore) {
+  const currentDisciple = state.sect.disciples.find((item) => item.id === adv?.discipleId);
+  const rows = [{
+    id: state.clientId,
+    name: state.sect.name,
+    disciple: currentDisciple?.name || "本宗弟子",
+    score: finalScore,
+    player: true,
+  }];
+  for (const player of foundedRoomPlayers()) {
+    if (!player || player.id === state.clientId) continue;
+    rows.push({
+      id: player.id,
+      name: player.name || "联机宗门",
+      disciple: player.topDisciple || "参战弟子",
+      score: Math.round((player.power || 0) * 0.08 + (player.maxRealm || 0) * 28 + stableRange(`${adv.theme?.name}:${state.year}:${player.id}:adventure`, 70, 260)),
+      remote: true,
+    });
+  }
+  for (const team of adv.aiTeams || []) {
+    rows.push({
+      id: team.sect,
+      name: team.sect,
+      disciple: team.disciple,
+      score: Math.round((team.score || 0) * 0.72 + stableRange(`${adv.theme?.name}:${state.year}:${team.sect}:ai-adventure`, 0, 150)),
+      ai: true,
+    });
+  }
+  return rows
+    .sort((a, b) => b.score - a.score)
+    .map((row, index) => ({ ...row, rank: index + 1 }));
+}
+
 function finishWorldAdventure(dead) {
   const adv = state.worldAdventure;
   const d = state.sect.disciples.find((item) => item.id === adv?.discipleId);
   if (!adv || !d || dead) return;
   const coopSize = Math.max(1, adv.participants?.length || 1);
-  const aiBest = adv.aiTeams.map((team) => ({ ...team, score: team.score * 0.72 + rand(0, 150) })).sort((a, b) => b.score - a.score)[0];
   const finalScore = adv.merit + (adv.flags.insight || 0) * 9 + (adv.flags.mercy || 0) * 7 + (adv.flags.greed || 0) * 5 + (adv.flags.blood || 0) * 7 + coopSize * 12 - adv.danger * 1.25 - adv.injuries * 3 + rand(12, 55);
-  const rank = finalScore >= (aiBest?.score || 0) ? 1 : finalScore > (aiBest?.score || 0) * 0.72 ? 2 : 3;
+  const leaderboard = buildWorldAdventureLeaderboard(adv, finalScore);
+  const rank = leaderboard.find((row) => row.id === state.clientId)?.rank || leaderboard.length;
   const ending = pickWorldAdventureEnding(adv, finalScore, rank);
   const reward = applyWorldAdventureReward(adv, d, finalScore, rank);
   log(`${d.name}走出${adv.theme.name}：${ending.title}。${ending.log}`, rank === 1 ? "good" : "warn");
   const next = adv.afterClose;
+  const leaderboardHtml = leaderboard.slice(0, 12).map((row) => `<article class="system-card ${row.id === state.clientId ? "is-winner" : ""}"><strong>第 ${row.rank} 名：${tradeEscape(row.name)}</strong><span>${tradeEscape(row.disciple || "参战弟子")} · 评分 ${Math.round(row.score || 0)}${row.remote ? " · 联机玩家" : row.ai ? " · AI宗门" : " · 本宗"}</span></article>`).join("");
   showModal({
     kicker: "世界奇遇结算",
     title: ending.title,
@@ -4450,6 +7062,7 @@ function finishWorldAdventure(dead) {
       <div class="reward-list">
         ${reward.map((item) => `<div><span>${item.name}</span><strong>${item.value}</strong></div>`).join("")}
       </div>
+      <div class="system-grid">${leaderboardHtml}</div>
       <div class="adventure-history">
         ${adv.history.slice(-6).map((h) => `<p class="${h.tone}">${h.text}</p>`).join("")}
       </div>
@@ -4482,7 +7095,7 @@ function pickWorldAdventureEnding(adv, score, rank) {
 }
 
 function applyWorldAdventureReward(adv, d, score, rank) {
-  const tier = rank === 1 ? 2 : rank === 2 ? 1 : 0;
+  const tier = rank === 1 ? 2 : rank <= 3 ? 1 : 0;
   const quality = clamp(Math.floor(score / 45) + tier, 0, qualityNames.length - 1);
   const stones = Math.max(80, Math.round(120 + score * 3 + tier * 180));
   const insightGain = Math.max(12, Math.round(score / 4)) + tier * 18;
@@ -4493,8 +7106,10 @@ function applyWorldAdventureReward(adv, d, score, rank) {
   const atkGain = adv.flags.bold || adv.flags.blood ? 3 + tier * 2 : 0;
   const defGain = adv.flags.guard || adv.flags.mercy ? 3 + tier * 2 : 0;
   const hpLoss = adv.flags.blood >= 2 || adv.danger > 40 ? rand(8, 18) : 0;
-  const itemId = adv.flags.greed || rank === 1 ? pick(["spiritBlade", "guardTalisman", "swordManual"]) : pick(["qiPill", "marrowPill", "heartLotus", "tribPill"]);
-  const itemName = `${qualityNames[quality]}${itemCatalog[itemId].name}`;
+  const itemId = adv.flags.greed || rank === 1
+    ? pick([...equipmentItemIds, ...methodItemIds, "refineStone", "affixLock"])
+    : pick(["qiPill", "marrowPill", "heartLotus", "tribPill", "swordManual"]);
+  const itemName = `${gearTierName(quality)}${itemCatalog[itemId].name}`;
   state.sect.stones += stones;
   state.sect.insight += insightGain;
   state.sect.prestige += prestigeGain;
@@ -4703,6 +7318,8 @@ function runAiTurns() {
     }
     r.foundation = clamp((r.foundation || 100) + Math.round(rand(5, 15) * era), 0, 320);
     r.power += Math.round((rand(14, 42) + r.disciples * 2.4 + (r.alchemy + r.forging) * 5.5) * era) + catchUp;
+    const softCap = Math.max(1200 + state.year * 260, playerPower * 1.65 + state.year * 120);
+    if (r.power > softCap) r.power = Math.round(softCap + (r.power - softCap) * 0.35);
     if (catchUp) report.push({ tone: "warn", text: `感受到本宗压力，强行整合底蕴追赶，战力额外 +${catchUp}。` });
     maybeAiResourceSabotage(r, report);
     if (report.length) {
@@ -4921,12 +7538,477 @@ function expeditionPower(mode, tactic) {
   return top * tacticFactor + support + economy + dao + boon + steal + rand(0, 220);
 }
 
+function methodIdsByElement(element, fallback = "swordManual") {
+  const ids = Object.values(methodCatalog).filter((method) => method.element === element).map((method) => method.id);
+  return ids.length ? ids : [fallback];
+}
+
+function syntheticGuardian(name, power = 600, seed = "guardian") {
+  const realm = clamp(Math.floor(Math.sqrt(Math.max(0, power)) / 14), 0, realms.length - 1);
+  const base = Math.max(26, Math.round(power / (32 + realm * 3)));
+  const element = pick(elementNames);
+  const methods = methodIdsByElement(element).slice(0, 2).map((id, index) => ({
+    id,
+    quality: clamp(realm - 1 + index, 0, 4),
+    proficiency: clamp(24 + realm * 8 + stableRange(`${seed}:${id}`, 0, 28), 0, 100),
+  }));
+  return {
+    id: `guardian-${seed}`,
+    name,
+    realm,
+    hp: 78 + realm * 28 + Math.round(base * 0.8),
+    atk: base + realm * 18,
+    def: Math.round(base * 0.75) + realm * 14,
+    speed: 28 + realm * 9 + stableRange(`${seed}:speed`, 0, 18),
+    temper: 48 + realm * 8,
+    aptitude: 45 + realm * 7,
+    luck: 35 + stableRange(`${seed}:luck`, 0, 18),
+    elementDamage: { [element]: 12 + realm * 8 },
+    methods,
+    activeMethods: methods.map((method) => method.id),
+  };
+}
+
+function combatantFromDisciple(d, name = d?.name || "参战者") {
+  normalizeDiscipleProgression(d);
+  return {
+    source: d,
+    name,
+    realm: d.realm || 0,
+    hpMax: Math.max(80, Math.round((d.hp || 1) * 10 + (d.realm || 0) * 120)),
+    hp: Math.max(80, Math.round((d.hp || 1) * 10 + (d.realm || 0) * 120)),
+    shield: Math.max(0, Number(d.shieldPower || 0) * 4),
+    atk: Math.max(1, d.atk || 1),
+    def: Math.max(0, d.def || 0),
+    speed: Math.max(1, d.speed || 1),
+    damagePct: Number(d.damagePct || 0),
+    reducePct: Number(d.reducePct || 0),
+    critPct: Number(d.critPct || 0),
+    critDamage: Number(d.critDamage || 0),
+    lifeSteal: Number(d.lifeSteal || 0),
+    pierce: Number(d.pierce || 0),
+    elementDamage: { ...(d.elementDamage || {}) },
+    methods: Array.isArray(d.methods) ? d.methods : [],
+    activeMethods: Array.isArray(d.activeMethods) ? d.activeMethods : [],
+    methodIndex: 0,
+  };
+}
+
+function nextCombatMethod(actor) {
+  const active = actor.activeMethods || [];
+  if (!active.length) return null;
+  const id = active[actor.methodIndex % active.length];
+  actor.methodIndex += 1;
+  const known = actor.methods?.find((method) => method.id === id) || { id, quality: methodCatalog[id]?.rarity || 0, proficiency: 30 };
+  const data = methodCatalog[id];
+  return data ? { known, data, scale: methodEffectScale(known, data, actor.source) } : null;
+}
+
+function applyCombatHit(attacker, defender, method) {
+  const data = method?.data || {};
+  const scale = method?.scale || 1;
+  const element = data.element || "";
+  const elementDamage = element ? (attacker.elementDamage?.[element] || 0) + (data.elementDamage || 0) * scale : 0;
+  const pierce = clamp((attacker.pierce || 0) + (data.pierce || 0) * scale, 0, 80);
+  const effectiveDef = defender.def * (1 - pierce / 100);
+  const crit = Math.random() * 100 < clamp(5 + (attacker.critPct || 0), 0, 70);
+  const critScale = crit ? 1.5 + (attacker.critDamage || 0) / 100 : 1;
+  const raw = attacker.atk * 3.2 + (data.atk || 0) * 7 * scale + elementDamage * 2.4 + attacker.realm * 42;
+  const damageScale = 1 + ((attacker.damagePct || 0) + (data.damagePct || 0) * scale - (defender.reducePct || 0) - (data.selfHurt ? 0 : 0)) / 100;
+  let damage = Math.max(8, Math.round((raw - effectiveDef * 1.65) * Math.max(0.25, damageScale) * critScale));
+  const shieldTaken = Math.min(defender.shield || 0, damage);
+  defender.shield = Math.max(0, (defender.shield || 0) - shieldTaken);
+  damage -= shieldTaken;
+  defender.hp = Math.max(0, defender.hp - damage);
+  const heal = Math.round(((data.heal || 0) * 5 * scale) + damage * Math.max(0, attacker.lifeSteal || 0) / 100);
+  if (heal) attacker.hp = Math.min(attacker.hpMax, attacker.hp + heal);
+  const shield = Math.round((data.shield || 0) * 4 * scale);
+  if (shield) attacker.shield += shield;
+  if (data.selfHurt) attacker.hp = Math.max(1, attacker.hp - Math.round(data.selfHurt * 3 * scale));
+  return {
+    methodName: data.name || "普通攻击",
+    element,
+    damage,
+    shieldTaken,
+    heal,
+    shield,
+    crit,
+  };
+}
+
+function simulateOneVsOneBattle(leftDisciple, rightDisciple, options = {}) {
+  const left = combatantFromDisciple(leftDisciple, leftDisciple.name);
+  const right = combatantFromDisciple(rightDisciple, rightDisciple.name);
+  const logRows = [];
+  for (let round = 1; round <= 10 && left.hp > 0 && right.hp > 0; round += 1) {
+    const order = left.speed + rand(0, 30) >= right.speed + rand(0, 30) ? [[left, right], [right, left]] : [[right, left], [left, right]];
+    for (const [actor, defender] of order) {
+      if (actor.hp <= 0 || defender.hp <= 0) continue;
+      const method = nextCombatMethod(actor);
+      const hit = applyCombatHit(actor, defender, method);
+      logRows.push({
+        round,
+        actor: actor.name,
+        target: defender.name,
+        actorSide: actor === left ? "left" : "right",
+        targetSide: defender === left ? "left" : "right",
+        ...hit,
+        leftHp: left.hp,
+        rightHp: right.hp,
+        leftShield: left.shield,
+        rightShield: right.shield,
+      });
+    }
+  }
+  if (left.hp > 0 && right.hp > 0) {
+    const leftScore = discipleBattleScore(leftDisciple);
+    const rightScore = discipleBattleScore(rightDisciple);
+    if (leftScore >= rightScore) right.hp = 0;
+    else left.hp = 0;
+    logRows.push({ round: 10, actor: "战力判定", target: leftScore >= rightScore ? left.name : right.name, actorSide: "system", targetSide: leftScore >= rightScore ? "right" : "left", methodName: "十回合未分胜负", damage: 0, leftHp: left.hp, rightHp: right.hp, leftShield: left.shield, rightShield: right.shield });
+  }
+  const won = left.hp > 0;
+  const htmlRows = logRows.slice(0, 24).map((row) => `
+    <p><strong>第${row.round}合 ${tradeEscape(row.actor)}</strong> 使用 ${tradeEscape(row.methodName)} 攻向 ${tradeEscape(row.target)}，造成 ${Math.round(row.damage || 0)}${row.element ? ` ${tradeEscape(row.element)}伤` : ""}${row.crit ? "，会心" : ""}${row.shieldTaken ? `，破盾 ${row.shieldTaken}` : ""}${row.heal ? `，回血 ${row.heal}` : ""}${row.shield ? `，护盾 +${row.shield}` : ""}。</p>
+  `).join("");
+  const html = `
+    <div class="duel-stage">
+      <div class="duel-fighter ${won ? "is-winner" : ""}"><span>${tradeEscape(left.name)}</span><i style="width:${Math.max(0, left.hp / left.hpMax * 100)}%"></i><em>${Math.max(0, Math.round(left.hp))}/${left.hpMax}</em></div>
+      <div class="duel-fighter ${!won ? "is-winner" : ""}"><span>${tradeEscape(right.name)}</span><i style="width:${Math.max(0, right.hp / right.hpMax * 100)}%"></i><em>${Math.max(0, Math.round(right.hp))}/${right.hpMax}</em></div>
+    </div>
+    <div class="auction-feed duel-log">${htmlRows}</div>
+  `;
+  return { won, left, right, html, rows: logRows };
+}
+
+function setModalActionButtons(actions = []) {
+  els.modalActions.innerHTML = "";
+  for (const action of actions) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = action.label;
+    btn.disabled = Boolean(action.disabled);
+    btn.addEventListener("click", () => runActionWithFeedback(action.label, action.handler));
+    els.modalActions.appendChild(btn);
+  }
+}
+
+function hpPct(value, max) {
+  return `${clamp(Math.round((Math.max(0, value) / Math.max(1, max)) * 100), 0, 100)}%`;
+}
+
+function showRealtimeDuelModal({ kicker = "实时斗法", title = "弟子斗法", duel, leftLabel = "本宗", rightLabel = "敌方", scores = null, onComplete = null }) {
+  const rows = duel?.rows || [];
+  let index = -1;
+  let finished = false;
+  let timer = null;
+  const leftMax = duel.left.hpMax;
+  const rightMax = duel.right.hpMax;
+  const body = `
+    <div class="realtime-duel" data-phase="playing">
+      <div class="realtime-fighters">
+        <div class="realtime-fighter left">
+          <strong>${tradeEscape(duel.left.name)}</strong>
+          <span>${tradeEscape(leftLabel)}</span>
+          <div class="realtime-hp"><i class="left-hp" style="width:100%"></i></div>
+          <em class="left-hp-text">${leftMax}/${leftMax}</em>
+          <small class="left-shield">护盾 ${Math.round(duel.rows[0]?.leftShield || 0)}</small>
+        </div>
+        <div class="realtime-center">
+          <b>VS</b>
+          <span class="realtime-round">准备</span>
+        </div>
+        <div class="realtime-fighter right">
+          <strong>${tradeEscape(duel.right.name)}</strong>
+          <span>${tradeEscape(rightLabel)}</span>
+          <div class="realtime-hp"><i class="right-hp" style="width:100%"></i></div>
+          <em class="right-hp-text">${rightMax}/${rightMax}</em>
+          <small class="right-shield">护盾 ${Math.round(duel.rows[0]?.rightShield || 0)}</small>
+        </div>
+      </div>
+      <div class="realtime-action">
+        <strong class="realtime-method">斗法开始</strong>
+        <span class="realtime-damage">双方运转功法，气机交锋。</span>
+      </div>
+      <div class="realtime-log"></div>
+      ${scores ? `<div class="battle-breakdown">
+        <div><span>我方战力</span><strong>${Math.round(scores.our || 0)}</strong></div>
+        <div><span>敌方压力</span><strong>${Math.round(scores.enemy || 0)}</strong></div>
+        <div><span>结果</span><strong class="realtime-result">播放中</strong></div>
+      </div>` : ""}
+    </div>
+  `;
+  showModal({ kicker, title, body, actions: [{ label: "跳过动画", handler: () => finish(true) }] });
+  els.modalCloseBtn.onclick = () => finish(true);
+  const root = els.modalBody.querySelector(".realtime-duel");
+  const logBox = els.modalBody.querySelector(".realtime-log");
+  const updateBars = (row = null) => {
+    const leftHp = row ? row.leftHp : leftMax;
+    const rightHp = row ? row.rightHp : rightMax;
+    root.querySelector(".left-hp").style.width = hpPct(leftHp, leftMax);
+    root.querySelector(".right-hp").style.width = hpPct(rightHp, rightMax);
+    root.querySelector(".left-hp-text").textContent = `${Math.max(0, Math.round(leftHp))}/${leftMax}`;
+    root.querySelector(".right-hp-text").textContent = `${Math.max(0, Math.round(rightHp))}/${rightMax}`;
+    root.querySelector(".left-shield").textContent = `护盾 ${Math.round(row?.leftShield || 0)}`;
+    root.querySelector(".right-shield").textContent = `护盾 ${Math.round(row?.rightShield || 0)}`;
+  };
+  const pushLog = (row) => {
+    const text = row.actorSide === "system"
+      ? `十回合未分胜负，${row.target}凭战力压过对手。`
+      : `${row.actor}施展${row.methodName}，对${row.target}造成${Math.round(row.damage || 0)}${row.element ? row.element + "伤" : "伤害"}${row.crit ? "，会心一击" : ""}${row.shieldTaken ? `，破盾${row.shieldTaken}` : ""}${row.heal ? `，回血${row.heal}` : ""}${row.shield ? `，护盾+${row.shield}` : ""}。`;
+    logBox.insertAdjacentHTML("afterbegin", `<p>${tradeEscape(text)}</p>`);
+    logBox.scrollTop = 0;
+  };
+  const step = () => {
+    if (finished) return;
+    index += 1;
+    if (index >= rows.length) {
+      finish(false);
+      return;
+    }
+    const row = rows[index];
+    updateBars(row);
+    root.querySelector(".realtime-round").textContent = `第 ${row.round} 合`;
+    root.querySelector(".realtime-method").textContent = row.methodName;
+    root.querySelector(".realtime-damage").textContent = row.actorSide === "system"
+      ? `${row.target}在十回合判定中胜出`
+      : `${row.actor} → ${row.target}：${Math.round(row.damage || 0)}${row.element ? row.element + "伤" : "伤害"}`;
+    root.querySelectorAll(".realtime-fighter").forEach((node) => node.classList.remove("is-acting", "is-hit"));
+    if (row.actorSide !== "system") root.querySelector(`.realtime-fighter.${row.actorSide}`)?.classList.add("is-acting");
+    if (row.targetSide !== "system") root.querySelector(`.realtime-fighter.${row.targetSide}`)?.classList.add("is-hit");
+    root.querySelector(".realtime-action").classList.remove("flash");
+    void root.querySelector(".realtime-action").offsetWidth;
+    root.querySelector(".realtime-action").classList.add("flash");
+    pushLog(row);
+    timer = setTimeout(step, 760);
+  };
+  const finish = (skipped = false) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    const finalRow = rows[rows.length - 1];
+    updateBars(finalRow);
+    root.dataset.phase = "done";
+    root.querySelector(".realtime-result")?.replaceChildren(document.createTextNode(duel.won ? "胜" : "败"));
+    root.querySelector(".realtime-method").textContent = duel.won ? "胜负已分" : "斗法失利";
+    root.querySelector(".realtime-damage").textContent = skipped ? "已跳过动画，等待结算。" : "实时斗法结束，等待结算。";
+    setModalActionButtons([
+      { label: duel.won ? "结算胜利" : "结算失败", handler: () => { closeModal(); onComplete?.(); } },
+    ]);
+    els.modalCloseBtn.onclick = () => { closeModal(); onComplete?.(); };
+  };
+  updateBars();
+  timer = setTimeout(step, 450);
+}
+
+function frontierMonsterFromPower(name, power, seed = "frontier", hpScale = 1) {
+  const monster = syntheticGuardian(name, power, seed);
+  monster.hp = Math.round((monster.hp || 80) * hpScale);
+  monster.atk = Math.round((monster.atk || 40) * (1 + Math.min(0.55, power / 18000)));
+  monster.def = Math.round((monster.def || 30) * (1 + Math.min(0.42, power / 22000)));
+  monster.speed = Math.round((monster.speed || 30) * 0.92);
+  monster.temper = 70 + monster.realm * 8;
+  monster.aptitude = 60 + monster.realm * 6;
+  monster.name = name;
+  return monster;
+}
+
+function simulateTeamVsMonsterBattle(team, monsterData, options = {}) {
+  const members = team.map((d) => combatantFromDisciple(d, d.name));
+  const monster = combatantFromDisciple(monsterData, monsterData.name);
+  if (options.monsterHp) {
+    monster.hpMax = Math.max(1, Math.round(options.monsterHpMax || options.monsterHp));
+    monster.hp = Math.max(1, Math.round(options.monsterHp));
+  }
+  const rows = [];
+  let totalDamage = 0;
+  const maxRounds = options.maxRounds || 10;
+  for (let round = 1; round <= maxRounds && monster.hp > 0 && members.some((m) => m.hp > 0); round += 1) {
+    const order = [...members, monster]
+      .filter((actor) => actor.hp > 0)
+      .sort((a, b) => (b.speed + rand(0, 28)) - (a.speed + rand(0, 28)));
+    for (const actor of order) {
+      if (actor.hp <= 0 || monster.hp <= 0 || !members.some((m) => m.hp > 0)) continue;
+      if (actor === monster) {
+        const targets = members.filter((m) => m.hp > 0).sort((a, b) => a.hp / a.hpMax - b.hp / b.hpMax);
+        const target = targets[0] || pick(members.filter((m) => m.hp > 0));
+        if (!target) continue;
+        const hit = applyCombatHit(monster, target, nextCombatMethod(monster));
+        rows.push({
+          round,
+          actor: monster.name,
+          target: target.name,
+          actorSide: "monster",
+          targetSide: "team",
+          targetIndex: members.indexOf(target),
+          ...hit,
+          monsterHp: monster.hp,
+          monsterShield: monster.shield,
+          teamHp: members.map((m) => m.hp),
+          teamShield: members.map((m) => m.shield),
+        });
+      } else {
+        const before = monster.hp;
+        const hit = applyCombatHit(actor, monster, nextCombatMethod(actor));
+        totalDamage += Math.max(0, before - monster.hp);
+        rows.push({
+          round,
+          actor: actor.name,
+          target: monster.name,
+          actorSide: "team",
+          targetSide: "monster",
+          actorIndex: members.indexOf(actor),
+          ...hit,
+          monsterHp: monster.hp,
+          monsterShield: monster.shield,
+          teamHp: members.map((m) => m.hp),
+          teamShield: members.map((m) => m.shield),
+        });
+      }
+    }
+  }
+  const teamAlive = members.some((m) => m.hp > 0);
+  let won = monster.hp <= 0;
+  if (!options.noPowerJudge && !won && teamAlive) {
+    const ourPower = team.reduce((sum, d) => sum + frontierDisciplePower(d), 0);
+    const enemyPower = Number(options.enemyPower || discipleBattleScore(monsterData));
+    if (ourPower + totalDamage * 1.55 >= enemyPower) {
+      won = true;
+      monster.hp = 0;
+      rows.push({
+        round: maxRounds,
+        actor: "战力判定",
+        target: monster.name,
+        actorSide: "system",
+        targetSide: "monster",
+        methodName: "十回合压制",
+        damage: 0,
+        monsterHp: 0,
+        monsterShield: monster.shield,
+        teamHp: members.map((m) => m.hp),
+        teamShield: members.map((m) => m.shield),
+      });
+    }
+  }
+  return { members, monster, rows, totalDamage: Math.round(totalDamage), won, teamAlive };
+}
+
+function showRealtimeTeamBattleModal({ kicker = "边境战斗", title = "队伍斗法", battle, teamLabel = "讨伐队", enemyLabel = "妖兽", scores = null, onComplete = null }) {
+  const rows = battle?.rows || [];
+  let index = -1;
+  let finished = false;
+  let timer = null;
+  const teamHtml = battle.members.map((member, i) => `
+    <article class="team-member" data-index="${i}">
+      <strong>${tradeEscape(member.name)}</strong>
+      <div class="realtime-hp"><i class="team-hp-${i}" style="width:100%"></i></div>
+      <em class="team-hp-text-${i}">${member.hpMax}/${member.hpMax}</em>
+    </article>
+  `).join("");
+  const body = `
+    <div class="team-battle" data-phase="playing">
+      <div class="team-battle-grid">
+        <section class="team-side">
+          <h4>${tradeEscape(teamLabel)}</h4>
+          ${teamHtml}
+        </section>
+        <section class="monster-side">
+          <h4>${tradeEscape(enemyLabel)}</h4>
+          <div class="monster-card">
+            <strong>${tradeEscape(battle.monster.name)}</strong>
+            <div class="realtime-hp"><i class="monster-hp" style="width:100%"></i></div>
+            <em class="monster-hp-text">${battle.monster.hpMax}/${battle.monster.hpMax}</em>
+            <small class="monster-shield">护盾 ${Math.round(battle.monster.shield || 0)}</small>
+          </div>
+        </section>
+      </div>
+      <div class="realtime-action">
+        <strong class="realtime-method">战斗开始</strong>
+        <span class="realtime-damage">队伍列阵，妖气压境。</span>
+      </div>
+      <div class="realtime-log"></div>
+      ${scores ? `<div class="battle-breakdown">
+        <div><span>本宗队伍</span><strong>${Math.round(scores.our || 0)}</strong></div>
+        <div><span>敌方强度</span><strong>${Math.round(scores.enemy || 0)}</strong></div>
+        <div><span>累计伤害</span><strong class="team-total-damage">0</strong></div>
+      </div>` : ""}
+    </div>
+  `;
+  showModal({ kicker, title, body, actions: [{ label: "跳过动画", handler: () => finish(true) }] });
+  els.modalCloseBtn.onclick = () => finish(true);
+  const root = els.modalBody.querySelector(".team-battle");
+  const logBox = els.modalBody.querySelector(".realtime-log");
+  const updateBars = (row = null) => {
+    const teamHp = row?.teamHp || battle.members.map((m) => m.hpMax);
+    teamHp.forEach((hp, i) => {
+      const member = battle.members[i];
+      const bar = root.querySelector(`.team-hp-${i}`);
+      const text = root.querySelector(`.team-hp-text-${i}`);
+      if (bar) bar.style.width = hpPct(hp, member.hpMax);
+      if (text) text.textContent = `${Math.max(0, Math.round(hp))}/${member.hpMax}`;
+    });
+    const monsterHp = row ? row.monsterHp : battle.monster.hpMax;
+    root.querySelector(".monster-hp").style.width = hpPct(monsterHp, battle.monster.hpMax);
+    root.querySelector(".monster-hp-text").textContent = `${Math.max(0, Math.round(monsterHp))}/${battle.monster.hpMax}`;
+    root.querySelector(".monster-shield").textContent = `护盾 ${Math.round(row?.monsterShield || 0)}`;
+    if (root.querySelector(".team-total-damage")) {
+      const currentDamage = row ? Math.max(0, battle.monster.hpMax - Math.max(0, row.monsterHp || 0)) : 0;
+      root.querySelector(".team-total-damage").textContent = Math.round(currentDamage);
+    }
+  };
+  const pushLog = (row) => {
+    const text = row.actorSide === "system"
+      ? `${row.target}被十回合战力压制，战局转为胜利。`
+      : `${row.actor}施展${row.methodName}，对${row.target}造成${Math.round(row.damage || 0)}${row.element ? row.element + "伤" : "伤害"}${row.crit ? "，会心" : ""}${row.shieldTaken ? `，破盾${row.shieldTaken}` : ""}${row.heal ? `，回血${row.heal}` : ""}${row.shield ? `，护盾+${row.shield}` : ""}。`;
+    logBox.insertAdjacentHTML("afterbegin", `<p>${tradeEscape(text)}</p>`);
+  };
+  const step = () => {
+    if (finished) return;
+    index += 1;
+    if (index >= rows.length) {
+      finish(false);
+      return;
+    }
+    const row = rows[index];
+    updateBars(row);
+    root.querySelector(".realtime-method").textContent = row.methodName || "普通攻击";
+    root.querySelector(".realtime-damage").textContent = row.actorSide === "system"
+      ? `${row.target}被压制`
+      : `${row.actor} → ${row.target}：${Math.round(row.damage || 0)}${row.element ? row.element + "伤" : "伤害"}`;
+    root.querySelectorAll(".team-member,.monster-card").forEach((node) => node.classList.remove("is-acting", "is-hit"));
+    if (row.actorSide === "team") root.querySelector(`.team-member[data-index="${row.actorIndex}"]`)?.classList.add("is-acting");
+    if (row.targetSide === "team") root.querySelector(`.team-member[data-index="${row.targetIndex}"]`)?.classList.add("is-hit");
+    if (row.actorSide === "monster") root.querySelector(".monster-card")?.classList.add("is-acting");
+    if (row.targetSide === "monster") root.querySelector(".monster-card")?.classList.add("is-hit");
+    root.querySelector(".realtime-action").classList.remove("flash");
+    void root.querySelector(".realtime-action").offsetWidth;
+    root.querySelector(".realtime-action").classList.add("flash");
+    pushLog(row);
+    timer = setTimeout(step, 520);
+  };
+  const finish = (skipped = false) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    const finalRow = rows[rows.length - 1];
+    updateBars(finalRow);
+    root.dataset.phase = "done";
+    root.querySelector(".realtime-method").textContent = battle.won ? "战斗胜利" : "战斗结束";
+    root.querySelector(".realtime-damage").textContent = skipped ? "已跳过动画，等待结算。" : "回合制战斗播放完毕，等待结算。";
+    setModalActionButtons([{ label: battle.won ? "结算胜利" : "结算战果", handler: () => { closeModal(); onComplete?.(); } }]);
+    els.modalCloseBtn.onclick = () => { closeModal(); onComplete?.(); };
+  };
+  updateBars();
+  timer = setTimeout(step, 420);
+}
+
 function showTacticModal(target, mode) {
   const labels = {
     raid: "资源掠夺",
     steal: "抢夺弟子",
     tournament: "宗门大比",
   };
+  const roster = state.sect.disciples.slice().sort((a, b) => discipleBattleScore(b) - discipleBattleScore(a));
   showModal({
     kicker: "战前部署",
     title: `${labels[mode]}：${target.name}`,
@@ -4936,29 +8018,52 @@ function showTacticModal(target, mode) {
         <div class="slash"></div>
         <div class="fighter right">${target.name.slice(0, 2)}</div>
       </div>
-      <p>选择本次战术。强攻收益高风险高；奇袭适合抢徒；稳守能减少失败损失。</p>
+      <p>选择一名出战弟子与对方驻守弟子斗法。强攻收益高风险高；奇袭适合抢徒；稳守能减少失败损失。</p>
+      <div class="tournament-table">
+        ${roster.map((d, index) => `<label class="match-row"><span>${d.name}<div class="hp-line"><i style="width:${clamp(d.hp, 0, 180) / 1.8}%"></i></div></span><strong>${realms[d.realm]} · 战力 ${Math.round(discipleBattleScore(d))}</strong><input type="radio" name="battle-disciple" value="${d.id}" ${index === 0 ? "checked" : ""}></label>`).join("")}
+      </div>
     `,
     actions: [
-      { label: "强攻", handler: () => { closeModal(); resolveBattle(target, mode, "assault"); } },
-      { label: "奇袭", handler: () => { closeModal(); resolveBattle(target, mode, "ambush"); } },
-      { label: "稳守", handler: () => { closeModal(); resolveBattle(target, mode, "guard"); } },
+      { label: "强攻", handler: () => { const id = els.modalBody.querySelector("input[name='battle-disciple']:checked")?.value; closeModal(); resolveBattle(target, mode, "assault", id); } },
+      { label: "奇袭", handler: () => { const id = els.modalBody.querySelector("input[name='battle-disciple']:checked")?.value; closeModal(); resolveBattle(target, mode, "ambush", id); } },
+      { label: "稳守", handler: () => { const id = els.modalBody.querySelector("input[name='battle-disciple']:checked")?.value; closeModal(); resolveBattle(target, mode, "guard", id); } },
     ],
   });
 }
 
-function resolveBattle(target, mode, tactic) {
+function resolveBattle(target, mode, tactic, discipleId = null) {
   if (!target || target.alive === false) {
     log("此地只余宗门遗址，已经没有可交战的山门。", "warn");
     render();
     return;
   }
   state.sect.diplomacy = state.sect.diplomacy || { reputation: 20, infamy: 0 };
-  const our = expeditionPower(mode, tactic);
+  const d = state.sect.disciples.find((item) => item.id === discipleId) || state.sect.disciples.slice().sort((a, b) => discipleBattleScore(b) - discipleBattleScore(a))[0];
+  if (!d) {
+    log("没有可出战弟子。", "warn");
+    render();
+    return;
+  }
   const enemyAlert = (target.grudges || 0) * 115 + (target.attitude < -30 ? 180 : 0);
   const eraGuard = state.year >= 7 ? state.year * 58 + (target.foundation || 100) * 1.1 : state.year * 26;
   const allianceGuard = activeRivals().filter((r) => r.alliance && r.id !== target.id).length * 55;
-  const enemy = rivalStrategicPower(target) * (mode === "steal" ? 0.92 : 1.02) + enemyAlert + eraGuard + allianceGuard + rand(120, 520);
-  if (our >= enemy) {
+  const enemy = rivalStrategicPower(target) * (mode === "steal" ? 0.68 : 0.78) + enemyAlert + eraGuard + allianceGuard + rand(80, 260);
+  const guardian = syntheticGuardian(`${target.name.replace("遗址·", "").slice(0, 2)}守`, enemy, `${target.id}:${mode}:${state.year}`);
+  const duel = simulateOneVsOneBattle(d, guardian, { mode, tactic });
+  const our = discipleBattleScore(d);
+  showRealtimeDuelModal({
+    kicker: "宗门斗法",
+    title: `${d.name} 挑战 ${target.name}`,
+    duel,
+    leftLabel: state.sect.name,
+    rightLabel: target.name,
+    scores: { our, enemy },
+    onComplete: () => applyRivalBattleOutcome(target, mode, tactic, d, duel, our, enemy),
+  });
+}
+
+function applyRivalBattleOutcome(target, mode, tactic, d, duel, our, enemy) {
+  if (duel.won) {
     const gainScale = tactic === "assault" ? 1.25 : tactic === "guard" ? 0.82 : 1;
     const gain = Math.min(target.stones || 500, Math.round(rand(110, 260) * gainScale));
     state.sect.stones += gain;
@@ -4976,7 +8081,7 @@ function resolveBattle(target, mode, tactic) {
       log(text, "good");
       showBattleModal(target, true, text, { our, enemy });
     } else {
-      const text = `本宗击败${target.name}，夺得 ${gain} 灵石，声望上涨。`;
+      const text = `${d.name}击败${target.name}驻守弟子，夺得 ${gain} 灵石，声望上涨。`;
       log(text, "good");
       showBattleModal(target, true, text, { our, enemy });
     }
@@ -4989,8 +8094,9 @@ function resolveBattle(target, mode, tactic) {
     target.attitude = (target.attitude || 0) - 8;
     target.grudges = (target.grudges || 0) + 1;
     state.sect.diplomacy.infamy += 2;
-    const text = `与${target.name}交锋失利，损失 ${lost} 灵石。`;
-    state.sect.disciples.slice().sort((a, b) => discipleBattleScore(b) - discipleBattleScore(a)).slice(0, 3).forEach((d) => adjustMind(d, 6, "远征失利"));
+    const text = `${d.name}挑战${target.name}驻守弟子失利，本宗损失 ${lost} 灵石。`;
+    adjustMind(d, 8, "远征斗法失利");
+    d.hp = Math.max(18, d.hp - rand(4, 12));
     log(text, "warn");
     showBattleModal(target, false, text, { our, enemy });
   }
@@ -5012,12 +8118,56 @@ function eliminateRival(target, mode) {
 
 function contestResource(resource) {
   if (!state.founded) return;
-  if (!spendAction(1, "争夺资源")) return;
+  const roster = state.sect.disciples.slice().sort((a, b) => discipleBattleScore(b) - discipleBattleScore(a));
+  const holder = resource.owner && resource.owner !== "player" ? state.rivals.find((r) => r.id === resource.owner && r.alive !== false) : null;
+  showModal({
+    kicker: "资源争夺",
+    title: `争夺${resource.name}`,
+    body: `
+      <p>选择一名弟子挑战${holder ? `${holder.name}驻守弟子` : "地脉守势"}。胜利后占领资源点，失败会损失粮草和灵石。</p>
+      <div class="tournament-table">
+        ${roster.map((d, index) => `<label class="match-row"><span>${d.name}<div class="hp-line"><i style="width:${clamp(d.hp, 0, 180) / 1.8}%"></i></div></span><strong>${realms[d.realm]} · 战力 ${Math.round(discipleBattleScore(d))}</strong><input type="radio" name="resource-disciple" value="${d.id}" ${index === 0 ? "checked" : ""}></label>`).join("")}
+      </div>
+    `,
+    actions: [
+      { label: "发起争夺", handler: () => {
+        const id = els.modalBody.querySelector("input[name='resource-disciple']:checked")?.value;
+        closeModal();
+        resolveResourceContest(resource, id);
+      } },
+      { label: "暂不争夺", handler: closeModal },
+    ],
+  });
+}
+
+function resolveResourceContest(resource, discipleId = null) {
+  if (!state.founded || !resource) return;
   const holder = resource.owner && resource.owner !== "player" ? state.rivals.find((r) => r.id === resource.owner && r.alive !== false) : null;
   const enemyPower = holder ? rivalStrategicPower(holder, resource) + rand(0, 260) : wildResourceDefense(resource);
-  const our = playerContestPower(resource);
+  const d = state.sect.disciples.find((item) => item.id === discipleId) || state.sect.disciples.slice().sort((a, b) => discipleBattleScore(b) - discipleBattleScore(a))[0];
+  if (!d) {
+    log("没有可出战弟子。", "warn");
+    render();
+    return;
+  }
+  if (!spendAction(1, "争夺资源")) return;
+  const guardian = syntheticGuardian(holder ? `${holder.name.slice(0, 2)}守` : `${resource.name.slice(0, 2)}灵`, enemyPower * 0.82, `${resource.id}:${holder?.id || "wild"}:${state.year}`);
+  const duel = simulateOneVsOneBattle(d, guardian, { mode: "resource" });
+  const our = discipleBattleScore(d);
+  showRealtimeDuelModal({
+    kicker: "资源争夺",
+    title: `${d.name} 争夺 ${resource.name}`,
+    duel,
+    leftLabel: state.sect.name,
+    rightLabel: holder ? holder.name : "地脉守势",
+    scores: { our, enemy: enemyPower },
+    onComplete: () => applyResourceContestOutcome(resource, holder, d, duel, our, enemyPower),
+  });
+}
+
+function applyResourceContestOutcome(resource, holder, d, duel, our, enemyPower) {
   const scores = { our, enemy: enemyPower };
-  if (our >= enemyPower) {
+  if (duel.won) {
     const oldOwner = resource.owner;
     resource.owner = "player";
     state.sect.prestige += 18;
@@ -5027,8 +8177,8 @@ function contestResource(resource) {
       holder.power = Math.max(60, holder.power - rand(18, 48));
     }
     const detail = holder
-      ? `本宗压过${holder.name}的驻守队伍，夺下${resource.name}，守方底蕴受损。`
-      : `本宗破开地脉守势，设下阵旗，占下${resource.name}。`;
+      ? `${d.name}击败${holder.name}驻守弟子，夺下${resource.name}，守方底蕴受损。`
+      : `${d.name}破开地脉守势，设下阵旗，占下${resource.name}。`;
     applyResourceCaptureBonus(resource);
     log(`${detail}每年资源收益提升。`, "good");
     showResourceBattleModal(resource, holder, true, detail, scores);
@@ -5043,9 +8193,11 @@ function contestResource(resource) {
       holder.attitude -= 8;
       holder.power += rand(12, 28);
     }
+    adjustMind(d, 5, "资源争夺失利");
+    d.hp = Math.max(18, d.hp - rand(3, 9));
     const detail = holder
-      ? `${holder.name}守住${resource.name}，本宗远征队折损粮草 ${grainLost}、灵石 ${stoneLost}。`
-      : `${resource.name}地脉反噬，本宗未能立稳阵脚，折损粮草 ${grainLost}、灵石 ${stoneLost}。`;
+      ? `${holder.name}守住${resource.name}，${d.name}负伤撤回，本宗折损粮草 ${grainLost}、灵石 ${stoneLost}。`
+      : `${resource.name}地脉反噬，${d.name}未能立稳阵脚，折损粮草 ${grainLost}、灵石 ${stoneLost}。`;
     log(detail, "warn");
     showResourceBattleModal(resource, holder, false, detail, scores);
   }
@@ -5132,7 +8284,21 @@ function bestHealingPillSlot() {
 function resolveFrontierDungeon(dungeon, team, healBoost = 0) {
   const our = team.reduce((sum, d) => sum + frontierDisciplePower(d), 0) + state.sect.barrier * 3 + healBoost + rand(0, 260);
   const enemy = dungeon.value + dungeon.tier * rand(80, 160) + rand(0, 420);
-  const won = our >= enemy;
+  const monster = frontierMonsterFromPower(`${dungeon.name.slice(0, 4)}首领`, enemy, `${dungeon.id}:${state.year}:${healBoost}`, 1 + dungeon.tier * 0.12);
+  const battle = simulateTeamVsMonsterBattle(team, monster, { enemyPower: enemy, maxRounds: 10 });
+  showRealtimeTeamBattleModal({
+    kicker: "边境讨伐",
+    title: `${dungeon.name}：回合战斗`,
+    battle,
+    teamLabel: "讨伐队",
+    enemyLabel: dungeon.name,
+    scores: { our, enemy },
+    onComplete: () => resolveFrontierDungeonAfterBattle(dungeon, team, battle, our, enemy, healBoost),
+  });
+}
+
+function resolveFrontierDungeonAfterBattle(dungeon, team, battle, our, enemy, healBoost = 0) {
+  const won = battle.won;
   const pill = bestHealingPillSlot();
   const teamNames = team.map((d) => d.name).join("、");
   const battleHtml = `
@@ -5232,6 +8398,358 @@ function occupyFrontierPoint(node) {
   render();
 }
 
+function openFrontierBossRaid(boss) {
+  if (!frontierUnlocked() || !boss || boss.defeated) return;
+  const roster = state.sect.disciples
+    .slice()
+    .sort((a, b) => frontierDisciplePower(b) - frontierDisciplePower(a));
+  showModal({
+    kicker: "巨兽讨伐",
+    title: `${boss.name}：选择最多 2 名弟子`,
+    body: `
+      <div class="boss-panel">
+        <strong>${tradeEscape(boss.name)}</strong>
+        <div class="realtime-hp"><i style="width:${hpPct(boss.hp, boss.totalHp)}"></i></div>
+        <span>剩余血量 ${Math.round(boss.hp)} / ${Math.round(boss.totalHp)}，强度 ${Math.round(boss.power)}</span>
+      </div>
+      <p>巨兽不会在十回合后按战力直接判胜，本次挑战只结算实际造成的伤害。每次挑战消耗 1 点行动。</p>
+      <div class="adventure-roster">
+        ${roster.map((d, i) => `<label class="adventure-candidate ${d.core ? "is-core" : ""}">
+          <input class="frontier-boss-team" type="checkbox" value="${d.id}" ${i < 2 ? "checked" : ""} />
+          <div><strong>${d.core ? "核心·" : ""}${d.name}</strong><span>${realms[d.realm]} · 战力 ${Math.round(frontierDisciplePower(d))} · 体${d.hp} 攻${d.atk} 御${d.def}</span></div>
+        </label>`).join("")}
+      </div>
+      ${(state.frontier.bossDamageLog || []).length ? `<div class="adventure-history">${state.frontier.bossDamageLog.slice(0, 5).map((row) => `<p>${tradeEscape(row.name)}造成 ${Math.round(row.damage)} 伤害</p>`).join("")}</div>` : ""}
+    `,
+    actions: [
+      { label: state.multiplayer && state.roomConnected ? "创建协作房间" : "准备挑战", handler: () => {
+        if (state.multiplayer && state.roomConnected) createRoomBossLobby(boss);
+        else startFrontierBossRaid(boss);
+      } },
+      { label: "暂不挑战", handler: closeModal },
+    ],
+  });
+  for (const box of els.modalBody.querySelectorAll(".frontier-boss-team")) {
+    box.addEventListener("change", () => {
+      const checked = [...els.modalBody.querySelectorAll(".frontier-boss-team:checked")];
+      if (checked.length > 2) {
+        box.checked = false;
+        flashFeedback("巨兽讨伐最多派遣 2 名弟子。", "warn");
+      }
+    });
+  }
+}
+
+function selectedFrontierBossTeamFromModal() {
+  const ids = [...els.modalBody.querySelectorAll(".frontier-boss-team:checked")].map((box) => box.value).slice(0, 2);
+  return ids.map((id) => state.sect.disciples.find((d) => d.id === id)).filter(Boolean);
+}
+
+function roomBossParticipant(team) {
+  return {
+    id: state.clientId,
+    playerId: state.clientId,
+    name: state.sect.name,
+    ready: true,
+    discipleIds: team.map((d) => d.id),
+    disciples: team.map(combatDiscipleSnapshot).filter(Boolean),
+  };
+}
+
+function normalizeRoomBossLobby(lobby) {
+  if (!lobby) return null;
+  return {
+    ...lobby,
+    boss: lobby.boss || state.frontier?.worldBoss || null,
+    expectedIds: Array.isArray(lobby.expectedIds) ? lobby.expectedIds : [],
+    expectedNames: lobby.expectedNames || {},
+    participants: lobby.participants || {},
+  };
+}
+
+function createRoomBossLobby(boss) {
+  const team = selectedFrontierBossTeamFromModal();
+  if (!team.length) {
+    flashFeedback("至少选择 1 名弟子。", "warn");
+    return;
+  }
+  if (!spendAction(1, "巨兽协作")) return;
+  const players = foundedRoomPlayers();
+  const expectedIds = players.map((player) => player.id).filter(Boolean);
+  const expectedNames = Object.fromEntries(players.map((player) => [player.id, player.name || "联机宗门"]));
+  const participant = roomBossParticipant(team);
+  const lobby = {
+    id: `${state.roomCode || "room"}-${boss.id}-${Date.now()}`,
+    year: state.year,
+    hostId: state.clientId,
+    hostName: state.sect.name,
+    boss: { ...boss },
+    expectedIds,
+    expectedNames,
+    participants: { [state.clientId]: participant },
+    started: false,
+  };
+  state.roomBossLobby = lobby;
+  sendRoomFeature("frontier_boss_lobby_open", { lobby });
+  closeModal();
+  showRoomBossLobbyModal(lobby);
+  log(`已创建${boss.name}协作房间，等待所有在线玩家准备。`, "good");
+  syncPublicState();
+  render();
+}
+
+function handleRoomBossLobbyOpen(lobby) {
+  const data = normalizeRoomBossLobby(lobby);
+  if (!data || data.year !== state.year || !state.founded) return;
+  mergeFrontierBoss(data.boss);
+  state.roomBossLobby = data;
+  if (data.hostId === state.clientId || data.participants?.[state.clientId]) showRoomBossLobbyModal(data);
+  else showRoomBossLobbyInvite(data);
+}
+
+function showRoomBossLobbyInvite(lobby) {
+  const data = normalizeRoomBossLobby(lobby);
+  if (!data || data.participants?.[state.clientId]) return;
+  const roster = state.sect.disciples.slice().sort((a, b) => frontierDisciplePower(b) - frontierDisciplePower(a));
+  showModal({
+    kicker: "巨兽协作邀请",
+    title: `${tradeEscape(data.hostName || "房主")}召集讨伐${tradeEscape(data.boss?.name || "边境巨兽")}`,
+    body: `
+      <p>选择最多 2 名弟子加入同场讨伐。准备会消耗 1 点行动点；房主在所有在线玩家准备后统一开战，所有参与者播放同一场战斗动画。</p>
+      <div class="adventure-roster">
+        ${roster.map((d, i) => `<label class="adventure-candidate ${d.core ? "is-core" : ""}">
+          <input class="frontier-boss-team" type="checkbox" value="${tradeEscape(d.id)}" ${i < 2 ? "checked" : ""} />
+          <div><strong>${d.core ? "核心·" : ""}${tradeEscape(d.name)}</strong><span>${tradeEscape(realms[d.realm] || "")} · 战力 ${Math.round(frontierDisciplePower(d))} · 体${d.hp}</span></div>
+        </label>`).join("")}
+      </div>
+    `,
+    actions: [
+      { label: "准备加入", handler: () => {
+        const team = selectedFrontierBossTeamFromModal();
+        if (!team.length) {
+          flashFeedback("至少选择 1 名弟子。", "warn");
+          return;
+        }
+        if (!spendAction(1, "巨兽协作")) return;
+        const participant = roomBossParticipant(team);
+        state.roomBossLobby = normalizeRoomBossLobby({ ...data, participants: { ...(data.participants || {}), [state.clientId]: participant } });
+        sendRoomFeature("frontier_boss_lobby_ready", { lobbyId: data.id, participant, lobby: state.roomBossLobby });
+        closeModal();
+        showRoomBossLobbyModal(state.roomBossLobby);
+        syncPublicState();
+      } },
+      { label: "暂不参加", handler: closeModal },
+    ],
+  });
+  bindBossTeamLimit();
+}
+
+function bindBossTeamLimit() {
+  for (const box of els.modalBody.querySelectorAll(".frontier-boss-team")) {
+    box.addEventListener("change", () => {
+      const checked = [...els.modalBody.querySelectorAll(".frontier-boss-team:checked")];
+      if (checked.length > 2) {
+        box.checked = false;
+        flashFeedback("巨兽讨伐最多派遣 2 名弟子。", "warn");
+      }
+    });
+  }
+}
+
+function handleRoomBossLobbyReady(payload = {}) {
+  const participant = payload.participant;
+  if (!participant?.playerId && !participant?.id) return;
+  const base = normalizeRoomBossLobby(state.roomBossLobby || payload.lobby);
+  if (!base || base.id !== payload.lobbyId) return;
+  const id = participant.playerId || participant.id;
+  base.participants = { ...(base.participants || {}), [id]: { ...participant, playerId: id, id, ready: true } };
+  state.roomBossLobby = base;
+  if (base.hostId === state.clientId) sendRoomFeature("frontier_boss_lobby_open", { lobby: base });
+  showRoomBossLobbyModal(base);
+}
+
+function showRoomBossLobbyModal(lobby) {
+  const data = normalizeRoomBossLobby(lobby);
+  if (!data) return;
+  state.roomBossLobby = data;
+  const expected = data.expectedIds.length ? data.expectedIds : Object.keys(data.participants || {});
+  const rows = expected.map((id) => {
+    const p = data.participants?.[id];
+    const name = p?.name || data.expectedNames?.[id] || "联机宗门";
+    const names = p?.disciples?.map((d) => d.name).join("、") || "等待选人";
+    return `<article class="system-card ${p?.ready ? "is-winner" : ""}"><strong>${tradeEscape(name)}</strong><span>${tradeEscape(p?.ready ? names : "等待准备")}</span></article>`;
+  }).join("");
+  const allReady = expected.length > 0 && expected.every((id) => data.participants?.[id]?.ready);
+  const isHost = data.hostId === state.clientId;
+  showModal({
+    kicker: "巨兽协作房间",
+    title: `${tradeEscape(data.boss?.name || "边境巨兽")}：同场讨伐`,
+    body: `
+      <div class="boss-panel">
+        <strong>${tradeEscape(data.boss?.name || "边境巨兽")}</strong>
+        <div class="realtime-hp"><i style="width:${hpPct(data.boss?.hp || 0, data.boss?.totalHp || 1)}"></i></div>
+        <span>血量 ${Math.round(data.boss?.hp || 0)} / ${Math.round(data.boss?.totalHp || 1)} · 强度 ${Math.round(data.boss?.power || 0)}</span>
+      </div>
+      <p>房主开战后，所有已准备玩家会看到同一场实时回合制战斗，伤害统一扣到共享巨兽血量。</p>
+      <div class="system-grid">${rows}</div>
+    `,
+    actions: [
+      { label: "刷新房间", handler: () => showRoomBossLobbyModal(state.roomBossLobby) },
+      { label: "开始同场讨伐", disabled: !isHost || !allReady, handler: startRoomBossLobbyFromHost },
+      { label: "取消房间", disabled: !isHost, handler: () => {
+        sendRoomFeature("frontier_boss_lobby_cancel", { lobbyId: data.id });
+        state.roomBossLobby = null;
+        closeModal();
+        render();
+      } },
+    ],
+  });
+}
+
+function startRoomBossLobbyFromHost() {
+  const lobby = normalizeRoomBossLobby(state.roomBossLobby);
+  if (!lobby || lobby.hostId !== state.clientId) return;
+  const current = state.frontier?.worldBoss || lobby.boss;
+  if (!current || current.defeated) return;
+  const team = Object.values(lobby.participants || {}).flatMap((p) => p.disciples || []);
+  if (!team.length) return;
+  const monster = frontierMonsterFromPower(current.name, current.power * (1 + Math.max(0, team.length - 2) * 0.08), `${current.id}:${lobby.id}`, 3.5 + Math.max(0, team.length - 2) * 0.18);
+  const battle = simulateTeamVsMonsterBattle(team, monster, {
+    enemyPower: current.power,
+    maxRounds: 12,
+    noPowerJudge: true,
+    monsterHp: current.hp,
+    monsterHpMax: current.totalHp,
+  });
+  const damage = Math.max(1, Math.min(current.hp, Math.round(battle.totalDamage || Math.max(0, current.totalHp - battle.monster.hp))));
+  const result = {
+    id: `${lobby.id}-result`,
+    lobby,
+    battle,
+    damage,
+    hpAfter: Math.max(0, current.hp - damage),
+    defeated: current.hp - damage <= 0,
+    scores: { our: team.reduce((sum, d) => sum + discipleBattleScore(d), 0), enemy: current.power },
+  };
+  sendRoomFeature("frontier_boss_lobby_start", { result });
+  applyRoomBossLobbyResult(result);
+}
+
+function applyRoomBossLobbyResult(result) {
+  if (!result?.id || !result.battle) return;
+  showRealtimeTeamBattleModal({
+    kicker: "巨兽协作讨伐",
+    title: `${result.lobby?.boss?.name || "边境巨兽"}：同场战斗`,
+    battle: result.battle,
+    teamLabel: "协作队伍",
+    enemyLabel: "边境巨兽",
+    scores: result.scores || null,
+    onComplete: () => finalizeRoomBossLobbyResult(result),
+  });
+}
+
+function finalizeRoomBossLobbyResult(result) {
+  if (!result?.id || state.appliedRoomBossResults?.[result.id]) {
+    render();
+    return;
+  }
+  ensureSectDefaults();
+  state.appliedRoomBossResults[result.id] = true;
+  const bossId = result.lobby?.boss?.id;
+  const current = state.frontier.worldBoss;
+  if (current && current.id === bossId) {
+    current.hp = result.hpAfter;
+    current.defeated = Boolean(result.defeated);
+  }
+  state.frontier.bossDamageLog = state.frontier.bossDamageLog || [];
+  state.frontier.bossDamageLog.unshift({ name: "协作队伍", damage: result.damage, year: state.year });
+  state.frontier.bossDamageLog = state.frontier.bossDamageLog.slice(0, 8);
+  const mine = result.lobby?.participants?.[state.clientId];
+  if (mine) {
+    for (const id of mine.discipleIds || []) {
+      const d = state.sect.disciples.find((item) => item.id === id);
+      if (!d) continue;
+      d.exp += 16 + Math.floor(d.realm * 3);
+      d.status = result.defeated ? "协作斩兽" : "协作讨伐";
+      if (!result.defeated) d.hp = Math.max(20, d.hp - rand(4, 12));
+    }
+    if (result.defeated) grantFrontierBossReward(result.lobby.boss, result.damage);
+    else log(`协作讨伐造成 ${result.damage} 伤害，巨兽剩余血量 ${Math.round(result.hpAfter)}。`, "warn");
+  } else {
+    log(`联机协作讨伐造成 ${result.damage} 伤害。`, result.defeated ? "good" : "warn");
+  }
+  state.roomBossLobby = null;
+  syncSharedWorld();
+  syncPublicState();
+  render();
+}
+
+function startFrontierBossRaid(boss) {
+  const team = selectedFrontierBossTeamFromModal();
+  if (!team.length) {
+    flashFeedback("至少选择 1 名弟子。", "warn");
+    return;
+  }
+  if (!spendAction(1, "巨兽讨伐")) return;
+  closeModal();
+  const current = state.frontier.worldBoss || boss;
+  const monster = frontierMonsterFromPower(current.name, current.power, `${current.id}:${state.clientId}:${state.year}`, 3.4);
+  const battle = simulateTeamVsMonsterBattle(team, monster, {
+    enemyPower: current.power,
+    maxRounds: 10,
+    noPowerJudge: true,
+    monsterHp: current.hp,
+    monsterHpMax: current.totalHp,
+  });
+  const our = team.reduce((sum, d) => sum + frontierDisciplePower(d), 0);
+  showRealtimeTeamBattleModal({
+    kicker: "巨兽讨伐",
+    title: `${current.name}：协作挑战`,
+    battle,
+    teamLabel: state.sect.name,
+    enemyLabel: "边境巨兽",
+    scores: { our, enemy: current.power },
+    onComplete: () => finishFrontierBossRaid(current, team, battle),
+  });
+}
+
+function finishFrontierBossRaid(boss, team, battle) {
+  const current = state.frontier.worldBoss;
+  if (!current || current.id !== boss.id) return;
+  const damage = Math.max(1, Math.min(current.hp, Math.round(battle.totalDamage || Math.max(0, current.totalHp - battle.monster.hp))));
+  current.hp = Math.max(0, current.hp - damage);
+  current.defeated = current.hp <= 0;
+  state.frontier.bossDamageLog = state.frontier.bossDamageLog || [];
+  state.frontier.bossDamageLog.unshift({ name: state.sect.name, damage, year: state.year });
+  state.frontier.bossDamageLog = state.frontier.bossDamageLog.slice(0, 8);
+  team.forEach((d) => {
+    d.exp += 18 + Math.floor(d.realm * 3);
+    d.status = current.defeated ? "巨兽凯旋" : "巨兽浴血";
+    if (!current.defeated) d.hp = Math.max(20, d.hp - rand(5, 16));
+  });
+  if (current.defeated) {
+    grantFrontierBossReward(current, damage);
+    sendRoomFeature("frontier_boss_defeated", { bossId: current.id, playerName: state.sect.name, damage, hp: 0, defeated: true });
+  } else {
+    log(`${state.sect.name}挑战${current.name}造成 ${damage} 伤害，剩余血量 ${Math.round(current.hp)}。`, "warn");
+    sendRoomFeature("frontier_boss_damage", { bossId: current.id, playerName: state.sect.name, damage, hp: current.hp, totalHp: current.totalHp, defeated: false });
+  }
+  syncSharedWorld();
+  render();
+}
+
+function grantFrontierBossReward(boss, damage) {
+  const stones = 1800 + Math.round(boss.power * 0.22);
+  state.sect.stones += stones;
+  state.sect.prestige += 260;
+  state.sect.alchemyMats += 4;
+  state.sect.forgingMats += 4;
+  state.sect.refineStone = Number(state.sect.refineStone || 0) + 3;
+  state.sect.affixLock = Number(state.sect.affixLock || 0) + 1;
+  addItem(pick(["thunderMethod", "sunMethod", "moonMethod", "scaleArmor", "spiritRing", "voidMirror", "affixLock"]), 1, 3 + (Math.random() < 0.35 ? 1 : 0));
+  log(`边境巨兽${boss.name}被击杀！本宗本次贡献 ${damage} 伤害，获得 ${stones} 灵石、声望 +260、丹材/器材 +4、洗练灵砂 +3、定纹玉扣 +1。`, "good");
+}
+
 function forbiddenAttemptInfo() {
   ensureSectDefaults();
   const cycle = Math.floor((state.year - 1) / 10);
@@ -5281,7 +8799,7 @@ function openForbiddenGate() {
 
 function forbiddenDiscipleSeed(d) {
   const relic = d.equipment?.relic ? 35 : 0;
-  return 220 + d.realm * 22 + d.temper * 0.9 + d.luck * 0.7 + traitBonusOnDisciple(d, "forbidden") * 7 + relic;
+  return 260 + d.realm * 34 + d.temper * 1.05 + d.luck * 0.86 + traitBonusOnDisciple(d, "forbidden") * 8 + relic;
 }
 
 function forbiddenRealmBonusPct(d) {
@@ -5415,26 +8933,76 @@ function forbiddenActionsForRoom(type, run) {
 
 function resolveForbiddenDanger(label) {
   const run = state.forbiddenRun;
-  const danger = rand(10, 28) + run.floor * 2;
+  const danger = rand(6, 18) + Math.ceil(run.floor * 1.35);
   if (rand(1, 100) > run.luck + run.temper * 0.45) run.hp -= danger;
   advanceForbiddenFloor(label);
 }
 
 function forbiddenCombatPower(run, tactic) {
-  const tacticBoost = tactic === "assault" ? run.atk * 0.5 : tactic === "guard" ? run.def * 0.65 : run.speed * 0.55 + run.luck * 0.28;
-  return run.atk * 2.1 + run.def * 1.65 + run.speed * 1.1 + run.temper * 0.8 + tacticBoost + rand(0, 95);
+  const tacticBoost = tactic === "assault" ? run.atk * 0.62 : tactic === "guard" ? run.def * 0.78 : run.speed * 0.68 + run.luck * 0.36;
+  return run.atk * 2.35 + run.def * 1.82 + run.speed * 1.22 + run.temper * 0.92 + tacticBoost + rand(35, 135);
 }
 
-function resolveForbiddenBattle(type, tactic) {
+function forbiddenActorFromRun(run, tactic) {
+  const methods = tactic === "assault"
+    ? ["swordManual", "thunderMethod", "fireMethod"].filter((id) => methodCatalog[id])
+    : tactic === "guard"
+      ? ["earthMethod", "waterMethod", "woodMethod"].filter((id) => methodCatalog[id])
+      : ["shadowMethod", "poisonMethod", "windMethod"].filter((id) => methodCatalog[id]);
+  const active = methods.length ? methods : ["swordManual"];
+  return {
+    name: "禁地化身",
+    realm: 0,
+    hp: Math.max(8, run.hp / 10),
+    atk: Math.max(1, Math.round(run.atk)),
+    def: Math.max(0, Math.round(run.def)),
+    speed: Math.max(1, Math.round(run.speed)),
+    temper: Math.round(run.temper || 0),
+    aptitude: 50,
+    luck: Math.round(run.luck || 0),
+    damagePct: tactic === "assault" ? 8 : 0,
+    reducePct: tactic === "guard" ? 8 : 0,
+    critPct: tactic === "ambush" ? 12 : 4,
+    elementDamage: {},
+    methods: active.map((id, index) => ({ id, quality: clamp(1 + Math.floor(run.floor / 6) + index, 1, 4), proficiency: clamp(38 + run.floor * 2 + run.temper * 0.25, 30, 92) })),
+    activeMethods: active,
+  };
+}
+
+function forbiddenGuardianActor(type, enemy, floor) {
+  const scale = type === "boss" ? 1.35 : type === "elite" ? 1.12 : 1;
+  const guardian = syntheticGuardian(type === "boss" ? "残仙王影" : type === "elite" ? "禁地精魅" : "禁地守卫", Math.max(220, enemy * scale), `forbidden:${state.year}:${floor}:${type}`);
+  guardian.realm = 0;
+  guardian.hp = Math.max(8, Math.round(enemy / (type === "boss" ? 7.5 : type === "elite" ? 9 : 10)) / 10);
+  guardian.atk = Math.max(12, Math.round(enemy / (type === "boss" ? 18 : type === "elite" ? 21 : 24)));
+  guardian.def = Math.max(8, Math.round(enemy / (type === "boss" ? 24 : type === "elite" ? 28 : 32)));
+  guardian.speed = Math.max(14, Math.round(22 + floor * 2.2 + (type === "boss" ? 12 : type === "elite" ? 7 : 0)));
+  return guardian;
+}
+
+function forceForbiddenDuelResult(duel, won) {
+  if (!duel) return duel;
+  const last = duel.rows[duel.rows.length - 1] || {};
+  duel.won = won;
+  duel.rows.push({
+    round: 10,
+    actor: "禁地判定",
+    target: won ? duel.right.name : duel.left.name,
+    actorSide: "system",
+    targetSide: won ? "right" : "left",
+    methodName: won ? "禁制溃散" : "禁制反噬",
+    damage: 0,
+    leftHp: won ? Math.max(1, Math.round(last.leftHp || duel.left.hpMax * 0.35)) : 0,
+    rightHp: won ? 0 : Math.max(1, Math.round(last.rightHp || duel.right.hpMax * 0.35)),
+    leftShield: last.leftShield || 0,
+    rightShield: last.rightShield || 0,
+  });
+  return duel;
+}
+
+function settleForbiddenBattle(type, won, detail) {
   const run = state.forbiddenRun;
-  const scale = type === "boss" ? 1.92 : type === "elite" ? 1.42 : 1;
-  const enemy = Math.round((150 + run.floor * 44 + Math.pow(run.floor, 1.35) * 16) * scale + rand(0, 120));
-  const our = forbiddenCombatPower(run, tactic);
-  const won = our >= enemy;
-  const damage = won ? Math.max(5, Math.round(enemy / 32 + rand(4, 18))) : Math.max(16, Math.round(enemy / 18 + rand(10, 34)));
-  run.hp -= damage;
-  const result = won ? "胜" : "败";
-  const detail = `${result}：本层判定 ${Math.round(our)} / ${enemy}，生命 -${damage}。`;
+  if (!run) return;
   if (run.hp <= 0) {
     showModal({
       kicker: "禁地败退",
@@ -5474,6 +9042,33 @@ function resolveForbiddenBattle(type, tactic) {
       { label: "继续前进", handler: () => won && Math.random() < 0.5 ? chooseForbiddenBuff("战后悟法") : advanceForbiddenFloor(detail) },
       { label: "撤离禁地", handler: () => finishForbiddenRun(false, "主动撤离") },
     ],
+  });
+}
+
+function resolveForbiddenBattle(type, tactic) {
+  const run = state.forbiddenRun;
+  if (!run) return;
+  const scale = type === "boss" ? 1.58 : type === "elite" ? 1.22 : 0.9;
+  const enemy = Math.round((128 + run.floor * 34 + Math.pow(run.floor, 1.28) * 11) * scale + rand(0, 76));
+  const our = forbiddenCombatPower(run, tactic);
+  const won = our >= enemy;
+  const damage = won ? Math.max(4, Math.round(enemy / 44 + rand(3, 12))) : Math.max(10, Math.round(enemy / 28 + rand(6, 22)));
+  const hpBefore = run.hp;
+  run.hp -= damage;
+  const result = won ? "胜" : "败";
+  const detail = `${result}：本层判定 ${Math.round(our)} / ${enemy}，生命 -${damage}。`;
+  const duel = forceForbiddenDuelResult(
+    simulateOneVsOneBattle(forbiddenActorFromRun({ ...run, hp: hpBefore }, tactic), forbiddenGuardianActor(type, enemy, run.floor)),
+    won,
+  );
+  showRealtimeDuelModal({
+    kicker: type === "elite" ? "禁地精英战" : type === "boss" ? "禁地终局战" : "禁地战斗",
+    title: detail,
+    duel,
+    leftLabel: "禁地独立属性",
+    rightLabel: type === "boss" ? "残仙王影" : type === "elite" ? "精英守卫" : "禁地守卫",
+    scores: { our, enemy },
+    onComplete: () => settleForbiddenBattle(type, won, detail),
   });
 }
 
@@ -5591,11 +9186,8 @@ function showForbiddenRelicCarry(run, d) {
 }
 
 function showForbiddenWaitingHint() {
-  els.waitingOverlay.hidden = false;
-  els.waitingText.textContent = `联机同步：本宗进入禁地，其他玩家等待中。当前第 ${state.forbiddenRun?.floor || 1} 层。`;
-  setTimeout(() => {
-    if (!state.waitingForPlayers) els.waitingOverlay.hidden = true;
-  }, 1200);
+  flashFeedback(`禁地探索已同步：当前第 ${state.forbiddenRun?.floor || 1} 层，不会阻塞其他玩家。`, "good");
+  syncPublicState();
 }
 
 function exploreEvent(event) {
@@ -5745,42 +9337,180 @@ function grantForgingMaterialsFromEvent(event, amount = 1) {
   return gained;
 }
 
-function applyOpportunityReward(event, choice, d, great, score) {
-  const quality = clamp(Math.floor(event.value / 32) + (great ? 1 : 0), 0, qualityNames.length - 1);
-  const materialGain = [];
-  const rewardText = {
-    insight: () => { state.sect.insight += great ? 46 : 26; d.temper += 2; },
-    gear: () => addItem(pick(["spiritBlade", "guardTalisman", "swordManual", "moonBlade"]), 1, quality),
-    rarePill: () => addItem(pick(["tribPill", "marrowPill", "qiPill"]), 1, quality),
-    safe: () => { state.sect.insight += 14; state.sect.prestige += 8; },
-    alchemyMats: () => { state.sect.alchemyMats += great ? 3 : 2; materialGain.push(...grantAlchemyMaterialsFromEvent(event, great || event.materialRich ? 2 : 1)); },
-    building: () => { state.sect.insight += 22; if (event.materialRich) { state.sect.alchemyMats += 1; materialGain.push(...grantAlchemyMaterialsFromEvent(event, 1)); } },
-    disciple: () => state.recruitPool.push(createDisciple()),
-    battleExp: () => { d.exp += great ? 44 : 26; d.atk += great ? 5 : 2; },
-    manual: () => { addItem("swordManual", 1, quality); state.sect.insight += 20; },
-    barrier: () => state.sect.barrier = clamp(state.sect.barrier + (great ? 16 : 9), 0, 100),
-    market: () => { state.sect.stones += great ? 180 : 90; if (great) { state.sect.alchemyMats += 1; materialGain.push(...grantAlchemyMaterialsFromEvent(event, 1)); } state.sect.forgingMats += 1; },
-    prestige: () => state.sect.prestige += great ? 50 : 28,
-    random: () => applyRandomOpportunityWindfall(quality, event),
-    trib: () => addItem("tribPill", 1, quality),
-    body: () => { d.hp += great ? 26 : 14; d.def += great ? 8 : 4; },
-    dao: () => { state.sect.insight += great ? 60 : 34; d.temper += 5; },
-  };
-  rewardText[choice.reward]?.();
-  const materialText = materialGain.length ? `额外带回丹材：${materialGain.join("、")}。` : "";
-  const text = `${choice.text}${great ? "气运牵引出隐藏机缘，收获远超预期。" : "此行顺利，机缘入手。"}${materialText}`
-  log(`${d.name}完成机缘「${choice.label}」：${text}`, "good");
-  showExploreResult(event, choice.label, `${text}<br><br>${great ? "气运翻涌，触发隐藏收益。" : "气机顺流，行动成功。"}`, true);
+function rewardItemDisplay(itemId, quality = 0) {
+  const item = itemCatalog[itemId];
+  if (!item) return itemId || "未知物品";
+  if (item.material) return item.name;
+  return `${gearTierName(quality)}${item.name}`;
 }
 
-function applyRandomOpportunityWindfall(quality, event = null) {
+function pushReward(rewards, name, value) {
+  if (!rewards || !name || value === undefined || value === null || value === "" || value === 0) return;
+  rewards.push({ name, value: String(value) });
+}
+
+function renderRewardList(rewards = []) {
+  if (!rewards.length) return `<div class="reward-list"><div><span>奖励</span><strong>无额外收获</strong></div></div>`;
+  return `<div class="reward-list">${rewards.map((item) => `<div><span>${item.name}</span><strong>${item.value}</strong></div>`).join("")}</div>`;
+}
+
+function applyOpportunityReward(event, choice, d, great, score) {
+  const quality = clamp(Math.floor(event.value / 32) + (great ? 1 : 0), 0, qualityNames.length - 1);
+  const rewards = [];
+  const rewardText = {
+    insight: () => {
+      const amount = great ? 46 : 26;
+      state.sect.insight += amount;
+      d.temper += 2;
+      pushReward(rewards, "参悟", `+${amount}`);
+      pushReward(rewards, `${d.name}心性`, "+2");
+    },
+    gear: () => {
+      const id = pick([...equipmentItemIds, ...methodItemIds, "refineStone"]);
+      addItem(id, 1, quality);
+      pushReward(rewards, itemCatalog[id]?.equipment ? "装备" : methodCatalog[id] ? "功法" : "材料", rewardItemDisplay(id, quality));
+    },
+    rarePill: () => {
+      const id = pick(["tribPill", "marrowPill", "qiPill"]);
+      addItem(id, 1, quality);
+      pushReward(rewards, "丹药", rewardItemDisplay(id, quality));
+    },
+    safe: () => {
+      state.sect.insight += 14;
+      state.sect.prestige += 8;
+      pushReward(rewards, "参悟", "+14");
+      pushReward(rewards, "声望", "+8");
+    },
+    alchemyMats: () => {
+      const generic = great ? 3 : 2;
+      state.sect.alchemyMats += generic;
+      const gained = grantAlchemyMaterialsFromEvent(event, great || event.materialRich ? 2 : 1);
+      pushReward(rewards, "通用丹材", `+${generic}`);
+      pushReward(rewards, "具体丹材", gained.join("、"));
+    },
+    building: () => {
+      state.sect.insight += 22;
+      pushReward(rewards, "参悟", "+22");
+      if (event.materialRich) {
+        state.sect.alchemyMats += 1;
+        const gained = grantAlchemyMaterialsFromEvent(event, 1);
+        pushReward(rewards, "通用丹材", "+1");
+        pushReward(rewards, "具体丹材", gained.join("、"));
+      }
+    },
+    disciple: () => {
+      const newcomer = createDisciple();
+      state.recruitPool.push(newcomer);
+      pushReward(rewards, "候选弟子", newcomer.name);
+    },
+    battleExp: () => {
+      const exp = great ? 44 : 26;
+      const atk = great ? 5 : 2;
+      d.exp += exp;
+      d.atk += atk;
+      pushReward(rewards, `${d.name}修为`, `+${exp}`);
+      pushReward(rewards, `${d.name}攻伐`, `+${atk}`);
+    },
+    manual: () => {
+      const id = pick(methodItemIds);
+      addItem(id, 1, quality);
+      state.sect.insight += 20;
+      pushReward(rewards, "功法", rewardItemDisplay(id, quality));
+      pushReward(rewards, "参悟", "+20");
+    },
+    barrier: () => {
+      const amount = great ? 16 : 9;
+      state.sect.barrier = clamp(state.sect.barrier + amount, 0, 100);
+      pushReward(rewards, "护山大阵", `+${amount}`);
+    },
+    market: () => {
+      const stones = great ? 180 : 90;
+      state.sect.stones += stones;
+      state.sect.forgingMats += 1;
+      pushReward(rewards, "灵石", `+${stones}`);
+      pushReward(rewards, "通用器材", "+1");
+      if (great) {
+        state.sect.alchemyMats += 1;
+        const gained = grantAlchemyMaterialsFromEvent(event, 1);
+        pushReward(rewards, "通用丹材", "+1");
+        pushReward(rewards, "具体丹材", gained.join("、"));
+      }
+    },
+    prestige: () => {
+      const amount = great ? 50 : 28;
+      state.sect.prestige += amount;
+      pushReward(rewards, "声望", `+${amount}`);
+    },
+    random: () => applyRandomOpportunityWindfall(quality, event, rewards),
+    trib: () => {
+      addItem("tribPill", 1, quality);
+      pushReward(rewards, "丹药", rewardItemDisplay("tribPill", quality));
+    },
+    body: () => {
+      const hp = great ? 26 : 14;
+      const def = great ? 8 : 4;
+      d.hp += hp;
+      d.def += def;
+      pushReward(rewards, `${d.name}体魄`, `+${hp}`);
+      pushReward(rewards, `${d.name}守御`, `+${def}`);
+    },
+    dao: () => {
+      const amount = great ? 60 : 34;
+      state.sect.insight += amount;
+      d.temper += 5;
+      pushReward(rewards, "参悟", `+${amount}`);
+      pushReward(rewards, `${d.name}心性`, "+5");
+    },
+  };
+  rewardText[choice.reward]?.();
+  if ((d.activeMethods || []).length) {
+    const methodGain = great ? 4 : 2;
+    for (const id of d.activeMethods) {
+      const method = d.methods.find((item) => item.id === id);
+      if (method) method.proficiency = clamp((method.proficiency || 0) + methodGain, 0, 100);
+    }
+    pushReward(rewards, "携带功法熟练度", `+${methodGain}`);
+  }
+  const text = `${choice.text}${great ? "气运牵引出隐藏机缘，收获远超预期。" : "此行顺利，机缘入手。"}`
+  log(`${d.name}完成机缘「${choice.label}」：${text}`, "good");
+  showExploreResult(event, choice.label, `${text}<br><br>${great ? "气运翻涌，触发隐藏收益。" : "气机顺流，行动成功。"}`, true, rewards);
+}
+
+function applyRandomOpportunityWindfall(quality, event = null, rewards = []) {
   const roll = pick(["stones", "pill", "gear", "insight", "mats", "forgeMats"]);
-  if (roll === "stones") state.sect.stones += 180;
-  if (roll === "pill") addItem(pick(["tribPill", "qiPill", "marrowPill"]), 1, quality);
-  if (roll === "gear") addItem(pick(["spiritBlade", "guardTalisman", "moonBlade", "thunderSpear"]), 1, quality);
-  if (roll === "insight") state.sect.insight += 52;
-  if (roll === "mats") { state.sect.alchemyMats += 1; addItem(pick(alchemyMaterialIds), 1, 0); state.sect.forgingMats += 1; }
-  if (roll === "forgeMats") { state.sect.forgingMats += 1; grantForgingMaterialsFromEvent(event, 1); }
+  if (roll === "stones") {
+    state.sect.stones += 180;
+    pushReward(rewards, "灵石", "+180");
+  }
+  if (roll === "pill") {
+    const id = pick(["tribPill", "qiPill", "marrowPill"]);
+    addItem(id, 1, quality);
+    pushReward(rewards, "丹药", rewardItemDisplay(id, quality));
+  }
+  if (roll === "gear") {
+    const id = pick([...equipmentItemIds, ...methodItemIds, "refineStone", "affixLock"]);
+    addItem(id, 1, quality);
+    pushReward(rewards, itemCatalog[id]?.equipment ? "装备" : methodCatalog[id] ? "功法" : "材料", rewardItemDisplay(id, quality));
+  }
+  if (roll === "insight") {
+    state.sect.insight += 52;
+    pushReward(rewards, "参悟", "+52");
+  }
+  if (roll === "mats") {
+    const id = pick(alchemyMaterialIds);
+    state.sect.alchemyMats += 1;
+    addItem(id, 1, 0);
+    state.sect.forgingMats += 1;
+    pushReward(rewards, "通用丹材", "+1");
+    pushReward(rewards, "具体丹材", itemCatalog[id].name);
+    pushReward(rewards, "通用器材", "+1");
+  }
+  if (roll === "forgeMats") {
+    state.sect.forgingMats += 1;
+    const gained = grantForgingMaterialsFromEvent(event, 1);
+    pushReward(rewards, "通用器材", "+1");
+    pushReward(rewards, "具体器材", gained.join("、"));
+  }
 }
 
 function applyOpportunityFailure(event, choice, d, score) {
@@ -5791,7 +9521,10 @@ function applyOpportunityFailure(event, choice, d, score) {
   d.status = "机缘受挫";
   const text = `${choice.text}然而气机逆转，${d.name}判断失误，遭受 ${hurt} 点体魄损伤。`;
   log(`${d.name}机缘失败：${text}`, "warn");
-  showExploreResult(event, choice.label, `${text}<br><br>气机逆转，未能压住此地变化。`, false);
+  showExploreResult(event, choice.label, `${text}<br><br>气机逆转，未能压住此地变化。`, false, [
+    { name: `${d.name}体魄`, value: `-${hurt}` },
+    { name: `${d.name}心魔`, value: "+6" },
+  ]);
 }
 
 function resolveExploreEvent(event, approach = "safe") {
@@ -5813,9 +9546,14 @@ function resolveExploreEvent(event, approach = "safe") {
     state.sect.insight += 16 + quality * 4;
     state.sect.prestige += 24;
     d.exp += 22;
-    const text = `${d.name}在${event.name}的石匣中发现${qualityNames[quality]}${itemCatalog[itemId].name}，已收入仓库。`;
+    const text = `${d.name}在${event.name}的石匣中发现${gearTierName(quality)}${itemCatalog[itemId].name}，已收入仓库。`;
     log(text, "good");
-    showExploreResult(event, "遗迹石匣", text, true);
+    showExploreResult(event, "遗迹石匣", text, true, [
+      { name: "丹药", value: rewardItemDisplay(itemId, quality) },
+      { name: "参悟", value: `+${16 + quality * 4}` },
+      { name: "声望", value: "+24" },
+      { name: `${d.name}修为`, value: "+22" },
+    ]);
   } else if (luck > 52 && result === "oreVein") {
     state.sect.forgingMats += 1;
     const gained = grantForgingMaterialsFromEvent(event, 1);
@@ -5823,29 +9561,46 @@ function resolveExploreEvent(event, approach = "safe") {
     state.sect.insight += 8;
     const text = `${d.name}循地脉寻到一处散碎玄铁，带回通用器材、${gained.join("、")}与 ${event.value * 2} 灵石。`;
     log(text, "good");
-    showExploreResult(event, "地脉矿痕", text, true);
+    showExploreResult(event, "地脉矿痕", text, true, [
+      { name: "通用器材", value: "+1" },
+      { name: "具体器材", value: gained.join("、") },
+      { name: "灵石", value: `+${event.value * 2}` },
+      { name: "参悟", value: "+8" },
+    ]);
   } else if (luck > 44 && result === "manual") {
     const quality = clamp(d.realm + rand(0, 2), 0, qualityNames.length - 1);
-    addItem(pick(["swordManual", "spiritBlade", "guardTalisman"]), 1, quality);
+    const itemId = pick([...methodItemIds, ...equipmentItemIds, "refineStone", "affixLock"]);
+    addItem(itemId, 1, quality);
     d.temper += 4;
     state.sect.insight += 28;
-    const text = `${d.name}破解${event.name}中的残阵，得一件${qualityNames[quality]}法器/功法，已存入仓库。`;
+    const text = `${d.name}破解${event.name}中的残阵，得到${rewardItemDisplay(itemId, quality)}，已存入仓库。`;
     log(text, "good");
-    showExploreResult(event, "残阵回响", text, true);
+    showExploreResult(event, "残阵回响", text, true, [
+      { name: itemCatalog[itemId]?.equipment ? "装备" : methodCatalog[itemId] ? "功法" : "材料", value: rewardItemDisplay(itemId, quality) },
+      { name: "参悟", value: "+28" },
+      { name: `${d.name}心性`, value: "+4" },
+    ]);
   } else if (luck > 38 && result === "herbs") {
     state.sect.alchemyMats += 1;
     const gained = grantAlchemyMaterialsFromEvent(event, event.materialRich ? 2 : 1);
     state.sect.insight += 6;
     const text = `${d.name}采得灵草并辨出药性，带回通用丹材与${gained.join("、")}。`;
     log(text, "good");
-    showExploreResult(event, "灵草露华", text, true);
+    showExploreResult(event, "灵草露华", text, true, [
+      { name: "通用丹材", value: "+1" },
+      { name: "具体丹材", value: gained.join("、") },
+      { name: "参悟", value: "+6" },
+    ]);
   } else if (luck > 58 && result === "lostDisciple") {
     const newcomer = createDisciple();
     state.recruitPool.push(newcomer);
     state.sect.insight += 12;
     const text = `${d.name}在${event.name}救下一位流落散修，${newcomer.name}进入本年候选名册。`;
     log(text, "good");
-    showExploreResult(event, "山路相逢", text, true);
+    showExploreResult(event, "山路相逢", text, true, [
+      { name: "候选弟子", value: newcomer.name },
+      { name: "参悟", value: "+12" },
+    ]);
   } else {
     const hurt = rand(8, 18);
     d.hp = Math.max(25, d.hp - hurt);
@@ -5853,17 +9608,20 @@ function resolveExploreEvent(event, approach = "safe") {
     state.sect.barrier = clamp(state.sect.barrier - 4, 0, 100);
     const text = `${d.name}探访${event.name}时遭遇伏击，体魄受损 ${hurt}，山门派人接应后撤。`;
     log(text, "warn");
-    showExploreResult(event, "暗处伏击", text, false);
+    showExploreResult(event, "暗处伏击", text, false, [
+      { name: `${d.name}体魄`, value: `-${hurt}` },
+      { name: "护山大阵", value: "-4" },
+    ]);
   }
   state.events = state.events.filter((e) => e.id !== event.id);
   render();
 }
 
-function showExploreResult(event, title, text, good) {
+function showExploreResult(event, title, text, good, rewards = []) {
   showModal({
     kicker: good ? "探索收获" : "探索遇险",
     title,
-    body: `<p>${text}</p><p>${event.name}的灵机逐渐消散，地图上的该事件点已关闭。</p>`,
+    body: `<p>${text}</p>${renderRewardList(rewards)}<p>${event.name}的灵机逐渐消散，地图上的该事件点已关闭。</p>`,
   });
 }
 
@@ -6041,21 +9799,32 @@ function sabotageRival(target) {
 
 function tournament() {
   if (!state.founded) return;
-  if (state.year % 3 !== 0) {
-    log(`宗门大比每三年举行一次，下一届在太初 ${state.year + (3 - state.year % 3)} 年。`, "warn");
+  if (state.year % 10 !== 0) {
+    log(`宗门大比每十年举行一次，下一届在太初 ${state.year + (10 - state.year % 10)} 年。`, "warn");
     render();
     return;
   }
   if (state.lastTournamentYear === state.year) {
-    log("本届宗门大比已经结束，需等待三年后的下一届。", "warn");
+    log("本届宗门大比已经结束，需等待十年后的下一届。", "warn");
     render();
     return;
   }
-  if (!spendAction(2, "宗门大比")) return;
+  if (state.actionPoints < 2) {
+    log("宗门大比需要 2 点行动，本年行动点不足。", "warn");
+    render();
+    return;
+  }
   openTournamentPicker(false);
 }
 
 function openTournamentPicker(auto = false, afterClose = null) {
+  if (state.multiplayer && state.roomConnected) {
+    state.pendingTournamentAfterClose = afterClose;
+    state.roomTournament = state.roomTournament && state.roomTournament.year === state.year
+      ? state.roomTournament
+      : { year: state.year, ready: {}, resolved: false };
+    if (state.roomHost) sendRoomFeature("tournament_open", { tournament: { year: state.year, ready: state.roomTournament.ready || {} } });
+  }
   const roster = state.sect.disciples.slice().sort((a, b) => discipleBattleScore(b) - discipleBattleScore(a));
   const chosen = new Set(roster.slice(0, 3).map((d) => d.id));
   const actionText = auto ? "本届自动开启，不消耗行动点。若弃权，将失去排名奖励。" : "本次由玩家主动参加，消耗 2 点行动。";
@@ -6072,11 +9841,16 @@ function openTournamentPicker(auto = false, afterClose = null) {
     actions: [
       { label: "开始锦标赛", handler: () => {
         const ids = [...els.modalBody.querySelectorAll(".tournament-pick:checked")].map((input) => input.value).slice(0, 3);
-        if (ids.length < 3) return;
+        if (ids.length < 3) {
+          flashFeedback("至少选择 3 名弟子参赛。", "warn");
+          return;
+        }
+        if (!auto && !spendAction(2, "宗门大比")) return;
         closeModal();
-        resolveTournament(ids, auto, afterClose);
+        if (state.multiplayer && state.roomConnected) submitRoomTournamentTeam(ids, auto, afterClose);
+        else resolveTournament(ids, auto, afterClose);
       } },
-      { label: auto ? "本届弃权" : "弃权返还行动", handler: () => { state.lastTournamentYear = state.year; if (!auto) state.actionPoints += 2; log("本宗放弃本届宗门大比。", "warn"); closeModal(); if (afterClose) afterClose(); render(); } },
+      { label: auto ? "本届弃权" : "弃权", handler: () => { state.lastTournamentYear = state.year; log("本宗放弃本届宗门大比。", "warn"); closeModal(); if (afterClose) afterClose(); render(); } },
     ],
   });
   if (auto) {
@@ -6093,17 +9867,343 @@ function openTournamentPicker(auto = false, afterClose = null) {
 function discipleBattleScore(d) {
   const mindPenalty = (d.mind || 0) * 1.1;
   const elder = d.elder ? 30 + d.realm * 8 : 0;
-  return d.hp * 0.65 + d.atk * 2.1 + d.def * 1.55 + d.speed * 1.35 + d.realm * 95 + d.temper * 0.35 + d.aptitude * 0.2 + bondPowerBonus(d) + elder - mindPenalty;
+  const realmGap = Math.pow(2.05, d.realm || 0) * 82;
+  const elementPower = Object.values(d.elementDamage || {}).reduce((sum, value) => sum + Number(value || 0) * 1.35, 0);
+  const base = d.hp * 0.78 + d.atk * 2.38 + d.def * 1.82 + d.speed * 1.55 + realmGap + d.temper * 0.46 + d.aptitude * 0.28;
+  return base + elementPower + gearPowerBonus(d) + methodPowerBonus(d) + bondPowerBonus(d) + cultivationPowerBonus(d) + elder - mindPenalty;
+}
+
+function publicTournamentTeam(ids) {
+  const members = ids.map((id) => state.sect.disciples.find((d) => d.id === id)).filter(Boolean).slice(0, 3);
+  return {
+    id: state.clientId,
+    name: state.sect.name,
+    playerId: state.clientId,
+    members: members.map((d) => ({
+      name: d.name,
+      realm: d.realm,
+      hp: d.hp,
+      atk: d.atk,
+      def: d.def,
+      speed: d.speed,
+      temper: d.temper,
+      aptitude: d.aptitude,
+      luck: d.luck,
+      shieldPower: d.shieldPower || 0,
+      damagePct: d.damagePct || 0,
+      reducePct: d.reducePct || 0,
+      critPct: d.critPct || 0,
+      critDamage: d.critDamage || 0,
+      lifeSteal: d.lifeSteal || 0,
+      pierce: d.pierce || 0,
+      elementDamage: d.elementDamage || {},
+      methods: (d.methods || []).map((method) => ({ id: method.id, quality: method.quality || 0, proficiency: method.proficiency || 0 })),
+      activeMethods: (d.activeMethods || []).slice(0, 5),
+      power: Math.round(discipleBattleScore(d)),
+    })),
+  };
+}
+
+function submitRoomTournamentTeam(ids, auto = false, afterClose = null) {
+  const team = publicTournamentTeam(ids);
+  if (team.members.length < 3) return;
+  state.pendingTournamentAfterClose = afterClose;
+  state.roomTournament = state.roomTournament || { year: state.year, ready: {}, resolved: false };
+  state.roomTournament.ready = state.roomTournament.ready || {};
+  state.roomTournament.ready[state.clientId] = team;
+  state.lastTournamentYear = state.year;
+  sendRoomFeature("tournament_ready", { team, year: state.year });
+  markPlayerAction("宗门大比已准备", true);
+  showTournamentWaitingRoom();
+  if (state.roomHost) maybeFinalizeRoomTournament();
+}
+
+function showTournamentWaitingRoom() {
+  const ready = Object.values(state.roomTournament?.ready || {});
+  const players = foundedRoomPlayers();
+  const readyIds = new Set(ready.map((team) => team.playerId || team.id));
+  showModal({
+    kicker: "联机宗门大比",
+    title: `等待参赛宗门 ${ready.length}/${Math.max(1, players.length)}`,
+    body: `
+      <p>所有已立宗门玩家提交三名弟子后，房主会统一抽签并结算排名。</p>
+      <div class="system-grid">
+        ${players.map((player) => `<article class="system-card ${readyIds.has(player.id) ? "is-winner" : ""}"><strong>${tradeEscape(player.name)}</strong><span>${readyIds.has(player.id) ? "已准备" : "等待选择弟子"}</span></article>`).join("")}
+      </div>
+    `,
+    actions: [{ label: "等待结果", handler: closeModal }],
+  });
+}
+
+function maybeFinalizeRoomTournament() {
+  if (!state.roomHost || !state.roomTournament || state.roomTournament.year !== state.year || state.roomTournament.resolved) return;
+  const players = foundedRoomPlayers();
+  const ready = state.roomTournament.ready || {};
+  if (players.length && players.some((player) => !ready[player.id])) return;
+  state.roomTournament.resolved = true;
+  const teams = Object.values(ready);
+  const result = resolveTournamentField(teams);
+  sendRoomFeature("tournament_result", { result });
+  applyRoomTournamentResult(result);
+}
+
+function resolveTournamentField(playerTeams = []) {
+  const teams = playerTeams.map((team) => ({
+    ...team,
+    playerTeam: true,
+    score: team.members.reduce((sum, d) => sum + (d.power || discipleBattleScore(d)), 0) + stableRange(`${state.roomCode}:${state.year}:${team.id}:seed`, 0, 180),
+  }));
+  for (const r of activeRivals().slice(0, 7)) {
+    const realm = clamp(Math.floor((r.power || 600) / 1400), 0, realms.length - 1);
+    teams.push({
+      id: r.id,
+      name: r.name,
+      members: Array.from({ length: 3 }, (_, i) => {
+        const base = Math.max(50, Math.round((r.power || 600) / 45));
+        const ghost = syntheticGuardian(`${r.name.slice(0, 1)}门${i + 1}`, Math.max(260, (r.power || 600) / 3), `${r.id}:tournament:${i}:${state.year}`);
+        return { ...ghost, realm, hp: 80 + realm * 22, atk: base + realm * 14, def: base + realm * 11, speed: 30 + realm * 8, temper: 55, aptitude: 55, power: Math.round((r.power || 600) / 3) };
+      }),
+      score: Math.round(r.power || 600) + stableRange(`${state.roomCode}:${state.year}:${r.id}:ai`, -120, 220),
+    });
+  }
+  const matches = [];
+  let field = teams.slice().sort((a, b) => b.score - a.score);
+  const rounds = ["首轮", "半决赛", "决赛"];
+  for (let round = 0; round < rounds.length && field.length > 1; round += 1) {
+    const next = [];
+    for (let i = 0; i < field.length; i += 2) {
+      const a = field[i];
+      const b = field[i + 1];
+      if (!b) {
+        next.push(a);
+        continue;
+      }
+      const result = resolveTeamMatch(a, b);
+      matches.push({
+        roundName: rounds[round],
+        left: { id: a.id, playerId: a.playerId, name: a.name },
+        right: { id: b.id, playerId: b.playerId, name: b.name },
+        winner: { id: result.winner.id, playerId: result.winner.playerId, name: result.winner.name },
+        aWins: result.aWins,
+        bWins: result.bWins,
+        duels: result.duels,
+      });
+      next.push(result.winner);
+    }
+    field = next.sort((a, b) => b.score - a.score);
+  }
+  const champion = field[0] || teams.slice().sort((a, b) => b.score - a.score)[0];
+  const ranked = teams.sort((a, b) => b.score - a.score).map((team, index) => ({ ...team, rank: index + 1 }));
+  return {
+    year: state.year,
+    champion: champion?.name || ranked[0]?.name || "未知",
+    matches,
+    rankings: ranked.map((team) => ({ id: team.id, playerId: team.playerId, name: team.name, rank: team.rank, score: Math.round(team.score), members: team.members })),
+  };
+}
+
+function tournamentRewardForRank(rank) {
+  if (rank === 1) return { stones: 1800, prestige: 240, insight: 120, item: pick(["spiritRing", "thunderMethod", "spiritBlade"]), quality: 4, exp: 56 };
+  if (rank <= 3) return { stones: 1000, prestige: 150, insight: 75, item: pick(["cloudRobe", "earthMethod", "tribPill"]), quality: 3, exp: 38 };
+  if (rank <= 6) return { stones: 520, prestige: 90, insight: 42, item: pick(["shadowBoots", "waterMethod", "heartLotus"]), quality: 2, exp: 24 };
+  return { stones: 220, prestige: 35, insight: 18, item: "qiPill", quality: 1, exp: 12 };
+}
+
+function applyRoomTournamentResult(result) {
+  const afterClose = state.pendingTournamentAfterClose;
+  state.pendingTournamentAfterClose = null;
+  state.pendingTournamentCost = 0;
+  state.roomTournament = null;
+  state.lastTournamentYear = result.year || state.year;
+  const mine = (result.rankings || []).find((row) => row.playerId === state.clientId || row.id === state.clientId);
+  if (mine) {
+    const reward = tournamentRewardForRank(mine.rank);
+    state.sect.stones += reward.stones;
+    state.sect.prestige += reward.prestige;
+    state.sect.insight += reward.insight;
+    addItem(reward.item, 1, reward.quality);
+    for (const member of mine.members || []) {
+      const d = state.sect.disciples.find((item) => item.name === member.name);
+      if (d) d.exp += reward.exp;
+    }
+    log(`联机宗门大比排名第 ${mine.rank}，获得 ${reward.stones} 灵石、声望 +${reward.prestige}、参悟 +${reward.insight}、${gearTierName(reward.quality)}${itemCatalog[reward.item].name}。`, mine.rank <= 3 ? "good" : "");
+  }
+  const rows = (result.rankings || []).slice(0, 10).map((row) => `<article class="system-card ${row.playerId === state.clientId || row.id === state.clientId ? "is-winner" : ""}"><strong>第 ${row.rank} 名：${tradeEscape(row.name)}</strong><span>评分 ${Math.round(row.score || 0)}</span></article>`).join("");
+  showTournamentReplayModal({
+    kicker: "联机宗门大比",
+    title: `冠军：${tradeEscape(result.champion || "未知")}`,
+    result,
+    tableHtml: `<div class="system-grid">${rows}</div>`,
+    summary: "本届宗门大比已统一结算，玩家和 AI 宗门按三人斗法排行。",
+    actionLabel: "领取奖励",
+    onDone: () => { closeModal(); afterClose?.(); render(); },
+  });
+  render();
+}
+
+function collectTournamentReplayDuels(result) {
+  const all = [];
+  for (const match of result.matches || []) {
+    for (const duel of match.duels || []) {
+      all.push({
+        ...duel,
+        roundName: match.roundName,
+        leftTeam: match.left,
+        rightTeam: match.right,
+        matchScore: `${match.aWins}:${match.bWins}`,
+      });
+    }
+  }
+  if (!all.length) return [];
+  const mine = all.filter((duel) => duel.leftTeam?.id === state.clientId || duel.leftTeam?.playerId === state.clientId || duel.rightTeam?.id === state.clientId || duel.rightTeam?.playerId === state.clientId);
+  const picked = mine.length ? mine : all;
+  return picked.slice(0, 9);
+}
+
+function showTournamentReplayModal({ kicker, title, result, tableHtml, summary, actionLabel = "继续", onDone = null }) {
+  const replayDuels = collectTournamentReplayDuels(result || {});
+  if (!replayDuels.length) {
+    showModal({
+      kicker,
+      title,
+      body: `<p>${tradeEscape(summary || "本届宗门大比已结算。")}</p>${tableHtml}`,
+      actions: [{ label: actionLabel, handler: onDone || closeModal }],
+    });
+    return;
+  }
+  let duelIndex = 0;
+  let rowIndex = -1;
+  let timer = null;
+  let finished = false;
+  const first = replayDuels[0];
+  const body = `
+    <div class="tournament-replay realtime-duel" data-phase="playing">
+      <div class="realtime-fighters">
+        <div class="realtime-fighter left">
+          <strong class="left-name">${tradeEscape(first.left.name)}</strong>
+          <span class="left-team">${tradeEscape(first.leftTeam?.name || "")}</span>
+          <div class="realtime-hp"><i class="left-hp" style="width:100%"></i></div>
+          <em class="left-hp-text">${first.leftMax}/${first.leftMax}</em>
+          <small class="left-shield">护盾 0</small>
+        </div>
+        <div class="realtime-center">
+          <b>VS</b>
+          <span class="realtime-round">${tradeEscape(first.roundName || "对局")}</span>
+        </div>
+        <div class="realtime-fighter right">
+          <strong class="right-name">${tradeEscape(first.right.name)}</strong>
+          <span class="right-team">${tradeEscape(first.rightTeam?.name || "")}</span>
+          <div class="realtime-hp"><i class="right-hp" style="width:100%"></i></div>
+          <em class="right-hp-text">${first.rightMax}/${first.rightMax}</em>
+          <small class="right-shield">护盾 0</small>
+        </div>
+      </div>
+      <div class="realtime-action">
+        <strong class="realtime-method">抽签落定</strong>
+        <span class="realtime-damage">三人对决开始，按功法顺序快速斗法。</span>
+      </div>
+      <div class="realtime-log"></div>
+    </div>
+    <div class="tournament-final" hidden>
+      <p>${tradeEscape(summary || "本届宗门大比已结算。")}</p>
+      ${tableHtml}
+    </div>
+  `;
+  showModal({ kicker, title, body, actions: [{ label: "跳过回放", handler: () => finish(true) }] });
+  els.modalCloseBtn.onclick = () => finish(true);
+  const root = els.modalBody.querySelector(".tournament-replay");
+  const finalBox = els.modalBody.querySelector(".tournament-final");
+  const logBox = els.modalBody.querySelector(".realtime-log");
+  const setDuelHeader = (duel) => {
+    root.querySelector(".left-name").textContent = duel.left.name;
+    root.querySelector(".right-name").textContent = duel.right.name;
+    root.querySelector(".left-team").textContent = duel.leftTeam?.name || "";
+    root.querySelector(".right-team").textContent = duel.rightTeam?.name || "";
+    root.querySelector(".realtime-round").textContent = `${duel.roundName || "对局"} ${duel.matchScore || ""}`;
+    root.querySelector(".left-hp").style.width = "100%";
+    root.querySelector(".right-hp").style.width = "100%";
+    root.querySelector(".left-hp-text").textContent = `${duel.leftMax}/${duel.leftMax}`;
+    root.querySelector(".right-hp-text").textContent = `${duel.rightMax}/${duel.rightMax}`;
+    root.querySelector(".left-shield").textContent = "护盾 0";
+    root.querySelector(".right-shield").textContent = "护盾 0";
+  };
+  const updateBars = (duel, row = null) => {
+    const leftHp = row ? row.leftHp : duel.leftMax;
+    const rightHp = row ? row.rightHp : duel.rightMax;
+    root.querySelector(".left-hp").style.width = hpPct(leftHp, duel.leftMax);
+    root.querySelector(".right-hp").style.width = hpPct(rightHp, duel.rightMax);
+    root.querySelector(".left-hp-text").textContent = `${Math.max(0, Math.round(leftHp))}/${duel.leftMax}`;
+    root.querySelector(".right-hp-text").textContent = `${Math.max(0, Math.round(rightHp))}/${duel.rightMax}`;
+    root.querySelector(".left-shield").textContent = `护盾 ${Math.round(row?.leftShield || 0)}`;
+    root.querySelector(".right-shield").textContent = `护盾 ${Math.round(row?.rightShield || 0)}`;
+  };
+  const pushLog = (duel, row) => {
+    const text = row.actorSide === "system"
+      ? `${duel.leftTeam?.name || ""} 对 ${duel.rightTeam?.name || ""} 十回合判定，${row.target}胜出。`
+      : `${row.actor}施展${row.methodName}，对${row.target}造成${Math.round(row.damage || 0)}${row.element ? row.element + "伤" : "伤害"}${row.crit ? "，会心" : ""}${row.heal ? `，回血${row.heal}` : ""}${row.shield ? `，护盾+${row.shield}` : ""}。`;
+    logBox.insertAdjacentHTML("afterbegin", `<p>${tradeEscape(text)}</p>`);
+  };
+  const step = () => {
+    if (finished) return;
+    const duel = replayDuels[duelIndex];
+    if (!duel) {
+      finish(false);
+      return;
+    }
+    rowIndex += 1;
+    if (rowIndex >= (duel.rows || []).length) {
+      const text = `${duel.left.name} ${duel.leftWon ? "胜" : "负"} ${duel.right.name}`;
+      logBox.insertAdjacentHTML("afterbegin", `<p><strong>${tradeEscape(text)}</strong></p>`);
+      duelIndex += 1;
+      rowIndex = -1;
+      if (!replayDuels[duelIndex]) {
+        timer = setTimeout(() => finish(false), 560);
+        return;
+      }
+      setDuelHeader(replayDuels[duelIndex]);
+      timer = setTimeout(step, 520);
+      return;
+    }
+    const row = duel.rows[rowIndex];
+    updateBars(duel, row);
+    root.querySelector(".realtime-method").textContent = row.methodName;
+    root.querySelector(".realtime-damage").textContent = row.actorSide === "system"
+      ? `${row.target}在十回合判定中胜出`
+      : `${row.actor} → ${row.target}：${Math.round(row.damage || 0)}${row.element ? row.element + "伤" : "伤害"}`;
+    root.querySelectorAll(".realtime-fighter").forEach((node) => node.classList.remove("is-acting", "is-hit"));
+    if (row.actorSide !== "system") root.querySelector(`.realtime-fighter.${row.actorSide}`)?.classList.add("is-acting");
+    if (row.targetSide !== "system") root.querySelector(`.realtime-fighter.${row.targetSide}`)?.classList.add("is-hit");
+    root.querySelector(".realtime-action").classList.remove("flash");
+    void root.querySelector(".realtime-action").offsetWidth;
+    root.querySelector(".realtime-action").classList.add("flash");
+    pushLog(duel, row);
+    timer = setTimeout(step, 560);
+  };
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    root.dataset.phase = "done";
+    finalBox.hidden = false;
+    root.querySelector(".realtime-method").textContent = "大比回放结束";
+    root.querySelector(".realtime-damage").textContent = "最终排名与奖励已生成。";
+    setModalActionButtons([{ label: actionLabel, handler: onDone || closeModal }]);
+    els.modalCloseBtn.onclick = onDone || closeModal;
+  };
+  setDuelHeader(first);
+  timer = setTimeout(step, 420);
 }
 
 function resolveTournament(ids, auto = false, afterClose = null) {
   state.lastTournamentYear = state.year;
   const team = ids.map((id) => state.sect.disciples.find((d) => d.id === id)).filter(Boolean);
-  const teams = [{ name: state.sect.name, player: true, members: team, score: 0 }];
+  const teams = [{ id: state.clientId, playerId: state.clientId, name: state.sect.name, player: true, members: team, score: 0 }];
   if (state.multiplayer) {
     for (const p of (state.remotePlayers || []).filter((player) => player.founded)) {
       const base = Math.max(260, (p.power || 600) / 3);
       teams.push({
+        id: p.id,
+        playerId: p.id,
         name: p.name,
         player: false,
         remote: true,
@@ -6123,13 +10223,15 @@ function resolveTournament(ids, auto = false, afterClose = null) {
   }
   for (const r of activeRivals().slice(0, 7)) {
     teams.push({
+      id: r.id,
       name: r.name,
       player: false,
-      members: Array.from({ length: 3 }, (_, i) => ({ name: `${r.name.slice(0, 1)}门${i + 1}`, hp: rand(70, 130), atk: rand(30, 70), def: rand(24, 62), speed: rand(18, 58), realm: rand(0, 4), temper: rand(30, 90), aptitude: rand(30, 90) })),
+      members: Array.from({ length: 3 }, (_, i) => syntheticGuardian(`${r.name.slice(0, 1)}门${i + 1}`, Math.max(260, (r.power || 600) / 3), `${r.id}:local-tournament:${i}:${state.year}`)),
       score: 0,
     });
   }
   const rows = [];
+  const matches = [];
   for (const t of teams) {
     t.score = t.members.reduce((sum, d) => sum + discipleBattleScore(d), 0) + rand(0, 420);
   }
@@ -6143,6 +10245,15 @@ function resolveTournament(ids, auto = false, afterClose = null) {
       if (!b) { next.push(a); continue; }
       const result = resolveTeamMatch(a, b);
       rows.push(renderTeamMatchRow(rounds[round], a, b, result));
+      matches.push({
+        roundName: rounds[round],
+        left: { id: a.id, playerId: a.playerId, name: a.name },
+        right: { id: b.id, playerId: b.playerId, name: b.name },
+        winner: { id: result.winner.id, playerId: result.winner.playerId, name: result.winner.name },
+        aWins: result.aWins,
+        bWins: result.bWins,
+        duels: result.duels,
+      });
       next.push(result.winner);
     }
     field = next.sort((a, b) => b.score - a.score);
@@ -6150,21 +10261,25 @@ function resolveTournament(ids, auto = false, afterClose = null) {
   const champion = field[0];
   const sorted = teams.sort((a, b) => b.score - a.score);
   const rank = sorted.findIndex((t) => t.player) + 1;
+  const rankings = sorted.map((item, index) => ({ id: item.id, playerId: item.playerId, name: item.name, rank: index + 1, score: Math.round(item.score), members: item.members }));
   const reward = rank === 1 ? { stones: 680, item: "spiritBlade", quality: 3 } : rank <= 3 ? { stones: 360, item: "tribPill", quality: 2 } : rank <= 6 ? { stones: 180, item: "heartLotus", quality: 1 } : { stones: 80, item: "qiPill", quality: 0 };
   state.sect.stones += reward.stones;
   addItem(reward.item, 1, reward.quality);
   state.sect.prestige += Math.max(20, 120 - rank * 10);
   for (const d of team) d.exp += rank === 1 ? 32 : rank <= 3 ? 22 : 12;
-  const text = `本宗大比排名第 ${rank}，获得 ${reward.stones} 灵石与${qualityNames[reward.quality]}${itemCatalog[reward.item].name}。`;
+  const text = `本宗大比排名第 ${rank}，获得 ${reward.stones} 灵石与${gearTierName(reward.quality)}${itemCatalog[reward.item].name}。`;
   log(text, rank <= 3 ? "good" : "");
   if (state.multiplayer && state.roomConnected) {
     sendRoomFeature("tournament_result", { result: { year: state.year, champion: champion.name, rank, text } });
   }
-  showModal({
+  showTournamentReplayModal({
     kicker: "锦标赛战报",
     title: `冠军：${champion.name} / 本宗第 ${rank} 名`,
-    body: `<div class="battle-stage"><div class="fighter left">甲</div><div class="slash"></div><div class="fighter right">乙</div></div><div class="tournament-table">${rows.join("")}</div><p>${text}</p>`,
-    actions: [{ label: "领取奖励", handler: () => { closeModal(); if (afterClose) afterClose(); render(); } }],
+    result: { year: state.year, champion: champion.name, rankings, matches },
+    tableHtml: `<div class="tournament-table">${rows.join("")}</div>`,
+    summary: text,
+    actionLabel: "领取奖励",
+    onDone: () => { closeModal(); if (afterClose) afterClose(); render(); },
   });
   render();
 }
@@ -6176,15 +10291,40 @@ function resolveTeamMatch(a, b) {
   for (let i = 0; i < 3; i += 1) {
     const left = a.members[i];
     const right = b.members[i];
-    const leftScore = discipleBattleScore(left) + rand(0, 120);
-    const rightScore = discipleBattleScore(right) + rand(0, 120);
-    const leftWon = leftScore >= rightScore;
+    const duel = simulateOneVsOneBattle(left, right, { mode: "tournament" });
+    const leftWon = duel.won;
     if (leftWon) aWins += 1;
     else bWins += 1;
-    duels.push({ left, right, leftWon, leftHp: leftWon ? rand(48, 92) : rand(8, 40), rightHp: leftWon ? rand(8, 40) : rand(48, 92) });
+    duels.push({
+      left: { name: left.name },
+      right: { name: right.name },
+      leftWon,
+      leftHp: clamp(Math.round((Math.max(0, duel.left.hp) / Math.max(1, duel.left.hpMax)) * 100), 0, 100),
+      rightHp: clamp(Math.round((Math.max(0, duel.right.hp) / Math.max(1, duel.right.hpMax)) * 100), 0, 100),
+      leftMax: duel.left.hpMax,
+      rightMax: duel.right.hpMax,
+      rows: duel.rows.slice(0, 28).map((row) => ({
+        round: row.round,
+        actor: row.actor,
+        target: row.target,
+        actorSide: row.actorSide,
+        targetSide: row.targetSide,
+        methodName: row.methodName,
+        element: row.element,
+        damage: row.damage,
+        shieldTaken: row.shieldTaken,
+        heal: row.heal,
+        shield: row.shield,
+        crit: row.crit,
+        leftHp: row.leftHp,
+        rightHp: row.rightHp,
+        leftShield: row.leftShield,
+        rightShield: row.rightShield,
+      })),
+    });
   }
   const winner = aWins >= bWins ? a : b;
-  winner.score += 180;
+  winner.score += 180 + Math.abs(aWins - bWins) * 55;
   return { winner, aWins, bWins, duels };
 }
 
@@ -6520,6 +10660,18 @@ function drawNode(node) {
     ctx.arc(0, 0, 28 * pulse, 0, Math.PI * 2);
     ctx.fill();
     drawMapBadge(node.tier >= 5 ? "#7f2f45" : "#9f3d35", node.glyph || "妖", "circle");
+  } else if (node.type === "frontierBoss") {
+    const pulse = 1 + Math.sin(Date.now() / 180) * 0.16;
+    ctx.fillStyle = "rgba(127, 47, 69, 0.22)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 46 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    drawMapBadge("#7f2f45", node.glyph || "巨", "circle");
+    ctx.strokeStyle = "rgba(255, 246, 223, 0.82)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, 30, 0, Math.PI * 2);
+    ctx.stroke();
   } else if (node.type === "frontierPoint") {
     drawMapBadge(node.owner === "player" ? "#286c58" : "#9f3d35", "寨", "square");
   } else if (node.type === "frontierLocked") {
@@ -6713,6 +10865,7 @@ function refreshFrontierYear() {
     state.forbidden.attemptsUsed = 0;
   }
   if (!frontierUnlocked()) return;
+  expireFrontierBossIfNeeded();
   refreshFrontierDungeons(true);
   state.frontier.dungeons = state.frontier.dungeons
     .map((dungeon) => ({ ...dungeon, ttl: Math.max(0, (dungeon.ttl || 1) - 1) }))
@@ -6728,6 +10881,82 @@ function refreshFrontierYear() {
       log("边境兽潮在关外游荡。若本宗开设边寨，后续会获得更多副本线索，也要承担兽潮压力。", "warn");
     }
   }
+  maybeSpawnFrontierBoss();
+}
+
+function createFrontierBoss(year = state.year) {
+  const seed = `${state.roomCode || "solo"}:${year}:frontier-boss`;
+  const names = ["玄甲裂天犼", "赤雷吞岳兽", "九首瘴龙", "幽渊搬山魁", "金瞳焚海猊"];
+  const name = names[stableHash(seed) % names.length];
+  const basePower = Math.max(2600, Math.round(sectPower() * 1.28 + year * 260 + stableRange(`${seed}:power`, 300, 980)));
+  const totalHp = Math.max(18000, Math.round(basePower * 7.4 + year * 900 + stableRange(`${seed}:hp`, 1600, 4200)));
+  return {
+    id: `frontier-boss-${year}-${stableHash(seed)}`,
+    type: "frontierBoss",
+    name,
+    glyph: "巨",
+    x: stableRange(`${seed}:x`, 180, 900),
+    y: stableRange(`${seed}:y`, 120, 520),
+    year,
+    expiresYear: year + 1,
+    power: basePower,
+    totalHp,
+    hp: totalHp,
+    defeated: false,
+  };
+}
+
+function expireFrontierBossIfNeeded() {
+  const boss = state.frontier?.worldBoss;
+  if (!boss) return;
+  if (boss.defeated || boss.expiresYear <= state.year) {
+    if (!boss.defeated && boss.hp > 0) log(`${boss.name}拖着伤势遁入妖域深处，本年巨兽讨伐结束。`, "warn");
+    if (!boss.defeated && state.multiplayer && state.roomConnected && state.roomHost) sendRoomFeature("frontier_boss_expire", { bossId: boss.id });
+    state.frontier.worldBoss = null;
+  }
+}
+
+function maybeSpawnFrontierBoss(force = false) {
+  if (!frontierUnlocked()) return null;
+  if (state.frontier.worldBoss && !state.frontier.worldBoss.defeated) return state.frontier.worldBoss;
+  if (state.multiplayer && state.roomConnected && !state.roomHost) return null;
+  const due = force || state.year % 5 === 0 || ((state.frontier.clears || 0) >= 2 && Math.random() < 0.18);
+  if (!due) return null;
+  const boss = createFrontierBoss();
+  state.frontier.worldBoss = boss;
+  state.frontier.bossDamageLog = [];
+  log(`边境巨兽「${boss.name}」现身，血量 ${boss.totalHp}。所有玩家可共同削减其血量，本年未击杀则遁走。`, "warn");
+  if (state.multiplayer && state.roomConnected) {
+    sendRoomFeature("frontier_boss_spawn", { boss });
+    syncSharedWorld();
+  }
+  return boss;
+}
+
+function mergeFrontierBoss(boss) {
+  if (!boss) return;
+  ensureSectDefaults();
+  const current = state.frontier.worldBoss;
+  if (!current || current.id === boss.id || Number(boss.year || 0) >= Number(current.year || 0)) {
+    state.frontier.worldBoss = { ...current, ...boss };
+  }
+}
+
+function applyRemoteBossDamage(payload = {}) {
+  ensureSectDefaults();
+  const boss = state.frontier.worldBoss;
+  if (!boss || boss.id !== payload.bossId) return;
+  boss.hp = Math.max(0, Number(payload.hp ?? (boss.hp - Number(payload.damage || 0))));
+  boss.defeated = Boolean(payload.defeated || boss.hp <= 0);
+  state.frontier.bossDamageLog = state.frontier.bossDamageLog || [];
+  state.frontier.bossDamageLog.unshift({
+    name: payload.playerName || "联机宗门",
+    damage: Math.round(Number(payload.damage || 0)),
+    year: state.year,
+  });
+  state.frontier.bossDamageLog = state.frontier.bossDamageLog.slice(0, 8);
+  log(`${payload.playerName || "联机宗门"}挑战${boss.name}，造成 ${Math.round(Number(payload.damage || 0))} 伤害，剩余 ${Math.round(boss.hp)}。`, boss.defeated ? "good" : "warn");
+  render();
 }
 
 function frontierNodes() {
@@ -6740,6 +10969,7 @@ function frontierNodes() {
   return [
     { id: "frontier-home", type: "frontierPoint", name: "本宗边寨", x: 132, y: 552, owner: "player", value: 120 },
     ...outposts,
+    ...(state.frontier.worldBoss && !state.frontier.worldBoss.defeated ? [state.frontier.worldBoss] : []),
     ...state.frontier.dungeons,
   ];
 }
@@ -6883,6 +11113,8 @@ function goalMissionDashboard() {
   const route = sectRoutes.find((item) => item.id === state.selectedRoute);
   const goal = victoryGoals.find((item) => item.id === state.victoryGoal);
   const goalProgress = goal ? victoryGoalProgress(goal.id) : { pct: 0, text: "尚未选择" };
+  const goalComplete = goal && goal.id !== "ascend" && goalProgress.pct >= 100;
+  const goalClaimed = goal && state.completedVictoryGoals.includes(goal.id);
   const missions = missionCatalog.map((mission) => {
     const done = state.completedMissions.includes(mission.id);
     const ready = !done && mission.check();
@@ -6898,6 +11130,7 @@ function goalMissionDashboard() {
       <div><span>终局目标</span><strong>${goal?.name || "未定"}</strong></div>
       <div class="goal-progress"><i style="width:${goalProgress.pct}%"></i></div>
       <p>${goal?.text || "开局后会选择长期目标。"} 当前进度：${goalProgress.pct}%｜${goalProgress.text}</p>
+      ${goalComplete || goalClaimed ? `<button class="goal-finish" data-id="${goal.id}" ${goalClaimed ? "disabled" : ""}>${goalClaimed ? "结局已达成" : "完成该结局"}</button>` : ""}
     </div>
     <div class="mission-board">
       <strong>宗门任务板</strong>
@@ -6913,13 +11146,13 @@ function victoryGoalProgress(goalId) {
   const owned = state.resources.filter((r) => r.owner === "player").length + (state.frontier?.outposts?.length || 0);
   const dip = state.sect.diplomacy || { reputation: 0, infamy: 0 };
   if (goalId === "ascend") return { pct: clamp(Math.round(maxRealm / 9 * 55 + state.sect.insight / 45 + state.forbidden?.clears * 8), 0, 99), text: `最高境界${realms[maxRealm]}，飞升需渡劫巅峰与巨量参悟` };
-  if (goalId === "leader") return { pct: clamp(Math.round(dip.reputation / 8 + activeRivals().filter((r) => r.alliance).length * 8 + (state.councilEdict ? 8 : 0)), 0, 99), text: `声誉${Math.round(dip.reputation)}，盟友${activeRivals().filter((r) => r.alliance).length}` };
-  if (goalId === "overlord") return { pct: clamp(Math.round(power / strongest * 45 + state.sect.prestige / 35), 0, 99), text: `本宗战力${power}，最强敌宗约${Math.round(strongest)}` };
-  if (goalId === "tycoon") return { pct: clamp(Math.round(state.sect.stones / 120 + state.sect.buildings.market * 12 + Object.values(state.sect.marketPortfolio || {}).reduce((s, p) => s + p.qty, 0) * 2), 0, 99), text: `灵石${Math.round(state.sect.stones)}，市集Lv.${state.sect.buildings.market}` };
-  if (goalId === "arrayHeaven") return { pct: clamp(Math.round(formationPower() / 95 + owned * 3 + daoLevelFor("array") * 8), 0, 99), text: `阵势${Math.round(formationPower())}，节点${owned}` };
+  if (goalId === "leader") return { pct: clamp(Math.round(dip.reputation / 7 + activeRivals().filter((r) => r.alliance).length * 10 + state.sect.prestige / 220 + (state.councilEdict ? 8 : 0)), 0, 100), text: `声誉${Math.round(dip.reputation)}，盟友${activeRivals().filter((r) => r.alliance).length}` };
+  if (goalId === "overlord") return { pct: clamp(Math.round(power / strongest * 48 + state.sect.prestige / 34 + (state.frontier?.clears || 0) * 1.5), 0, 100), text: `本宗战力${power}，最强敌宗约${Math.round(strongest)}` };
+  if (goalId === "tycoon") return { pct: clamp(Math.round(state.sect.stones / 115 + state.sect.buildings.market * 13 + Object.values(state.sect.marketPortfolio || {}).reduce((s, p) => s + p.qty, 0) * 2.4 + state.marketTradesThisYear), 0, 100), text: `灵石${Math.round(state.sect.stones)}，市集Lv.${state.sect.buildings.market}` };
+  if (goalId === "arrayHeaven") return { pct: clamp(Math.round(formationPower() / 88 + owned * 3.6 + daoLevelFor("array") * 8 + state.sect.arrayMats * 0.8), 0, 100), text: `阵势${Math.round(formationPower())}，节点${owned}` };
   if (goalId === "demonicSupreme") {
     const ruins = state.rivals.filter((r) => r.alive === false).length;
-    return { pct: clamp(Math.round((dip.infamy || 0) * 1.2 + ruins * 16 + power / strongest * 25), 0, 99), text: `恶名${Math.round(dip.infamy || 0)}，灭宗${ruins}` };
+    return { pct: clamp(Math.round((dip.infamy || 0) * 1.3 + ruins * 17 + power / strongest * 29), 0, 100), text: `恶名${Math.round(dip.infamy || 0)}，灭宗${ruins}` };
   }
   return { pct: 0, text: "未定" };
 }
@@ -6928,6 +11161,28 @@ function bindMissionButtons() {
   for (const btn of els.questDetail.querySelectorAll(".mission-claim")) {
     btn.addEventListener("click", () => claimMission(btn.dataset.id));
   }
+  for (const btn of els.questDetail.querySelectorAll(".goal-finish")) {
+    btn.addEventListener("click", () => claimVictoryGoal(btn.dataset.id));
+  }
+}
+
+function claimVictoryGoal(id) {
+  const goal = victoryGoals.find((item) => item.id === id);
+  if (!goal || goal.id === "ascend" || state.completedVictoryGoals.includes(id)) return;
+  const progress = victoryGoalProgress(id);
+  if (progress.pct < 100) return;
+  state.completedVictoryGoals.push(id);
+  state.sect.prestige += 160;
+  state.sect.insight += 120;
+  state.sect.stones += 600;
+  showModal({
+    kicker: "终局达成",
+    title: goal.name,
+    body: `<p>${state.sect.name}已完成「${goal.name}」。飞升仍是最高难度目标；本结局会保留在任务板中作为已达成记录。</p><div class="reward-list"><div><span>声望</span><strong>+160</strong></div><div><span>参悟</span><strong>+120</strong></div><div><span>灵石</span><strong>+600</strong></div></div>`,
+    actions: [{ label: "继续经营宗门", handler: () => { closeModal(); render(); } }],
+  });
+  log(`终局达成：${goal.name}。本宗获得声望、参悟与灵石奖励。`, "good");
+  render();
 }
 
 function claimMission(id) {
@@ -6956,6 +11211,18 @@ function bindTraitChips() {
 }
 
 const guidePages = [
+  {
+    title: "弟子养成：道心、体质与专精",
+    body: `
+      <p><strong>弟子养成入口</strong>在弟子详情的“弟子养成”按钮中。这里集中管理道心、体质、专精、师承、闭关、本命法宝、突破试炼和个人事件。</p>
+      <p><strong>道心</strong>是弟子的长期性格路线，会影响年度修行、战斗倾向、心魔风险和个人事件收益。道心随弟子生成，不需要玩家频繁操作。</p>
+      <p><strong>体质</strong>刷新率很低，新弟子约小概率天生拥有特殊体质。未显体质的弟子可以用“洗髓探体”尝试觉醒，但消耗材料且成功率依旧不高。</p>
+      <p><strong>专精</strong>决定弟子的培养定位：剑修、体修、丹修、器修、阵修、毒修、雷修、阴阳修。专精会随年度修行、闭关、试炼和个人事件线性成长，并直接影响战力或炼制表现。</p>
+      <p><strong>师徒传承</strong>允许低境界弟子拜高境界弟子为师，每年获得额外修为和专精经验。它不启用羁绊组合，只是稳定传承系统。</p>
+      <p><strong>闭关</strong>可选择修为、功法或问心方向。闭关会持续若干年自动结算收益，适合中后期培养核心弟子。</p>
+      <p><strong>本命法宝</strong>不占装备栏，消耗器材和洗练材料打造，可长期升级。突破试炼能为下一次渡劫积累加成。</p>
+    `,
+  },
   {
     title: "开局：模式、命名与选址",
     body: `
@@ -7033,7 +11300,7 @@ const guidePages = [
   {
     title: "宗门大比与世界奇遇",
     body: `
-      <p><strong>宗门大比</strong>每三年自动开始。各宗派三名弟子参赛，按对位战斗推进锦标赛，排名越高奖励越好。</p>
+      <p><strong>宗门大比</strong>每十年自动开始。各宗派三名弟子参赛，按对位战斗推进锦标赛，排名越高奖励越好。</p>
       <p><strong>世界奇遇</strong>会在随机年份自动开启。各宗各派一名弟子参与，是 20 轮连续选择的长线副本。</p>
       <p>世界奇遇每个选择都会给出清晰的文本结果和奖励反馈，但不会直接显示判定数值。中途可能死亡，也可能获得大量灵石、声望、参悟、装备和道统提升。</p>
       <p>选择路线会影响最终结局，例如稳健、贪念、善念、血契、气运、诡计、参悟等。</p>
@@ -7131,6 +11398,160 @@ function showGuidePage(index) {
   }
 }
 
+const tutorialSteps = [
+  {
+    id: "goal",
+    maxYear: 3,
+    selector: "#questDetail",
+    title: "先看当前目标",
+    text: "这里会告诉你本年最该做什么，并显示宗门路线、终局目标和任务板。前期跟着目标走，不容易漏掉关键系统。",
+    condition: () => state.founded,
+  },
+  {
+    id: "recruit",
+    maxYear: 3,
+    selector: ".recruit-panel",
+    title: "每年先看候选弟子",
+    text: "候选弟子每年刷新，能免费刷新一次。先看境界、资质和词条，再决定是否收入门下。",
+    condition: () => state.founded && !state.recruitedThisYear,
+  },
+  {
+    id: "disciples",
+    maxYear: 4,
+    selector: "#disciples",
+    title: "点弟子查看详情",
+    text: "弟子详情会显示战力、境界、装备、功法和可培养操作。后续战斗、机缘、炼丹炼器都围绕弟子分配。",
+    condition: () => state.founded && (state.sect?.disciples?.length || 0) > 0,
+  },
+  {
+    id: "cultivation",
+    maxYear: 5,
+    selector: "#discipleActions",
+    title: "新增弟子养成入口",
+    text: "选中弟子后，点击“弟子养成”可以管理道心、体质、专精、师徒、闭关、本命法宝、突破试炼和个人事件。核心弟子建议尽早确定专精。",
+    condition: () => state.founded && Boolean(selectedDisciple()),
+  },
+  {
+    id: "inventory",
+    maxYear: 5,
+    selector: ".inventory-panel",
+    title: "仓库已分类",
+    text: "装备、功法、丹药、材料会分区显示。选中弟子后，可直接在仓库里装备、参悟功法或使用丹药。",
+    condition: () => state.founded && (state.sect?.inventory?.length || 0) > 0,
+  },
+  {
+    id: "map",
+    maxYear: 5,
+    selector: ".map-wrap",
+    title: "地图是主要操作入口",
+    text: "点击资源点、机缘、敌宗或其他玩家宗门，会在地图旁弹出可执行操作。多数操作会消耗行动点。",
+    condition: () => state.founded && state.actionPoints > 0,
+  },
+  {
+    id: "workshop",
+    maxYear: 6,
+    selector: ".workshop-panel",
+    title: "炼丹炼器在工坊里做",
+    text: "工坊会列出弟子能力。炼丹、炼器、阵法推演都在这里进入，材料来源会在配方说明里提示。",
+    condition: () => state.founded && state.actionPoints > 0,
+  },
+  {
+    id: "nextYear",
+    maxYear: 6,
+    selector: ".action-bar",
+    title: "行动点用完就推进年份",
+    text: "进入下一年后，AI、市场、奇遇、拍卖和联机同步都会结算。联机时会等待所有玩家提交回合。",
+    condition: () => state.founded && state.actionPoints <= 0,
+  },
+  {
+    id: "market",
+    maxYear: 8,
+    selector: "#marketBtn",
+    title: "市集解锁后可交易",
+    text: "山门市集建成后可倒卖行情，联机下会同步市场事件。灵石既是发展资源，也是拍卖和交易的筹码。",
+    condition: () => state.founded && (state.sect?.buildings?.market || 0) > 0,
+  },
+  {
+    id: "frontier",
+    maxYear: 12,
+    selector: "#mapTabs",
+    title: "边境会在中期解锁",
+    text: "拥有足够金丹弟子后可切到边境，挑战妖兽、巨兽和晋升材料副本。这里使用数值战斗动画。",
+    condition: () => state.founded && frontierUnlocked(),
+  },
+  {
+    id: "guide",
+    maxYear: 12,
+    selector: "#guideBtn",
+    title: "随时打开完整手册",
+    text: "地图右上角的问号保留了完整说明。忘记系统入口或规则时，可以随时回来看。",
+    condition: () => state.founded,
+  },
+];
+
+function tutorialSeen() {
+  ensureSectDefaults();
+  return new Set(state.tutorial?.seen || []);
+}
+
+function maybeShowTutorialStep() {
+  if (!state.founded || !state.tutorial?.enabled || state.tutorial?.skipped) return;
+  if (!els.eventModal.hidden || document.querySelector(".tutorial-callout")) return;
+  const seen = tutorialSeen();
+  const step = tutorialSteps.find((item) => !seen.has(item.id) && state.year <= item.maxYear && item.condition());
+  if (!step) return;
+  const target = document.querySelector(step.selector);
+  if (!target) return;
+  showTutorialHighlight(step, target);
+}
+
+function showTutorialHighlight(step, target) {
+  clearTutorialHighlight();
+  target.classList.add("tutorial-focus");
+  target.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  const callout = document.createElement("div");
+  callout.className = "tutorial-callout";
+  callout.innerHTML = `
+    <span>新手指引</span>
+    <strong>${step.title}</strong>
+    <p>${step.text}</p>
+    <div class="tutorial-callout-actions">
+      <button type="button" data-action="next">知道了</button>
+      <button type="button" data-action="skip">跳过指引</button>
+    </div>
+  `;
+  document.body.appendChild(callout);
+  const place = () => {
+    const rect = target.getBoundingClientRect();
+    const pad = 12;
+    const width = Math.min(330, window.innerWidth - pad * 2);
+    callout.style.width = `${width}px`;
+    const preferRight = rect.left + rect.width + width + pad < window.innerWidth;
+    const left = preferRight ? rect.left + rect.width + pad : clamp(rect.left, pad, window.innerWidth - width - pad);
+    const below = rect.bottom + callout.offsetHeight + pad < window.innerHeight;
+    const top = below ? rect.bottom + pad : clamp(rect.top - callout.offsetHeight - pad, pad, window.innerHeight - callout.offsetHeight - pad);
+    callout.style.left = `${left}px`;
+    callout.style.top = `${top}px`;
+  };
+  requestAnimationFrame(place);
+  callout.querySelector('[data-action="next"]').addEventListener("click", () => {
+    state.tutorial.seen = [...new Set([...(state.tutorial.seen || []), step.id])];
+    clearTutorialHighlight();
+    render();
+  });
+  callout.querySelector('[data-action="skip"]').addEventListener("click", () => {
+    state.tutorial.enabled = false;
+    state.tutorial.skipped = true;
+    clearTutorialHighlight();
+    render();
+  });
+}
+
+function clearTutorialHighlight() {
+  document.querySelectorAll(".tutorial-focus").forEach((node) => node.classList.remove("tutorial-focus"));
+  document.querySelectorAll(".tutorial-callout").forEach((node) => node.remove());
+}
+
 
 function renderDiscipleDetail() {
   const d = selectedDisciple();
@@ -7159,16 +11580,39 @@ function renderDiscipleDetail() {
     <p>当前状态：${d.elder ? `${d.elderRole} / ` : ""}${d.status}。词条：${d.traits.map((t) => `${t.name}（${t.note}）`).join("、")}。</p>
     <p>羁绊：${bonds.length ? bonds.map(bondLabel).join("；") : "暂无"}。</p>
   `;
+  els.discipleDetail.insertAdjacentHTML("afterbegin", `<div class="detail-power">战力 <strong>${Math.round(discipleBattleScore(d))}</strong></div>`);
+  const heart = daoHeartOf(d);
+  const con = constitutionOf(d);
+  const spec = specializationOf(d);
+  const mentor = mentorOf(d);
+  const titles = discipleTitleNames(d);
+  els.discipleDetail.insertAdjacentHTML("beforeend", `
+    <div class="disciple-cultivation-strip">
+      <span><b>道心</b>${heart?.name || "未定"}</span>
+      <span><b>体质</b>${con?.name || "凡骨"}</span>
+      <span><b>专精</b>${spec?.name || "未定"} Lv.${d.specializationLevel || 0}</span>
+      <span><b>师承</b>${mentor?.name || "无"}</span>
+      <span><b>称号</b>${titles.length ? titles.join("、") : "无"}</span>
+    </div>
+  `);
+  const activeMethods = (d.activeMethods || []).map((id) => {
+    const method = d.methods?.find((item) => item.id === id);
+    const data = methodCatalog[id];
+    return data ? `${data.name}${method ? `(${Math.round(method.proficiency || 0)})` : ""}` : "";
+  }).filter(Boolean);
+  els.discipleDetail.insertAdjacentHTML("beforeend", `<p>携带功法：${activeMethods.length ? activeMethods.join(" → ") : "暂无"}。</p>`);
   renderEquipmentSlots(d);
+  addActionTo(els.discipleActions, "弟子养成", () => openDiscipleCultivationPanel(d));
   addActionTo(els.discipleActions, d.core ? "取消核心弟子" : "设为核心弟子", () => toggleCoreDisciple(d));
   addActionTo(els.discipleActions, "缔结羁绊", () => openBondMenu(d), state.sect.disciples.length < 2);
   addActionTo(els.discipleActions, d.elder ? "已是长老" : "晋为长老", () => promoteElder(d), d.elder || d.realm < 2 || state.sect.prestige < 180);
   addActionTo(els.discipleActions, "境界晋升", () => openAdvancementPanel(d), d.realm >= realms.length - 1 || d.exp < 100);
+  addActionTo(els.discipleActions, "功法配置", () => openMethodPanel(d));
   addActionTo(els.discipleActions, `压制心魔 ${45 + Math.floor((d.mind || 0) * 1.5)}参悟`, () => suppressMindDemon(d), state.actionPoints < 1 || (d.mind || 0) < 12);
   addActionTo(els.discipleActions, `阵道授课 ${arrayTrainCost(d)}参悟`, () => trainArrayDisciple(d), state.actionPoints < 1 || state.sect.insight < arrayTrainCost(d));
-  for (const slot of state.sect.inventory.filter((item) => item.count > 0 && !itemCatalog[item.id]?.material)) {
+  for (const slot of state.sect.inventory.filter((item) => item.count > 0 && itemCatalog[item.id] && !itemCatalog[item.id]?.material)) {
     const item = itemCatalog[slot.id];
-    addActionTo(els.discipleActions, `${item.equipment ? "装备" : "使用"}${itemLabel(slot)} x${slot.count}`, () => useItemOnSelected(slot.id, slot.quality || 0));
+    addActionTo(els.discipleActions, `${item.equipment ? "装备" : methodCatalog[slot.id] ? "参悟" : "使用"}${itemLabel(slot)} x${slot.count}`, () => useItemOnSelected(slot.id, slot.quality || 0, slot.gearUid || null));
   }
   for (const relicSlot of state.sect.relicInventory || []) {
     const relic = forbiddenRelics.find((item) => item.id === relicSlot.id);
@@ -7183,16 +11627,14 @@ function toggleCoreDisciple(d) {
 }
 
 function renderEquipmentSlots(d) {
-  const slots = [
-    { key: "weapon", name: "武器" },
-    { key: "artifact", name: "法器" },
-    { key: "relic", name: "遗物" },
-  ];
+  const slots = gearSlots;
   els.equipmentSlots.innerHTML = slots.map((slot) => {
     const equipped = d.equipment?.[slot.key];
     const relic = equipped && slot.key === "relic" ? forbiddenRelics.find((item) => item.id === equipped.id) : null;
-    const label = relic ? relic.name : equipped ? `${qualityNames[equipped.quality || 0]}${itemCatalog[equipped.id].name}` : "空";
-    return `<div class="equip-slot"><span>${slot.name}</span><strong>${label}</strong></div>`;
+    const gearItem = equipped ? itemCatalog[equipped.id] : null;
+    const label = relic ? relic.name : equipped && gearItem ? `${gearTierName(equipped.quality || 0)}${gearItem.name}` : equipped ? "旧装备" : "空";
+    const affixes = equipped && slot.key !== "relic" ? gearAffixSummary(equipped) : "";
+    return `<div class="equip-slot"><span>${slot.name}</span><strong>${label}</strong>${affixes ? `<em>${affixes}</em>` : ""}</div>`;
   }).join("");
   for (const slot of slots) {
     if (d.equipment?.[slot.key]) addActionTo(els.discipleActions, `卸下${slot.name}`, () => unequipItem(d, slot.key));
@@ -7208,15 +11650,54 @@ function renderInventory() {
   const total = state.sect.inventory.reduce((sum, item) => sum + item.count, 0);
   const relicTotal = (state.sect.relicInventory || []).length;
   els.inventoryCount.textContent = `${total} 件 / 遗物${relicTotal}`;
-  els.inventory.innerHTML = state.sect.inventory.length || relicTotal
-    ? state.sect.inventory.map((slot) => {
-        const item = itemCatalog[slot.id];
-        return `<div class="inventory-item quality-${slot.quality || 0}"><strong>${itemLabel(slot)} x${slot.count}</strong><span>${item.kind} · ${item.text}</span></div>`;
-      }).join("") + (relicTotal ? (state.sect.relicInventory || []).map((slot) => {
+  if (!state.sect.inventory.length && !relicTotal) {
+    els.inventory.innerHTML = `<div class="target-detail">仓库暂空，可通过探索秘境、宗门大比和随机事件获得物品。</div>`;
+    return;
+  }
+  const groups = [
+    { key: "equipment", name: "装备", test: (slot, item) => item?.equipment },
+    { key: "method", name: "功法", test: (slot) => Boolean(methodCatalog[slot.id]) },
+    { key: "pill", name: "丹药", test: (slot, item) => item && !item.material && !item.equipment && !methodCatalog[slot.id] && typeof item.apply === "function" },
+    { key: "material", name: "材料", test: (slot, item) => item?.material },
+    { key: "unknown", name: "待鉴定", test: (slot, item) => !item },
+  ];
+  const sections = groups.map((group) => {
+    const items = state.sect.inventory.filter((slot) => group.test(slot, itemCatalog[slot.id]));
+    if (!items.length) return "";
+    return `
+      <section class="warehouse-section">
+        <h4>${group.name}</h4>
+        ${items.map((slot) => {
+          const item = itemCatalog[slot.id];
+          const affixes = item?.equipment ? gearAffixSummary(slot) : "";
+          const action = item?.equipment ? "装备" : methodCatalog[slot.id] ? "参悟" : item?.material || !item ? "" : "使用";
+          return `<div class="inventory-item quality-${gearTier(slot.quality || 0)}">
+            <strong>${itemLabel(slot)} x${slot.count}</strong>
+            <span>${item ? `${item.kind} · ${item.text}` : "旧存档或旧奖励中的未知物品，已暂存为待鉴定，不会再影响仓库分类。"}</span>
+            ${affixes ? `<em>${affixes}</em>` : ""}
+            ${action ? `<button class="warehouse-use" data-id="${slot.id}" data-quality="${slot.quality || 0}" data-uid="${slot.gearUid || ""}" ${selectedDisciple() ? "" : "disabled"}>${action}</button>` : ""}
+            ${item?.equipment ? `<button class="warehouse-refine" data-uid="${slot.gearUid || ""}">洗练</button>` : ""}
+          </div>`;
+        }).join("")}
+      </section>
+    `;
+  }).join("");
+  const relics = relicTotal ? `
+    <section class="warehouse-section">
+      <h4>遗物</h4>
+      ${(state.sect.relicInventory || []).map((slot) => {
         const relic = forbiddenRelics.find((item) => item.id === slot.id);
         return relic ? `<div class="inventory-item rarity-${relic.rarity}"><strong>${relic.name}</strong><span>禁地遗物 · ${relic.text}</span></div>` : "";
-      }).join("") : "")
-    : `<div class="target-detail">仓库暂空，可通过探索秘境、宗门大比和随机事件获得物品。</div>`;
+      }).join("")}
+    </section>
+  ` : "";
+  els.inventory.innerHTML = sections + relics;
+  els.inventory.querySelectorAll(".warehouse-use").forEach((btn) => {
+    btn.addEventListener("click", () => useItemOnSelected(btn.dataset.id, Number(btn.dataset.quality || 0), btn.dataset.uid || null));
+  });
+  els.inventory.querySelectorAll(".warehouse-refine").forEach((btn) => {
+    btn.addEventListener("click", () => openGearRefinePanel(btn.dataset.uid));
+  });
 }
 
 function renderWorkshop() {
@@ -7336,6 +11817,11 @@ function renderTarget() {
     const materialName = itemCatalog[node.material]?.name || "晋升材料";
     els.targetDetail.textContent = `${node.name}，${node.text} 推荐战力 ${Math.round(node.value)}，掉落 ${materialName}，剩余 ${node.ttl} 年。最多派 5 名弟子进入，战斗全程动画展示，可消耗回血丹提高容错。`;
     addAction("讨伐副本", () => openFrontierDungeon(node), !state.founded || state.actionPoints < 1);
+  } else if (node.type === "frontierBoss") {
+    const pct = Math.round((node.hp / Math.max(1, node.totalHp)) * 100);
+    const logRows = (state.frontier.bossDamageLog || []).slice(0, 3).map((row) => `${row.name} ${Math.round(row.damage)}`).join("；") || "暂无挑战记录";
+    els.targetDetail.textContent = `${node.name}，边境巨兽，血量 ${Math.round(node.hp)}/${Math.round(node.totalHp)}（${pct}%），强度 ${Math.round(node.power)}。所有联机玩家共享血量，可多次挑战造成累计伤害；本年未击杀则遁走。近期伤害：${logRows}。`;
+    addAction("挑战巨兽", () => openFrontierBossRaid(node), !state.founded || state.actionPoints < 1 || node.defeated);
   } else if (node.type === "frontierPoint") {
     els.targetDetail.textContent = `${node.name}。边境扩张点可作为本宗前线据点，能抵御兽潮并提高边境副本收益。后续 AI 宗门也可能争夺这些据点。`;
     addAction(node.owner === "player" ? "已驻扎" : "扩张占点", () => occupyFrontierPoint(node), !state.founded || state.actionPoints < 1 || node.owner === "player");
@@ -7386,11 +11872,13 @@ function renderTarget() {
     if (node.yields?.alchemyMats) actualYields.push(`丹材 +${resourceYield(node, "alchemyMats")}/年`);
     if (node.yields?.forgingMats) actualYields.push(`器材 +${resourceYield(node, "forgingMats")}/年`);
     if (node.yields?.arrayMats) actualYields.push(`阵材 +${resourceYield(node, "arrayMats")}/年`);
+    if (node.yields?.refineStone) actualYields.push(`洗练灵砂 +${resourceYield(node, "refineStone")}/年`);
+    if (node.yields?.affixLock) actualYields.push(`定纹玉扣 +${resourceYield(node, "affixLock")}/年`);
     const defense = Math.round(resourceGarrisonPower(node));
     const garrison = node.garrisonId ? state.sect.disciples.find((d) => d.id === node.garrisonId)?.name || "驻守弟子" : "无";
     els.targetDetail.textContent = `${node.name}，价值 ${node.value}，产出：${yields.join("，")}。当前归属：${owner}。驻守：${garrison}。守备压力约 ${pressure}。争夺会按宗门综合实力判定，弟子、建筑、道统、仓库、经济和护山阵都会计入。`;
     els.hint.textContent = `资源点：${node.name}｜归属 ${owner}｜守备压力约 ${pressure}`;
-    els.targetDetail.textContent = `${node.name}，价值 ${node.value}，实际产出：${actualYields.join("、")}。当前归属：${owner}。驻守：${garrison}。资源点防守 ${defense}，守备压力约 ${pressure}。建设：${resourceUpgradeSummary(node)}。争夺会按宗门综合实力判定，弟子、建筑、道统、仓库、经济、护山阵和资源点建设都会计入。`;
+    els.targetDetail.textContent = `${node.name}，价值 ${node.value}，实际产出：${actualYields.join("、")}。当前归属：${owner}。驻守：${garrison}。资源点防守 ${defense}，守备压力约 ${pressure}。建设：${resourceUpgradeSummary(node)}。争夺会派一名弟子挑战驻守弟子或地脉守势。`;
     els.hint.textContent = `资源点：${node.name}｜归属 ${owner}｜防守 ${defense}`;
     addAction(node.owner === "player" ? "已占领" : "争夺资源", () => contestResource(node), !state.founded || node.owner === "player" || state.actionPoints < 1);
     if (node.owner === "player") {
@@ -7479,6 +11967,7 @@ function renderMapActionBubble(node) {
   if (node.type === "event") add("探索", () => exploreEvent(node), state.actionPoints < 1);
   if (node.type === "frontierLocked") add("要求", () => showModal({ kicker: "边境要求", title: "金丹三人方可开关", body: `<p>拥有 3 名金丹及以上弟子后，边境妖域会正式开放。</p>` }));
   if (node.type === "frontierDungeon") add("讨伐", () => openFrontierDungeon(node), state.actionPoints < 1);
+  if (node.type === "frontierBoss") add("挑战巨兽", () => openFrontierBossRaid(node), state.actionPoints < 1 || node.defeated);
   if (node.type === "frontierPoint") add(node.owner === "player" ? "已驻扎" : "扩张", () => occupyFrontierPoint(node), state.actionPoints < 1 || node.owner === "player");
   if (node.type === "forbiddenGate") add("进入", openForbiddenGate, forbiddenAttemptInfo().left <= 0 || Boolean(state.forbiddenRun));
   if (node.type === "overseasLocked") add("查看", () => showModal({ kicker: "海外仙洲", title: "暂未开放", body: `<p>海外地图暂时锁定，后续可做海贸与外域宗门。</p>` }));
@@ -7513,6 +12002,7 @@ function render() {
   renderMap();
   updateButtons();
   renderUI();
+  setTimeout(maybeShowTutorialStep, 0);
 }
 
 function updateButtons() {
@@ -7524,7 +12014,7 @@ function updateButtons() {
   els.allyBtn.disabled = disabled || waiting || state.actionPoints < 1;
   const tournamentDone = state.lastTournamentYear === state.year;
   els.tournamentBtn.disabled = true;
-  els.tournamentBtn.textContent = tournamentDone ? "本届已赛" : state.founded ? `大比自动：${state.year % 3 === 0 ? "本年" : `${state.year + (3 - state.year % 3)}年`}` : "宗门大比";
+  els.tournamentBtn.textContent = tournamentDone ? "本届已赛" : state.founded ? `大比自动：${state.year % 10 === 0 ? "本年" : `${state.year + (10 - state.year % 10)}年`}` : "宗门大比";
   els.buildBtn.disabled = disabled || waiting || state.actionPoints < 1;
   els.researchBtn.disabled = disabled || waiting;
   els.marketBtn.disabled = disabled || waiting || (state.sect?.buildings.market || 0) < 1;
@@ -7621,7 +12111,7 @@ canvas.addEventListener("mousemove", (evt) => {
   els.tip.hidden = false;
   els.tip.style.left = `${evt.clientX - canvas.getBoundingClientRect().left + 14}px`;
   els.tip.style.top = `${evt.clientY - canvas.getBoundingClientRect().top + 14}px`;
-  els.tip.innerHTML = `<strong>${node.name}</strong><br>${node.type === "rival" || node.type === "remotePlayer" ? `战力 ${Math.round(node.power || 0)}` : node.type === "resource" ? `价值 ${node.value}` : node.type === "event" ? `剩余 ${node.ttl} 季` : node.type === "frontierDungeon" ? `推荐战力 ${Math.round(node.value)}` : node.type === "forbiddenFloor" ? `第 ${node.floor} 层` : node.type === "forbiddenGate" ? "禁地入口" : "可选山门"}`;
+  els.tip.innerHTML = `<strong>${node.name}</strong><br>${node.type === "rival" || node.type === "remotePlayer" ? `战力 ${Math.round(node.power || 0)}` : node.type === "resource" ? `价值 ${node.value}` : node.type === "event" ? `剩余 ${node.ttl} 季` : node.type === "frontierDungeon" ? `推荐战力 ${Math.round(node.value)}` : node.type === "frontierBoss" ? `血量 ${Math.round(node.hp || 0)}/${Math.round(node.totalHp || 1)}` : node.type === "forbiddenFloor" ? `第 ${node.floor} 层` : node.type === "forbiddenGate" ? "禁地入口" : "可选山门"}`;
 });
 
 canvas.addEventListener("touchstart", (evt) => {
@@ -7647,6 +12137,30 @@ window.addEventListener("keydown", (evt) => {
     else closeModal();
   }
 });
+window.addEventListener("beforeunload", () => {
+  if (!state.multiplayer || !state.roomConnected) return;
+  saveMultiplayerRoomProgress(state.roomHost ? "房主关闭页面自动保存" : "离开房间自动保存");
+  if (state.roomHost && net.ws && net.ws.readyState === WebSocket.OPEN) {
+    try {
+      net.ws.send(JSON.stringify({
+        type: "room_feature",
+        clientId: state.clientId,
+        roomCode: state.roomCode,
+        action: "room_close_save",
+        sourceId: state.clientId,
+        sourceName: state.sect?.name || "房主宗门",
+        payload: {
+          roomCode: state.roomCode,
+          hostId: state.clientId,
+          hostName: state.sect?.name || "房主宗门",
+          year: state.year,
+          savedAt: Date.now(),
+          snapshot: createSharedWorldSnapshot(),
+        },
+      }));
+    } catch {}
+  }
+});
 els.startPanel.addEventListener("submit", (evt) => evt.preventDefault());
 els.startCollapseBtn.addEventListener("click", (evt) => {
   evt.preventDefault();
@@ -7665,6 +12179,41 @@ for (const btn of els.startPanel.querySelectorAll(".mode-card")) {
   });
 }
 els.roomConnectBtn?.addEventListener("click", () => connectMultiplayerRoom());
+els.lobbyBackBtn?.addEventListener("click", () => {
+  if (state.roomConnected || net.ws) disconnectMultiplayerRoom("已退出联机大厅");
+  state.roomLobbyReady = false;
+  if (els.multiplayerToggle) els.multiplayerToggle.checked = false;
+  showStartMenuPanel();
+  updateRoomPopulation([]);
+});
+els.lobbyConnectBtn?.addEventListener("click", () => {
+  state.multiplayer = true;
+  if (els.multiplayerToggle) els.multiplayerToggle.checked = true;
+  connectMultiplayerRoom(roomCodeValue());
+});
+els.lobbyReadyBtn?.addEventListener("click", toggleLobbyReady);
+els.lobbyStartBtn?.addEventListener("click", () => startMultiplayerGameFromLobby(false));
+els.lobbyLoadBtn?.addEventListener("click", () => {
+  const room = roomCodeValue() || state.roomCode || "";
+  if (!room) {
+    flashFeedback("请先输入房间号", "warn");
+    return;
+  }
+  loadMultiplayerRoomProgress(room);
+});
+els.lobbyRoomCodeInput?.addEventListener("input", () => {
+  const code = roomCodeValue();
+  if (els.roomCodeInput) els.roomCodeInput.value = code;
+  updateMultiplayerLobbyControls();
+});
+els.lobbyRoomCodeInput?.addEventListener("keydown", (evt) => {
+  if (evt.key === "Enter") {
+    evt.preventDefault();
+    state.multiplayer = true;
+    if (els.multiplayerToggle) els.multiplayerToggle.checked = true;
+    connectMultiplayerRoom(roomCodeValue());
+  }
+});
 els.roomCodeInput?.addEventListener("keydown", (evt) => {
   if (evt.key === "Enter") {
     evt.preventDefault();

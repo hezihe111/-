@@ -1,282 +1,224 @@
-const http = require("http");
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
+import http from "node:http";
+import { WebSocketServer } from "ws";
 
-const root = __dirname;
-const port = Number(process.env.PORT || process.argv.find((arg) => arg.startsWith("--port="))?.split("=")[1] || 8097);
+const PORT = Number(process.env.PORT || 8097);
 const rooms = new Map();
-const DISCONNECT_GRACE_MS = 60000;
 
-const mime = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".jpeg": "image/jpeg",
-  ".jpg": "image/jpeg",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-};
-
-const server = http.createServer((req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-  if (url.pathname === "/health") {
-    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ ok: true, rooms: rooms.size }));
-    return;
-  }
-  let filePath = path.normalize(path.join(root, decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname)));
-  if (!filePath.startsWith(root)) {
-    res.writeHead(403);
-    res.end("Forbidden");
-    return;
-  }
-  fs.readFile(filePath, (err, data) => {
-    if (err) {
-      res.writeHead(404);
-      res.end("Not found");
-      return;
-    }
-    res.writeHead(200, { "Content-Type": mime[path.extname(filePath)] || "application/octet-stream" });
-    res.end(data);
-  });
-});
-
-server.on("upgrade", (req, socket) => {
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-  if (url.pathname !== "/ws") {
-    socket.destroy();
-    return;
-  }
-  const key = req.headers["sec-websocket-key"];
-  if (!key) {
-    socket.destroy();
-    return;
-  }
-  const accept = crypto.createHash("sha1").update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest("base64");
-  socket.write([
-    "HTTP/1.1 101 Switching Protocols",
-    "Upgrade: websocket",
-    "Connection: Upgrade",
-    `Sec-WebSocket-Accept: ${accept}`,
-    "",
-    "",
-  ].join("\r\n"));
-
-  const roomCode = cleanRoom(url.searchParams.get("room") || "ZIHE01");
-  const client = { socket, roomCode, id: "", buffer: Buffer.alloc(0) };
-  socket.on("data", (chunk) => handleChunk(client, chunk));
-  socket.on("close", () => removeClient(client));
-  socket.on("error", () => removeClient(client));
-});
-
-function cleanRoom(room) {
-  return String(room || "ZIHE01").toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 16) || "ZIHE01";
-}
-
-function getRoom(roomCode) {
-  if (!rooms.has(roomCode)) rooms.set(roomCode, { code: roomCode, players: new Map(), year: 1 });
-  return rooms.get(roomCode);
-}
-
-function handleChunk(client, chunk) {
-  client.buffer = Buffer.concat([client.buffer, chunk]);
-  while (client.buffer.length) {
-    const frame = decodeFrame(client.buffer);
-    if (!frame) return;
-    client.buffer = frame.rest;
-    if (frame.close) {
-      client.socket.end();
-      return;
-    }
-    if (frame.text) {
-      try {
-        handleMessage(client, JSON.parse(frame.text));
-      } catch (err) {
-        send(client.socket, { type: "error", message: "Bad message" });
-      }
-    }
-  }
-}
-
-function decodeFrame(buffer) {
-  if (buffer.length < 2) return null;
-  const opcode = buffer[0] & 0x0f;
-  const masked = Boolean(buffer[1] & 0x80);
-  let length = buffer[1] & 0x7f;
-  let offset = 2;
-  if (length === 126) {
-    if (buffer.length < offset + 2) return null;
-    length = buffer.readUInt16BE(offset);
-    offset += 2;
-  } else if (length === 127) {
-    if (buffer.length < offset + 8) return null;
-    const high = buffer.readUInt32BE(offset);
-    const low = buffer.readUInt32BE(offset + 4);
-    length = high * 2 ** 32 + low;
-    offset += 8;
-  }
-  const maskOffset = masked ? 4 : 0;
-  if (buffer.length < offset + maskOffset + length) return null;
-  let payload = buffer.subarray(offset + maskOffset, offset + maskOffset + length);
-  if (masked) {
-    const mask = buffer.subarray(offset, offset + 4);
-    payload = Buffer.from(payload.map((byte, i) => byte ^ mask[i % 4]));
-  }
-  return {
-    close: opcode === 8,
-    text: opcode === 1 ? payload.toString("utf8") : "",
-    rest: buffer.subarray(offset + maskOffset + length),
-  };
-}
-
-function encodeFrame(text) {
-  const payload = Buffer.from(JSON.stringify(text));
-  if (payload.length < 126) return Buffer.concat([Buffer.from([0x81, payload.length]), payload]);
-  if (payload.length < 65536) {
-    const head = Buffer.alloc(4);
-    head[0] = 0x81;
-    head[1] = 126;
-    head.writeUInt16BE(payload.length, 2);
-    return Buffer.concat([head, payload]);
-  }
-  const head = Buffer.alloc(10);
-  head[0] = 0x81;
-  head[1] = 127;
-  head.writeUInt32BE(0, 2);
-  head.writeUInt32BE(payload.length, 6);
-  return Buffer.concat([head, payload]);
-}
-
-function send(socket, payload) {
-  if (socket && !socket.destroyed) {
-    try {
-      socket.write(encodeFrame(payload));
-    } catch {
-      socket.destroy();
-    }
-  }
-}
-
-function broadcast(room, payload) {
-  for (const player of room.players.values()) send(player.socket, payload);
-}
-
-function publicPlayers(room) {
-  return [...room.players.values()].map((player) => ({
-    ...player.publicState,
-    id: player.id,
-    connected: Boolean(player.connected),
-    ready: Boolean(player.ready),
-    forbiddenFloor: player.forbiddenFloor || player.publicState?.forbiddenFloor || 0,
-  }));
-}
-
-function maybeAdvanceRoom(room, roomCode) {
-  const players = [...room.players.values()];
-  if (players.length && players.every((item) => item.ready)) {
-    room.year += 1;
-    broadcast(room, { type: "all_ready", roomCode, year: room.year, players: publicPlayers(room) });
-    for (const item of players) {
-      item.ready = false;
-      item.forbiddenFloor = 0;
-      item.publicState = { ...item.publicState, ready: false, forbiddenFloor: 0, year: room.year };
-    }
-    setTimeout(() => broadcastRoomState(room), 120);
-  }
-}
-
-function handleMessage(client, msg) {
-  const roomCode = cleanRoom(msg.roomCode || client.roomCode);
-  const room = getRoom(roomCode);
-  if (msg.type === "join") {
-    const id = String(msg.clientId || msg.player?.id || crypto.randomUUID());
-    const old = room.players.get(id);
-    if (old?.socket && old.socket !== client.socket) old.socket.destroy();
-    if (old?.disconnectTimer) clearTimeout(old.disconnectTimer);
-    client.id = id;
-    client.roomCode = roomCode;
-    const host = ![...room.players.values()].some((player) => player.id !== id);
-    room.players.set(id, {
-      id,
-      socket: client.socket,
-      publicState: { ...(old?.publicState || {}), ...(msg.player || {}), id },
-      ready: Boolean(old?.ready || msg.player?.ready),
-      forbiddenFloor: Number(old?.forbiddenFloor || msg.player?.forbiddenFloor || 0),
-      joinedAt: old?.joinedAt || Date.now(),
-      lastSeen: Date.now(),
-      connected: true,
-      disconnectTimer: null,
+function roomFor(code) {
+  const key = String(code || "ZIHE01").trim().toUpperCase() || "ZIHE01";
+  if (!rooms.has(key)) {
+    rooms.set(key, {
+      code: key,
+      clients: new Map(),
+      players: new Map(),
+      hostId: "",
+      snapshot: null,
+      roomSave: null,
+      activeFeatures: {},
+      updatedAt: Date.now(),
     });
-    send(client.socket, { type: "welcome", clientId: id, roomCode, host });
-    broadcast(room, { type: "player_event", text: `${msg.player?.name || "一名玩家"}进入联机房间。`, tone: "good" });
-    broadcastRoomState(room);
-    return;
   }
-  const player = room.players.get(client.id || msg.clientId);
-  if (!player) return;
-  player.lastSeen = Date.now();
-  if (msg.type === "pong") return;
-  if (msg.type === "public_state" && msg.player) {
-    player.publicState = { ...player.publicState, ...msg.player, id: player.id };
-    player.forbiddenFloor = msg.player.forbiddenFloor || 0;
-    broadcastRoomState(room);
-  }
-  if (msg.type === "forbidden_progress") {
-    player.forbiddenFloor = Number(msg.floor || msg.player?.forbiddenFloor || 0);
-    if (msg.player) player.publicState = { ...player.publicState, ...msg.player, id: player.id };
-    broadcastRoomState(room);
-  }
-  if (msg.type === "ready") {
-    player.ready = true;
-    player.publicState = { ...player.publicState, ...(msg.player || {}), id: player.id, ready: true };
-    broadcastRoomState(room);
-    maybeAdvanceRoom(room, roomCode);
-  }
-  if (msg.type === "pvp_report" && msg.report) {
-    broadcast(room, { type: "pvp_report", report: msg.report });
-  }
-  if (msg.type === "world_snapshot" && msg.snapshot) {
-    broadcast(room, { type: "world_snapshot", sourceId: player.id, snapshot: msg.snapshot });
+  return rooms.get(key);
+}
+
+function safeSend(ws, data) {
+  if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(data));
+}
+
+function players(room) {
+  return [...room.players.values()];
+}
+
+function broadcast(room, data, exceptId = "") {
+  for (const [clientId, ws] of room.clients.entries()) {
+    if (clientId !== exceptId) safeSend(ws, data);
   }
 }
 
 function broadcastRoomState(room) {
-  broadcast(room, { type: "room_state", roomCode: room.code, year: room.year, players: publicPlayers(room) });
+  broadcast(room, { type: "room_state", players: players(room) });
 }
 
-function removeClient(client) {
-  if (!client.id) return;
-  const room = rooms.get(client.roomCode);
-  if (!room) return;
-  const player = room.players.get(client.id);
-  if (player?.socket === client.socket) {
-    player.socket = null;
-    player.connected = false;
-    player.lastSeen = Date.now();
-    player.disconnectTimer = setTimeout(() => {
-      const current = room.players.get(client.id);
-      if (!current || current.connected) return;
-      room.players.delete(client.id);
-      broadcast(room, { type: "player_event", text: `${current.publicState?.name || "一名玩家"}离开联机房间。`, tone: "warn" });
-      broadcastRoomState(room);
-      maybeAdvanceRoom(room, client.roomCode);
-      if (room.players.size === 0) rooms.delete(client.roomCode);
-    }, DISCONNECT_GRACE_MS);
-    broadcast(room, { type: "player_event", text: `${player.publicState?.name || "一名玩家"}连接短暂中断，正在等待重连。`, tone: "warn" });
-    broadcastRoomState(room);
+function refreshHost(room) {
+  if (room.hostId && room.clients.has(room.hostId)) return;
+  room.hostId = room.clients.keys().next().value || "";
+}
+
+function cacheFeature(room, msg) {
+  const action = msg.action;
+  const trade = msg.payload?.trade;
+  if (action === "lobby_start") room.activeFeatures.lobbyStart = msg;
+  if (action === "auction_open") room.activeFeatures.auction = msg;
+  if (action === "auction_bid" && room.activeFeatures.auction?.payload?.auction) {
+    const auction = room.activeFeatures.auction.payload.auction;
+    const bid = msg.payload?.bid || {};
+    auction.currentPrice = Number(bid.price || auction.currentPrice || 0);
+    auction.leaderName = bid.leaderName || msg.sourceName || auction.leaderName || "";
+    auction.leaderId = msg.sourceId || auction.leaderId || "";
+    auction.round = Number(bid.round || auction.round || 1);
+    auction.history = Array.isArray(auction.history) ? auction.history : [];
+    auction.history.push({ id: msg.sourceId, name: auction.leaderName, price: auction.currentPrice });
+  }
+  if (action === "auction_pass" && room.activeFeatures.auction?.payload?.auction) {
+    const auction = room.activeFeatures.auction.payload.auction;
+    auction.passed = auction.passed || {};
+    auction.passed[msg.sourceId] = true;
+  }
+  if (action === "auction_result") delete room.activeFeatures.auction;
+  if (action === "council_open") room.activeFeatures.council = msg;
+  if (action === "council_vote" && room.activeFeatures.council?.payload?.council) {
+    const council = room.activeFeatures.council.payload.council;
+    council.votes = council.votes || {};
+    council.votes[msg.sourceId] = msg.payload?.vote;
+  }
+  if (action === "council_result") delete room.activeFeatures.council;
+  if (action === "tournament_open") room.activeFeatures.tournament = msg;
+  if (action === "tournament_ready" && !room.activeFeatures.tournament) {
+    room.activeFeatures.tournament = {
+      type: "room_feature",
+      sourceId: "server",
+      sourceName: "房间服务器",
+      action: "tournament_open",
+      payload: { tournament: { year: msg.payload?.year || 0, ready: {}, resolved: false } },
+    };
+  }
+  if (action === "tournament_ready" && room.activeFeatures.tournament) {
+    const ready = room.activeFeatures.tournament.payload?.tournament?.ready || {};
+    if (msg.payload?.team?.id) ready[msg.payload.team.id] = msg.payload.team;
+    room.activeFeatures.tournament.payload.tournament.ready = ready;
+  }
+  if (action === "tournament_result") delete room.activeFeatures.tournament;
+  if (action === "world_adventure_open") room.activeFeatures.worldAdventure = msg;
+  if (action === "adventure_lobby_open" || action === "adventure_lobby_ready" || action === "adventure_lobby_decline") {
+    room.activeFeatures.adventureLobby = msg;
+  }
+  if (action === "adventure_lobby_start" || action === "adventure_lobby_cancel") delete room.activeFeatures.adventureLobby;
+  if (action === "adventure_lockstep_choice") room.activeFeatures.adventureLockstep = msg;
+  if (action === "adventure_lobby_cancel") delete room.activeFeatures.adventureLockstep;
+  if (action === "pvp_duel_request" || action === "pvp_duel_accept") room.activeFeatures.pvpDuel = msg;
+  if (action === "pvp_duel_result" || action === "pvp_duel_reject") delete room.activeFeatures.pvpDuel;
+  if (action === "frontier_boss_lobby_open" || action === "frontier_boss_lobby_ready") room.activeFeatures.bossLobby = msg;
+  if (action === "frontier_boss_lobby_start" || action === "frontier_boss_lobby_cancel") delete room.activeFeatures.bossLobby;
+  if (action === "frontier_boss_spawn" || action === "frontier_boss_damage") room.activeFeatures.frontierBoss = msg;
+  if (action === "frontier_boss_defeated" || action === "frontier_boss_expire") delete room.activeFeatures.frontierBoss;
+  if (action === "trade_request" && trade?.id) room.activeFeatures[`trade:${trade.id}`] = msg;
+  if (["trade_accept", "trade_reject", "trade_cancel"].includes(action) && (trade?.id || msg.payload?.tradeId)) {
+    delete room.activeFeatures[`trade:${trade?.id || msg.payload.tradeId}`];
+  }
+  if (action === "alliance_request" && msg.sourceId && msg.payload?.targetId) {
+    room.activeFeatures[`alliance:${msg.sourceId}:${msg.payload.targetId}`] = msg;
+  }
+  if (action === "alliance_accept" && msg.sourceId && msg.payload?.targetId) {
+    delete room.activeFeatures[`alliance:${msg.payload.targetId}:${msg.sourceId}`];
+    delete room.activeFeatures[`alliance:${msg.sourceId}:${msg.payload.targetId}`];
+  }
+  if (action === "room_close_save") {
+    room.snapshot = msg.payload?.snapshot || room.snapshot;
+    room.roomSave = msg.payload || null;
+    room.activeFeatures = {};
   }
 }
+
+function handleReady(room, clientId, player) {
+  const current = room.players.get(clientId) || {};
+  room.players.set(clientId, { ...current, ...player, id: clientId, online: true, ready: true });
+  broadcastRoomState(room);
+  const online = players(room).filter((item) => item.online !== false);
+  const founded = online.filter((item) => item.founded);
+  const eligible = founded.length ? founded : online;
+  if (eligible.length > 0 && eligible.every((item) => item.ready)) {
+    broadcast(room, { type: "all_ready", players: players(room) });
+  }
+}
+
+const server = http.createServer((req, res) => {
+  if (req.url === "/healthz") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: true, rooms: rooms.size }));
+    return;
+  }
+  res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+  res.end("Sect simulator WebSocket room server. Use /ws?room=ROOM_CODE");
+});
+
+const wss = new WebSocketServer({ server, path: "/ws" });
+
+wss.on("connection", (ws, req) => {
+  const url = new URL(req.url || "/ws", `http://${req.headers.host || "localhost"}`);
+  const room = roomFor(url.searchParams.get("room"));
+  let clientId = "";
+  room.updatedAt = Date.now();
+
+  ws.on("message", (raw) => {
+    let msg;
+    try {
+      msg = JSON.parse(String(raw));
+    } catch {
+      return;
+    }
+    clientId = msg.clientId || clientId;
+    if (!clientId) return;
+    room.clients.set(clientId, ws);
+    refreshHost(room);
+
+    if (msg.type === "join") {
+      const player = { ...(msg.player || {}), id: clientId, online: true, ready: false };
+      room.players.set(clientId, player);
+      safeSend(ws, { type: "welcome", host: room.hostId === clientId });
+      if (room.snapshot) safeSend(ws, { type: "world_snapshot", sourceId: "server", snapshot: room.snapshot });
+      if (room.roomSave) safeSend(ws, { type: "room_feature", sourceId: "server", sourceName: "房间服务器", action: "room_save_available", payload: room.roomSave });
+      for (const feature of Object.values(room.activeFeatures)) safeSend(ws, feature);
+      broadcastRoomState(room);
+      return;
+    }
+
+    if (msg.type === "public_state") {
+      const current = room.players.get(clientId) || {};
+      room.players.set(clientId, { ...current, ...(msg.player || {}), id: clientId, online: true });
+      broadcastRoomState(room);
+      return;
+    }
+
+    if (msg.type === "ready") {
+      handleReady(room, clientId, msg.player || {});
+      return;
+    }
+
+    if (msg.type === "world_snapshot") {
+      room.snapshot = msg.snapshot || null;
+      broadcast(room, { ...msg, sourceId: clientId }, clientId);
+      return;
+    }
+
+    if (msg.type === "room_feature") {
+      const outgoing = { ...msg, sourceId: msg.sourceId || clientId };
+      cacheFeature(room, outgoing);
+      broadcast(room, outgoing, clientId);
+      return;
+    }
+
+    if (["player_event", "pvp_report", "forbidden_progress"].includes(msg.type)) {
+      broadcast(room, { ...msg, sourceId: clientId }, clientId);
+    }
+  });
+
+  ws.on("close", () => {
+    if (!clientId) return;
+    room.clients.delete(clientId);
+    const player = room.players.get(clientId);
+    if (player) room.players.set(clientId, { ...player, online: false, ready: false, activity: "离线" });
+    refreshHost(room);
+    broadcastRoomState(room);
+  });
+});
 
 setInterval(() => {
   const now = Date.now();
-  for (const room of rooms.values()) {
-    for (const player of room.players.values()) {
-      send(player.socket, { type: "heartbeat", t: now });
-    }
+  for (const [code, room] of rooms.entries()) {
+    if (!room.clients.size && now - room.updatedAt > 1000 * 60 * 60 * 6) rooms.delete(code);
   }
-}, 25000);
+}, 1000 * 60 * 20).unref();
 
-server.listen(port, "0.0.0.0", () => {
-  console.log(`Cultivation Sect Sim server running on 0.0.0.0:${port}`);
+server.listen(PORT, () => {
+  console.log(`Sect room server listening on ${PORT}`);
 });

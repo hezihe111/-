@@ -1,14 +1,15 @@
 {
-  "name": "cultivation-sect-sim",
-  "version": "1.0.0",
+  "name": "sect-simulator-room-server",
+  "version": "1.1.0",
   "private": true,
-  "description": "2D cultivation sect simulator with WebSocket room multiplayer.",
-  "main": "server.js",
+  "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "check": "node --check app.js && node --check server.js"
+    "start": "node server.js"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
   }
 }
