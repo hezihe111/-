@@ -97,9 +97,29 @@ const els = {
 const W = 1040;
 const H = 680;
 
+function configuredAssetBase() {
+  return String(window.SECT_ASSET_BASE || "").trim().replace(/\/+$/, "");
+}
+
+function assetUrl(src) {
+  const raw = String(src || "");
+  if (/^(https?:)?\/\//.test(raw) || raw.startsWith("data:") || raw.startsWith("blob:")) return raw;
+  const clean = raw.replace(/^\.?\//, "");
+  const base = configuredAssetBase();
+  return base ? `${base}/${clean}` : `./${clean}`;
+}
+
+function cssAssetUrl(src) {
+  return `url('${assetUrl(src).replace(/'/g, "%27")}')`;
+}
+
+function applyAssetCssVars() {
+  document.documentElement.style.setProperty("--ui-map-bg", cssAssetUrl("assets/maps/map-xianshu.webp"));
+}
+
 function loadCanvasAsset(src) {
   const image = new Image();
-  image.src = src;
+  image.src = assetUrl(src);
   image.onload = () => setTimeout(() => {
     try {
       renderMap();
@@ -109,6 +129,8 @@ function loadCanvasAsset(src) {
   }, 0);
   return image;
 }
+
+applyAssetCssVars();
 
 const mapBackgroundImages = {
   central: loadCanvasAsset("./assets/maps/map-xianshu.webp"),
@@ -6114,7 +6136,7 @@ function disciplePortraitHtml(d, size = "") {
   const asset = portraitHeadAssetPath(d?.portraitId) || portraitAssetMap[d?.portraitId] || "";
   const hue = (stableHash(d?.portraitId || d?.name || "disciple") % 360);
   const style = [`--portrait-hue:${hue}`];
-  if (asset) style.push(`--portrait-image:url('${asset}')`);
+  if (asset) style.push(`--portrait-image:${cssAssetUrl(asset)}`);
   return `<div class="portrait-slot ${size} portrait-${portraitStyleOf(d)} ${asset ? "has-portrait-asset" : ""}" style="${style.join(";")}" title="${tradeEscape(d?.portraitId || "默认立绘槽")}">
     <span>${tradeEscape((d?.name || "?").slice(0, 1))}</span>
     <i></i>
@@ -6150,7 +6172,7 @@ function discipleProfileCardHtml(d) {
     ["机缘", d.luck, "缘"],
   ];
   const style = [`--portrait-hue:${hue}`];
-  if (asset) style.push(`--portrait-image:url('${asset}')`);
+  if (asset) style.push(`--portrait-image:${cssAssetUrl(asset)}`);
   return `
     <section class="cultivator-card portrait-${portraitStyleOf(d)} ${asset ? "has-portrait-asset" : ""}" style="${style.join(";")}">
       <div class="jade-pendant" aria-hidden="true"><span></span></div>

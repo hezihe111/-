@@ -163,6 +163,7 @@ function sendStatic(req, res) {
   const headers = {
     "content-type": mimeTypes[ext] || "application/octet-stream",
     "cache-control": ext === ".html" ? "no-cache" : "public, max-age=31536000, immutable",
+    "access-control-allow-origin": "*",
   };
   res.writeHead(200, headers);
   if (req.method === "HEAD") {
