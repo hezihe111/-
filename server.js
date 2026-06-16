@@ -121,13 +121,26 @@ function cacheFeature(room, msg) {
 
 function handleReady(room, clientId, player) {
   const current = room.players.get(clientId) || {};
-  room.players.set(clientId, { ...current, ...player, id: clientId, online: true, ready: true });
+  const readyYear = Number(player.readyYear || current.readyYear || player.year || current.year || 0);
+  room.players.set(clientId, { ...current, ...player, id: clientId, online: true, ready: true, readyYear });
   broadcastRoomState(room);
   const online = players(room).filter((item) => item.online !== false);
   const founded = online.filter((item) => item.founded);
   const eligible = founded.length ? founded : online;
-  if (eligible.length > 0 && eligible.every((item) => item.ready)) {
-    broadcast(room, { type: "all_ready", players: players(room) });
+  if (
+    readyYear > 0 &&
+    eligible.length > 0 &&
+    eligible.every((item) => item.ready && Number(item.readyYear || 0) === readyYear)
+  ) {
+    const readyPlayers = players(room);
+    broadcast(room, { type: "all_ready", year: readyYear, players: readyPlayers });
+    for (const item of eligible) {
+      const currentPlayer = room.players.get(item.id);
+      if (currentPlayer && Number(currentPlayer.readyYear || 0) === readyYear) {
+        room.players.set(item.id, { ...currentPlayer, ready: false, readyYear: 0, activity: "进入下一年结算" });
+      }
+    }
+    broadcastRoomState(room);
   }
 }
 
