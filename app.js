@@ -96,9 +96,46 @@ const els = {
 
 const W = 1040;
 const H = 680;
-const worldMapImage = new Image();
-worldMapImage.src = "./assets/world-map.jpeg";
-worldMapImage.onload = () => renderMap();
+
+function loadCanvasAsset(src) {
+  const image = new Image();
+  image.src = src;
+  image.onload = () => setTimeout(() => {
+    try {
+      renderMap();
+    } catch {
+      // Assets may finish before the game state is initialized.
+    }
+  }, 0);
+  return image;
+}
+
+const mapBackgroundImages = {
+  central: loadCanvasAsset("./assets/maps/map-xianshu.webp"),
+  frontier: loadCanvasAsset("./assets/maps/map-frontier.webp"),
+  overseas: loadCanvasAsset("./assets/maps/map-overseas.webp"),
+};
+
+const mapIconImages = {
+  player: loadCanvasAsset("./assets/map-icons/map-player.webp"),
+  rival: loadCanvasAsset("./assets/map-icons/map-rival.webp"),
+  alliance: loadCanvasAsset("./assets/map-icons/map-alliance.webp"),
+  site: loadCanvasAsset("./assets/map-icons/map-site.webp"),
+  mine: loadCanvasAsset("./assets/map-icons/map-mine.webp"),
+  herb: loadCanvasAsset("./assets/map-icons/map-herb.webp"),
+  spring: loadCanvasAsset("./assets/map-icons/map-spring.webp"),
+  forge: loadCanvasAsset("./assets/map-icons/map-forge.webp"),
+  jade: loadCanvasAsset("./assets/map-icons/map-jade.webp"),
+  event: loadCanvasAsset("./assets/map-icons/map-event.webp"),
+  boss: loadCanvasAsset("./assets/map-icons/map-boss.webp"),
+  forbidden: loadCanvasAsset("./assets/map-icons/map-forbidden.webp"),
+};
+
+function currentMapBackgroundImage() {
+  if (!window.__cultivationStateReady) return null;
+  if (state.currentMap === "forbidden") return null;
+  return mapBackgroundImages[state.currentMap] || mapBackgroundImages.central;
+}
 const surnames = "云 清 玄 星 秦 洛 谢 沈 宁 陆 叶 温 江 白 林 顾 萧 苏 楚 柳 许 孟 方 韩 杜".split(" ");
 const givenNames = "霁 衡 照 澜 岫 无咎 明河 惊春 观澜 不归 青蘅 扶桑 雪照 照夜 砚秋 听泉 问尘 逐月 归鸿 守拙 抱朴 临渊 见微 乘风".split(" ");
 const sectNames = "玄岳宗 太微宫 沧澜剑院 赤霞门 玉京观 百炼山 丹鼎盟 星河阁 寒江殿 灵鹤谷".split(" ");
@@ -995,7 +1032,32 @@ const secretRealmRooms = [
   { id: "trial", name: "问心阶", risk: 28, reward: "mind", text: "风险高，但可压心魔、涨道心。" },
 ];
 
-const portraitAssetMap = {};
+const portraitAssetMap = {
+  "male-01": "assets/portraits/male-01.webp",
+  "male-02": "assets/portraits/male-02.webp",
+  "male-03": "assets/portraits/male-03.webp",
+  "male-04": "assets/portraits/male-04.webp",
+  "male-05": "assets/portraits/male-05.webp",
+  "male-06": "assets/portraits/male-06.webp",
+  "male-07": "assets/portraits/male-07.webp",
+  "male-08": "assets/portraits/male-08.webp",
+  "male-09": "assets/portraits/male-09.webp",
+  "male-10": "assets/portraits/male-10.webp",
+  "female-01": "assets/portraits/female-01.webp",
+  "female-02": "assets/portraits/female-02.webp",
+  "female-03": "assets/portraits/female-03.webp",
+  "female-04": "assets/portraits/female-04.webp",
+  "female-05": "assets/portraits/female-05.webp",
+  "female-06": "assets/portraits/female-06.webp",
+  "female-07": "assets/portraits/female-07.webp",
+  "female-08": "assets/portraits/female-08.webp",
+  "female-09": "assets/portraits/female-09.webp",
+  "female-10": "assets/portraits/female-10.webp",
+};
+const portraitPools = {
+  male: ["male-01", "male-02", "male-03", "male-04", "male-05", "male-06", "male-07", "male-08", "male-09", "male-10"],
+  female: ["female-01", "female-02", "female-03", "female-04", "female-05", "female-06", "female-07", "female-08", "female-09", "female-10"],
+};
 const portraitStyles = ["sword", "alchemy", "forge", "shadow", "lotus", "thunder", "demon", "elder"];
 
 const delegationTasks = [
@@ -1102,6 +1164,7 @@ const state = {
   events: [],
   particles: [],
 };
+window.__cultivationStateReady = true;
 
 function rand(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -1536,9 +1599,12 @@ function createDisciple(options = {}) {
   const minRealm = clamp(options.minRealm ?? 0, 0, realms.length - 1);
   const maxRealm = clamp(options.maxRealm ?? 0, minRealm, realms.length - 1);
   const realm = rand(minRealm, maxRealm);
+  const gender = options.gender === "female" || options.gender === "male" ? options.gender : Math.random() < 0.5 ? "male" : "female";
+  const portraitId = portraitAssetMap[options.portraitId] ? options.portraitId : randomPortraitId(gender);
   const base = {
     id: uid(),
     name: first,
+    gender,
     realm,
     exp: rand(0, options.expMax ?? 40),
     hp: rand(55, 95) + realm * rand(14, 22),
@@ -1573,7 +1639,7 @@ function createDisciple(options = {}) {
     age: rand(16, 34) + realm * rand(3, 8),
     lifespan: 96 + realm * 70 + rand(0, 38),
     legacyGiven: false,
-    portraitId: options.portraitId || `p-${pick(portraitStyles)}-${rand(1, 6)}`,
+    portraitId,
     sectPosition: "",
     demonStage: 0,
     bondedArtifact: null,
@@ -2156,7 +2222,7 @@ function ensureSectDefaults() {
     d.age = Number(d.age || (18 + Number(d.realm || 0) * 8));
     d.lifespan = Number(d.lifespan || discipleLifeExpectancy(d));
     d.legacyGiven = Boolean(d.legacyGiven);
-    d.portraitId = d.portraitId || `p-${pick(portraitStyles)}-${rand(1, 6)}`;
+    normalizeDisciplePortrait(d);
     d.sectPosition = d.sectPosition || "";
     d.demonStage = Number(d.demonStage || 0);
     normalizeDiscipleProgression(d);
@@ -6020,8 +6086,32 @@ function portraitStyleOf(d) {
   return portraitStyles.find((style) => raw.includes(style)) || (d?.sectPosition === "spymaster" ? "shadow" : d?.realm >= 3 ? "elder" : "sword");
 }
 
+function randomPortraitId(gender = "") {
+  const resolved = gender === "female" || gender === "male" ? gender : Math.random() < 0.5 ? "male" : "female";
+  return pick(portraitPools[resolved] || portraitPools.male);
+}
+
+function inferPortraitGender(d) {
+  const id = String(d?.portraitId || "");
+  if (id.startsWith("female")) return "female";
+  if (id.startsWith("male")) return "male";
+  return stableHash(`${d?.id || ""}:${d?.name || ""}`) % 2 ? "female" : "male";
+}
+
+function normalizeDisciplePortrait(d) {
+  if (!d) return;
+  d.gender = d.gender === "female" || d.gender === "male" ? d.gender : inferPortraitGender(d);
+  if (!portraitAssetMap[d.portraitId]) d.portraitId = randomPortraitId(d.gender);
+}
+
+function portraitHeadAssetPath(portraitId) {
+  const asset = portraitAssetMap[portraitId] || "";
+  return asset ? asset.replace("assets/portraits/", "assets/portraits/heads/") : "";
+}
+
 function disciplePortraitHtml(d, size = "") {
-  const asset = portraitAssetMap[d?.portraitId] || "";
+  normalizeDisciplePortrait(d);
+  const asset = portraitHeadAssetPath(d?.portraitId) || portraitAssetMap[d?.portraitId] || "";
   const hue = (stableHash(d?.portraitId || d?.name || "disciple") % 360);
   const style = [`--portrait-hue:${hue}`];
   if (asset) style.push(`--portrait-image:url('${asset}')`);
@@ -6029,6 +6119,78 @@ function disciplePortraitHtml(d, size = "") {
     <span>${tradeEscape((d?.name || "?").slice(0, 1))}</span>
     <i></i>
   </div>`;
+}
+
+function discipleRoleLabel(d) {
+  return sectPositionOf(d)?.name || (d?.elder ? d.elderRole : d?.core ? "真传弟子" : d?.realm >= 2 ? "内门弟子" : "外门弟子");
+}
+
+function discipleRootLabel(d) {
+  const con = constitutionOf(d);
+  const spec = specializationOf(d);
+  if (con && con.id !== "normal") return con.name;
+  if (spec) return `${spec.name}灵根`;
+  return (d?.traits || []).slice(0, 2).map((t) => t.name).join("·") || "未显灵根";
+}
+
+function discipleProfileCardHtml(d) {
+  normalizeDisciplePortrait(d);
+  const asset = portraitAssetMap[d?.portraitId] || "";
+  const hue = stableHash(d?.portraitId || d?.name || "disciple") % 360;
+  const progress = clamp(Number(d?.exp || 0), 0, 100);
+  const total = 100;
+  const sectName = state.sect?.name || "清玄宗";
+  const realmText = realms[d.realm] || "未入道";
+  const stats = [
+    ["境界", realmText, "境"],
+    ["根骨", d.aptitude, "骨"],
+    ["灵根", discipleRootLabel(d), "灵"],
+    ["悟性", d.temper, "悟"],
+    ["灵力", Math.round(discipleBattleScore(d)), "力"],
+    ["机缘", d.luck, "缘"],
+  ];
+  const style = [`--portrait-hue:${hue}`];
+  if (asset) style.push(`--portrait-image:url('${asset}')`);
+  return `
+    <section class="cultivator-card portrait-${portraitStyleOf(d)} ${asset ? "has-portrait-asset" : ""}" style="${style.join(";")}">
+      <div class="jade-pendant" aria-hidden="true"><span></span></div>
+      <div class="cultivator-card-inner">
+        <div class="cultivator-sect">
+          <i>${tradeEscape((sectName || "宗").slice(0, 1))}</i>
+          <strong>${tradeEscape(sectName)}</strong>
+        </div>
+        <div class="cultivator-art">
+          <div class="ink-orbit" aria-hidden="true"></div>
+          <div class="ink-mountains" aria-hidden="true"></div>
+          <svg class="cultivator-silhouette" viewBox="0 0 220 300" aria-hidden="true" focusable="false">
+            <path class="silk-ribbon left" d="M85 42 C50 55 38 88 48 126 C55 151 43 171 23 190 C62 185 92 156 92 119 C92 91 104 67 129 51 C111 39 96 37 85 42 Z" />
+            <path class="silk-ribbon right" d="M139 46 C176 54 194 86 186 124 C181 150 191 171 210 194 C170 188 139 159 140 119 C141 91 128 69 104 52 C116 45 128 43 139 46 Z" />
+            <path class="hair-back" d="M107 26 C68 28 48 55 53 94 C57 124 40 155 18 178 C62 171 82 143 80 104 C79 76 94 58 118 49 C141 57 156 75 154 105 C152 145 174 174 213 184 C193 158 177 126 181 94 C186 55 148 24 107 26 Z" />
+            <path class="face" d="M111 52 C88 52 74 70 75 96 C76 122 91 145 111 145 C132 145 146 122 147 96 C148 70 134 52 111 52 Z" />
+            <path class="neck" d="M93 137 C99 151 122 151 129 137 L132 171 L90 171 Z" />
+            <path class="robe-back" d="M61 171 C28 199 13 242 7 293 L213 293 C207 242 191 199 160 171 C145 190 129 201 111 201 C93 201 76 190 61 171 Z" />
+            <path class="robe-left" d="M91 162 C66 178 45 216 34 293 L108 293 C104 246 98 202 91 162 Z" />
+            <path class="robe-right" d="M130 162 C155 178 176 216 187 293 L112 293 C117 246 123 202 130 162 Z" />
+            <path class="collar left" d="M87 159 C98 177 104 198 110 229" />
+            <path class="collar right" d="M134 159 C123 177 116 199 111 229" />
+            <path class="hair-front" d="M73 83 C83 52 111 39 141 58 C130 57 118 62 107 73 C97 84 86 87 73 83 Z" />
+            <path class="hair-tail" d="M136 47 C155 27 168 42 154 65 C146 79 147 100 163 119 C132 109 124 72 136 47 Z" />
+          </svg>
+          <aside class="cultivator-name-plaque">
+            <strong>${tradeEscape(d.name)}</strong>
+            <span>${tradeEscape(discipleRoleLabel(d))}</span>
+          </aside>
+        </div>
+        <div class="cultivator-stat-grid">
+          ${stats.map(([label, value, icon]) => `<div class="cultivator-stat"><i>${icon}</i><span>${label}</span><strong>${tradeEscape(String(value))}</strong></div>`).join("")}
+        </div>
+        <div class="cultivator-progress">
+          <div><span>修炼进度</span><strong>${progress} / ${total}</strong></div>
+          <em><b style="width:${progress}%"></b></em>
+        </div>
+      </div>
+    </section>
+  `;
 }
 
 function discipleLifeExpectancy(d) {
@@ -11445,8 +11607,9 @@ function nearestRival() {
 
 function drawTerrain() {
   ctx.clearRect(0, 0, W, H);
-  if (worldMapImage.complete && worldMapImage.naturalWidth) {
-    drawRealMapBackground();
+  const backgroundImage = currentMapBackgroundImage();
+  if (backgroundImage?.complete && backgroundImage.naturalWidth) {
+    drawRealMapBackground(backgroundImage);
     drawMapBorder();
     drawMapLegend();
     return;
@@ -11469,21 +11632,21 @@ function drawTerrain() {
   drawMapLegend();
 }
 
-function drawRealMapBackground() {
-  const imageRatio = worldMapImage.naturalWidth / worldMapImage.naturalHeight;
+function drawRealMapBackground(image) {
+  const imageRatio = image.naturalWidth / image.naturalHeight;
   const canvasRatio = W / H;
   let sx = 0;
   let sy = 0;
-  let sw = worldMapImage.naturalWidth;
-  let sh = worldMapImage.naturalHeight;
+  let sw = image.naturalWidth;
+  let sh = image.naturalHeight;
   if (imageRatio > canvasRatio) {
-    sw = worldMapImage.naturalHeight * canvasRatio;
-    sx = (worldMapImage.naturalWidth - sw) / 2;
+    sw = image.naturalHeight * canvasRatio;
+    sx = (image.naturalWidth - sw) / 2;
   } else {
-    sh = worldMapImage.naturalWidth / canvasRatio;
-    sy = (worldMapImage.naturalHeight - sh) / 2;
+    sh = image.naturalWidth / canvasRatio;
+    sy = (image.naturalHeight - sh) / 2;
   }
-  ctx.drawImage(worldMapImage, sx, sy, sw, sh, 0, 0, W, H);
+  ctx.drawImage(image, sx, sy, sw, sh, 0, 0, W, H);
 
   ctx.save();
   const vignette = ctx.createRadialGradient(W * 0.5, H * 0.46, 120, W * 0.5, H * 0.46, 720);
@@ -11717,10 +11880,47 @@ function roundRect(x, y, width, height, radius) {
   ctx.closePath();
 }
 
-function drawNode(node) {
+function drawMapArtIcon(key, fallbackColor, fallbackLabel, size = 54) {
+  const image = mapIconImages[key];
+  if (!image?.complete || !image.naturalWidth) {
+    drawMapBadge(fallbackColor, fallbackLabel, "circle");
+    return;
+  }
+  const half = size / 2;
+  ctx.save();
+  ctx.shadowColor = "rgba(35, 24, 12, 0.35)";
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 4;
+  roundRect(-half, -half, size, size, 11);
+  ctx.clip();
+  ctx.drawImage(image, -half, -half, size, size);
+  ctx.restore();
+
+  ctx.save();
+  roundRect(-half, -half, size, size, 11);
+  ctx.strokeStyle = "rgba(255, 246, 207, 0.76)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  roundRect(-half - 4, -half - 4, size + 8, size + 8, 14);
+  ctx.strokeStyle = "rgba(170, 118, 42, 0.42)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function resourceIconKey(node) {
+  if (node.kind === "mine") return "mine";
+  if (node.kind === "herb" || node.kind === "poison") return "herb";
+  if (node.kind === "forge") return "forge";
+  if (node.kind === "jade") return "jade";
+  if (node.kind === "spring" || node.kind === "spirit") return "spring";
+  return "spring";
+}
+
+function drawNode(node, view = node) {
   const selected = state.selected && state.selected.id === node.id;
   ctx.save();
-  ctx.translate(node.x, node.y);
+  ctx.translate(view.x, view.y);
   if (selected) {
     ctx.strokeStyle = "rgba(170, 118, 42, 0.45)";
     ctx.lineWidth = 8;
@@ -11733,68 +11933,74 @@ function drawNode(node) {
   }
 
   if (node.type === "site") {
-    drawMapBadge("#2f6f58", "址", "circle");
+    drawMapArtIcon("site", "#2f6f58", "址", 50);
   } else if (node.type === "rival") {
-    drawSectSeal(node.alive === false ? "#6d6257" : node.alliance ? "#2f6690" : "#9f3d35", node.alive === false ? "墟" : node.name.replace("遗址·", "").slice(0, 1), false);
+    drawMapArtIcon(node.alive === false ? "forbidden" : node.alliance ? "alliance" : "rival", node.alive === false ? "#6d6257" : node.alliance ? "#2f6690" : "#9f3d35", node.alive === false ? "墟" : node.name.replace("遗址·", "").slice(0, 1), 52);
   } else if (node.type === "remotePlayer") {
-    drawSectSeal("#7f4eaa", node.icon || node.name.slice(0, 1), false);
+    drawMapArtIcon("alliance", "#7f4eaa", node.icon || node.name.slice(0, 1), 52);
   } else if (node.type === "resource") {
     const label = node.kind === "mine" ? "矿" : node.kind === "herb" ? "药" : "泉";
-    drawMapBadge(node.owner === "player" ? "#aa762a" : node.owner ? "#9f3d35" : "#5c7469", label, "square");
+    drawMapArtIcon(resourceIconKey(node), node.owner === "player" ? "#aa762a" : node.owner ? "#9f3d35" : "#5c7469", label, 48);
   } else if (node.type === "event") {
     const pulse = 1 + Math.sin(Date.now() / 260) * 0.12;
     ctx.fillStyle = "rgba(170, 118, 42, 0.26)";
     ctx.beginPath();
     ctx.arc(0, 0, 26 * pulse, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = node.value > 92 ? "#9f3d35" : "#aa762a";
-    ctx.beginPath();
-    ctx.arc(0, 0, 12, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#fff6df";
-    ctx.font = "900 12px Microsoft YaHei";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(node.glyph || "缘", 0, 1);
+    drawMapArtIcon("event", node.value > 92 ? "#9f3d35" : "#aa762a", node.glyph || "缘", 48);
     addAction("分层秘境", () => openLayeredSecretRealm(node), !state.founded || state.actionPoints < 1);
   } else if (node.type === "player") {
-    drawSectSeal("#286c58", node.icon || "宗", true);
+    drawMapArtIcon("player", "#286c58", node.icon || "宗", 58);
   } else if (node.type === "frontierDungeon") {
     const pulse = 1 + Math.sin(Date.now() / 220) * 0.14;
     ctx.fillStyle = "rgba(159, 61, 53, 0.24)";
     ctx.beginPath();
     ctx.arc(0, 0, 28 * pulse, 0, Math.PI * 2);
     ctx.fill();
-    drawMapBadge(node.tier >= 5 ? "#7f2f45" : "#9f3d35", node.glyph || "妖", "circle");
+    drawMapArtIcon("boss", node.tier >= 5 ? "#7f2f45" : "#9f3d35", node.glyph || "妖", 54);
   } else if (node.type === "frontierBoss") {
     const pulse = 1 + Math.sin(Date.now() / 180) * 0.16;
     ctx.fillStyle = "rgba(127, 47, 69, 0.22)";
     ctx.beginPath();
     ctx.arc(0, 0, 46 * pulse, 0, Math.PI * 2);
     ctx.fill();
-    drawMapBadge("#7f2f45", node.glyph || "巨", "circle");
+    drawMapArtIcon("boss", "#7f2f45", node.glyph || "巨", 70);
     ctx.strokeStyle = "rgba(255, 246, 223, 0.82)";
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.arc(0, 0, 30, 0, Math.PI * 2);
     ctx.stroke();
   } else if (node.type === "frontierPoint") {
-    drawMapBadge(node.owner === "player" ? "#286c58" : "#9f3d35", "寨", "square");
+    drawMapArtIcon(node.owner === "player" ? "player" : "rival", node.owner === "player" ? "#286c58" : "#9f3d35", "寨", 50);
   } else if (node.type === "frontierLocked") {
-    drawMapBadge("#6d6257", "关", "circle");
+    drawMapArtIcon("site", "#6d6257", "关", 50);
   } else if (node.type === "forbiddenGate") {
-    drawMapBadge("#5f456f", "禁", "circle");
+    drawMapArtIcon("forbidden", "#5f456f", "禁", 52);
   } else if (node.type === "forbiddenFloor") {
-    drawMapBadge(node.current ? "#9f3d35" : node.cleared ? "#286c58" : "#6d6257", node.floor === 20 ? "王" : String(node.floor), "circle");
+    drawMapArtIcon("forbidden", node.current ? "#9f3d35" : node.cleared ? "#286c58" : "#6d6257", node.floor === 20 ? "王" : String(node.floor), 48);
   } else if (node.type === "overseasLocked") {
-    drawMapBadge("#2f6690", "锁", "circle");
+    drawMapArtIcon("site", "#2f6690", "锁", 54);
   }
 
-  ctx.font = "700 13px Microsoft YaHei";
+  drawMapNodeLabel(node.name, node.type === "frontierBoss" ? 38 : 28);
+  ctx.restore();
+}
+
+function drawMapNodeLabel(name, y = 28) {
+  const text = String(name || "").length > 8 ? `${String(name).slice(0, 7)}…` : String(name || "");
+  ctx.save();
+  ctx.font = "800 12px Microsoft YaHei";
   ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  ctx.fillStyle = "rgba(24, 32, 28, 0.9)";
-  ctx.fillText(node.name, 0, 28);
+  ctx.textBaseline = "middle";
+  const width = Math.min(96, Math.max(42, ctx.measureText(text).width + 16));
+  roundRect(-width / 2, y, width, 20, 10);
+  ctx.fillStyle = "rgba(255, 252, 242, 0.84)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(123, 103, 61, 0.34)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = "rgba(38, 38, 31, 0.92)";
+  ctx.fillText(text, 0, y + 10);
   ctx.restore();
 }
 
@@ -12128,7 +12334,7 @@ function renderMap() {
   drawTerrain();
   drawMapModeOverlay();
   drawLinks();
-  for (const node of allNodes()) drawNode(node);
+  for (const view of layoutMapNodes(allNodes())) drawNode(view.node, view);
 }
 
 function renderUI() {
@@ -12724,13 +12930,7 @@ function renderDiscipleDetail() {
   els.discipleDetailTitle.textContent = d.name;
   const bonds = discipleBonds(d);
   els.discipleDetail.innerHTML = `
-    <div class="disciple-portrait-hero">
-      ${disciplePortraitHtml(d, "large")}
-      <div>
-        <strong>${d.name}</strong>
-        <span>${realms[d.realm]} · ${d.age || 18}/${d.lifespan || discipleLifeExpectancy(d)} 岁 · ${delegationTasks.find((task) => task.id === d.assignment)?.name || "未委派"}</span>
-      </div>
-    </div>
+    ${discipleProfileCardHtml(d)}
     <div class="detail-grid">
       <span>境界<strong>${realms[d.realm]} ${d.exp}/100</strong></span>
       <span>资质<strong>${d.aptitude}</strong></span>
@@ -12748,7 +12948,6 @@ function renderDiscipleDetail() {
     <p>当前状态：${d.elder ? `${d.elderRole} / ` : ""}${d.status}。词条：${d.traits.map((t) => `${t.name}（${t.note}）`).join("、")}。</p>
     <p>羁绊：${bonds.length ? bonds.map(bondLabel).join("；") : "暂无"}。</p>
   `;
-  els.discipleDetail.insertAdjacentHTML("afterbegin", `<div class="detail-power">战力 <strong>${Math.round(discipleBattleScore(d))}</strong></div>`);
   const heart = daoHeartOf(d);
   const con = constitutionOf(d);
   const spec = specializationOf(d);
@@ -13136,8 +13335,9 @@ function renderMapActionBubble(node) {
   const wrap = canvas.parentElement.getBoundingClientRect();
   const bubbleWidth = Math.min(320, Math.max(240, wrap.width - 20));
   const bubbleHeight = window.matchMedia("(max-width: 560px)").matches ? 210 : 180;
-  const rawLeft = (node.x / W) * rect.width + rect.left - wrap.left + 12;
-  const rawTop = (node.y / H) * rect.height + rect.top - wrap.top - 8;
+  const view = mapNodeView(node) || node;
+  const rawLeft = (view.x / W) * rect.width + rect.left - wrap.left + 12;
+  const rawTop = (view.y / H) * rect.height + rect.top - wrap.top - 8;
   els.mapActionBubble.style.left = `${clamp(rawLeft, 8, Math.max(8, wrap.width - bubbleWidth - 8))}px`;
   els.mapActionBubble.style.top = `${clamp(rawTop, 8, Math.max(8, wrap.height - bubbleHeight - 8))}px`;
   const add = (label, handler, disabled = false) => {
@@ -13263,6 +13463,66 @@ function allNodes() {
   ];
 }
 
+function mapNodePriority(node) {
+  if (node.type === "player") return 1;
+  if (node.type === "site") return 2;
+  if (node.type === "rival" || node.type === "remotePlayer") return 3;
+  if (node.type === "frontierBoss") return 4;
+  if (node.type === "resource" || node.type === "frontierPoint") return 5;
+  if (node.type === "event" || node.type === "frontierDungeon") return 6;
+  return 7;
+}
+
+function mapNodeRadius(node) {
+  if (node.type === "frontierBoss") return 58;
+  if (node.type === "player") return 50;
+  if (node.type === "rival" || node.type === "remotePlayer") return 46;
+  if (node.type === "site") return 44;
+  if (node.type === "resource" || node.type === "frontierPoint") return 40;
+  return 36;
+}
+
+function layoutMapNodes(nodes = allNodes()) {
+  const ordered = nodes
+    .map((node, index) => ({ node, index, priority: mapNodePriority(node) }))
+    .sort((a, b) => a.priority - b.priority || a.index - b.index);
+  const placed = [];
+  const result = new Array(nodes.length);
+  for (const item of ordered) {
+    const node = item.node;
+    const r = mapNodeRadius(node);
+    let x = clamp(Number(node.x || W / 2), 48, W - 48);
+    let y = clamp(Number(node.y || H / 2), 52, H - 58);
+    if (item.priority > 2) {
+      for (let pass = 0; pass < 10; pass += 1) {
+        for (const other of placed) {
+          const dx = x - other.x;
+          const dy = y - other.y;
+          const distNow = Math.max(1, Math.hypot(dx, dy));
+          const minDist = (r + other.r) * (node.type === "resource" || other.node.type === "resource" ? 1.06 : 0.92);
+          if (distNow < minDist) {
+            const seedAngle = ((stableHash(`${node.id}:${other.node.id}:${pass}`) % 360) / 180) * Math.PI;
+            const ux = Math.abs(dx) + Math.abs(dy) > 0.5 ? dx / distNow : Math.cos(seedAngle);
+            const uy = Math.abs(dx) + Math.abs(dy) > 0.5 ? dy / distNow : Math.sin(seedAngle);
+            const push = (minDist - distNow) * 0.86;
+            x = clamp(x + ux * push + Math.cos(seedAngle) * 3, 48, W - 48);
+            y = clamp(y + uy * push + Math.sin(seedAngle) * 3, 52, H - 58);
+          }
+        }
+      }
+    }
+    const view = { node, x, y, r };
+    placed.push(view);
+    result[item.index] = view;
+  }
+  return result;
+}
+
+function mapNodeView(node) {
+  if (!node) return null;
+  return layoutMapNodes(allNodes()).find((item) => item.node === node || item.node.id === node.id) || { node, x: node.x, y: node.y, r: mapNodeRadius(node) };
+}
+
 function canvasPoint(evt) {
   const rect = canvas.getBoundingClientRect();
   return {
@@ -13274,8 +13534,8 @@ function canvasPoint(evt) {
 function hitTest(point) {
   const coarse = window.matchMedia("(pointer: coarse)").matches;
   const radius = coarse ? 46 : 34;
-  return allNodes()
-    .map((node) => ({ node, d: Math.hypot(node.x - point.x, node.y - point.y) }))
+  return layoutMapNodes(allNodes())
+    .map((view) => ({ node: view.node, d: Math.hypot(view.x - point.x, view.y - point.y) }))
     .filter((x) => x.d < radius)
     .sort((a, b) => a.d - b.d)[0]?.node;
 }
