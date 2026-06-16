@@ -1,8 +1,28 @@
 import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 
 const PORT = Number(process.env.PORT || 8097);
 const rooms = new Map();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const STATIC_ROOT = __dirname;
+const mimeTypes = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "application/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".txt": "text/plain; charset=utf-8",
+};
 
 function roomFor(code) {
   const key = String(code || "ZIHE01").trim().toUpperCase() || "ZIHE01";
@@ -119,6 +139,40 @@ function cacheFeature(room, msg) {
   }
 }
 
+function sendStatic(req, res) {
+  if (!["GET", "HEAD"].includes(req.method || "GET")) {
+    res.writeHead(405, { "content-type": "text/plain; charset=utf-8" });
+    res.end("Method Not Allowed");
+    return true;
+  }
+  const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+  let pathname = decodeURIComponent(url.pathname);
+  if (pathname === "/") pathname = "/index.html";
+  const requested = path.normalize(path.join(STATIC_ROOT, pathname));
+  if (!requested.startsWith(STATIC_ROOT)) {
+    res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
+    res.end("Forbidden");
+    return true;
+  }
+  let filePath = requested;
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+    filePath = path.join(STATIC_ROOT, "index.html");
+  }
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) return false;
+  const ext = path.extname(filePath).toLowerCase();
+  const headers = {
+    "content-type": mimeTypes[ext] || "application/octet-stream",
+    "cache-control": ext === ".html" ? "no-cache" : "public, max-age=31536000, immutable",
+  };
+  res.writeHead(200, headers);
+  if (req.method === "HEAD") {
+    res.end();
+    return true;
+  }
+  fs.createReadStream(filePath).pipe(res);
+  return true;
+}
+
 function handleReady(room, clientId, player) {
   const current = room.players.get(clientId) || {};
   const readyYear = Number(player.readyYear || current.readyYear || player.year || current.year || 0);
@@ -150,6 +204,7 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ ok: true, rooms: rooms.size }));
     return;
   }
+  if (sendStatic(req, res)) return;
   res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
   res.end("Sect simulator WebSocket room server. Use /ws?room=ROOM_CODE");
 });
