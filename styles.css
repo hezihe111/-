@@ -266,8 +266,9 @@ h1 {
 
 #worldMap {
   width: 100%;
-  height: calc(100vh - 116px);
-  min-height: 560px;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 1040 / 680;
   display: block;
   cursor: crosshair;
   touch-action: manipulation;
@@ -1025,6 +1026,31 @@ h1 {
   margin-top: 2px;
   color: var(--ink);
   font-size: 14px;
+}
+
+.disciple-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.disciple-detail-summary span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(123, 103, 61, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 252, 242, 0.62);
+  color: #4f4738;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.disciple-detail-summary b {
+  color: #263a33;
+  font-size: 12px;
 }
 
 .inventory-list {
@@ -2628,8 +2654,9 @@ h1 {
   }
 
   #worldMap {
-    min-height: 440px;
-    height: 62vh;
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 1040 / 680;
   }
 
   .side-pane {
@@ -2738,8 +2765,9 @@ h1 {
   }
 
   #worldMap {
-    height: 58vh;
-    min-height: 390px;
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 1040 / 680;
   }
 
   .start-panel {
@@ -2990,8 +3018,9 @@ h1 {
   }
 
   #worldMap {
-    height: 56vh;
-    min-height: 360px;
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 1040 / 680;
   }
 
   .stats-grid {
@@ -3754,9 +3783,9 @@ input {
   --card-jade: #6f8f7f;
   --card-ink: #282821;
   position: relative;
-  width: min(100%, 430px);
+  width: min(100%, 500px);
   margin: 0 auto 12px;
-  padding: 14px 15px 18px;
+  padding: 16px 18px 22px;
   border: 0;
   border-radius: 18px;
   background-color: #f4eedc;
@@ -4208,20 +4237,20 @@ input {
 
 .cultivator-card.has-portrait-asset .cultivator-art {
   isolation: isolate;
-  width: min(74%, 286px);
+  width: min(90%, 372px);
   height: auto;
-  aspect-ratio: 1;
-  margin: 18px auto 18px;
+  aspect-ratio: 512 / 720;
+  margin: 14px auto 18px;
   border: 1px solid rgba(183, 154, 90, 0.34);
-  border-radius: 50%;
+  border-radius: 18px;
   background-color: #efe7d3;
   background:
-    radial-gradient(circle at 50% 23%, rgba(255, 252, 242, 0.5), transparent 30%),
-    linear-gradient(180deg, rgba(43, 54, 49, 0.14), rgba(255, 252, 242, 0.24));
+    linear-gradient(180deg, rgba(255, 252, 242, 0.24), rgba(43, 54, 49, 0.12)),
+    linear-gradient(180deg, rgba(239, 231, 211, 0.94), rgba(224, 213, 190, 0.9));
   box-shadow:
-    inset 0 0 0 7px rgba(255, 252, 242, 0.22),
-    inset 0 -20px 36px rgba(116, 95, 56, 0.08),
-    0 10px 20px rgba(24, 32, 28, 0.1);
+    inset 0 0 0 6px rgba(255, 252, 242, 0.22),
+    inset 0 -24px 42px rgba(116, 95, 56, 0.1),
+    0 14px 26px rgba(24, 32, 28, 0.14);
 }
 
 .cultivator-card.has-portrait-asset .cultivator-art::before {
@@ -4229,13 +4258,13 @@ input {
   position: absolute;
   inset: 7px;
   z-index: 1;
-  border-radius: 50%;
+  border-radius: 14px;
   background-color: #efe7d3;
   background:
-    linear-gradient(180deg, rgba(255, 252, 242, 0.16), rgba(255, 252, 242, 0.04) 48%, rgba(119, 102, 64, 0.08)),
-    var(--portrait-image) center 14% / cover no-repeat;
-  filter: saturate(0.9) contrast(0.98) sepia(0.05);
-  transform: scale(1.015);
+    linear-gradient(180deg, rgba(255, 252, 242, 0.08), rgba(255, 252, 242, 0.02) 52%, rgba(119, 102, 64, 0.1)),
+    var(--portrait-image) center 8% / cover no-repeat;
+  filter: saturate(0.96) contrast(1.02) sepia(0.04);
+  transform: scale(1.01);
 }
 
 .cultivator-card.has-portrait-asset .cultivator-art::after {
@@ -4246,9 +4275,8 @@ input {
   pointer-events: none;
   border-radius: inherit;
   background:
-    linear-gradient(90deg, rgba(255, 252, 242, 0.48), transparent 18% 77%, rgba(255, 252, 242, 0.52)),
-    linear-gradient(180deg, rgba(255, 252, 242, 0.66), transparent 28%, rgba(244, 238, 218, 0.78)),
-    radial-gradient(circle at 50% 38%, transparent 0 43%, rgba(241, 234, 211, 0.3) 66%, rgba(241, 234, 211, 0.7) 100%);
+    linear-gradient(90deg, rgba(255, 252, 242, 0.34), transparent 14% 82%, rgba(255, 252, 242, 0.38)),
+    linear-gradient(180deg, rgba(255, 252, 242, 0.42), transparent 22%, rgba(244, 238, 218, 0.32));
   box-shadow: inset 0 0 0 1px rgba(255, 246, 207, 0.38), inset 0 0 30px rgba(132, 112, 70, 0.08);
 }
 
@@ -4259,12 +4287,12 @@ input {
 
 .cultivator-card.has-portrait-asset .cultivator-name-plaque {
   right: -2px;
-  top: 34px;
+  top: 78px;
 }
 
 .cultivator-card.has-portrait-asset .cultivator-stat-grid {
   gap: 10px 16px;
-  margin: 8px 24px 0;
+  margin: 10px 24px 0;
 }
 
 .cultivator-card.has-portrait-asset .cultivator-stat {
@@ -4369,6 +4397,30 @@ input {
 }
 
 @media (max-width: 760px) {
+  .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    width: 100%;
+    overflow-x: hidden;
+    padding: 8px;
+  }
+
+  .world-pane,
+  .side-pane,
+  .topbar,
+  .action-bar {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .world-pane {
+    padding: 8px;
+  }
+
+  .side-pane {
+    grid-template-columns: 1fr;
+  }
+
   .map-tabs {
     top: auto;
     right: auto;
@@ -4408,6 +4460,7 @@ input {
   }
 
   .disciple-cultivation-strip,
+  .disciple-detail-summary,
   .cultivation-summary,
   .cultivation-grid {
     grid-template-columns: 1fr;
@@ -4426,8 +4479,21 @@ input {
     height: 248px;
   }
 
+  .cultivator-card.has-portrait-asset .cultivator-art {
+    width: min(94%, 330px);
+    height: auto;
+    aspect-ratio: 512 / 720;
+    margin: 10px auto 14px;
+    border-radius: 14px;
+  }
+
   .cultivator-sect {
     max-width: calc(100% - 70px);
+  }
+
+  .cultivator-card.has-portrait-asset .cultivator-name-plaque {
+    top: 62px;
+    right: -1px;
   }
 
   .cultivator-name-plaque strong {

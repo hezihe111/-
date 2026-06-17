@@ -101,12 +101,36 @@ function configuredAssetBase() {
   return String(window.SECT_ASSET_BASE || "").trim().replace(/\/+$/, "");
 }
 
+function bundledAssetPath(src) {
+  return String(src || "").replace(/^\.?\//, "");
+}
+
+function assetVersion() {
+  return String(window.SECT_ASSET_VERSION || "20260617-mobile-artfix").trim();
+}
+
+function withAssetVersion(url) {
+  const version = assetVersion();
+  if (!version || /[?&]v=/.test(url)) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}v=${encodeURIComponent(version)}`;
+}
+
 function assetUrl(src) {
   const raw = String(src || "");
   if (/^(https?:)?\/\//.test(raw) || raw.startsWith("data:") || raw.startsWith("blob:")) return raw;
-  const clean = raw.replace(/^\.?\//, "");
+  const clean = bundledAssetPath(raw);
   const base = configuredAssetBase();
-  return base ? `${base}/${clean}` : `./${clean}`;
+  if (base) return withAssetVersion(`${base}/${clean}`);
+  const local = window.location.protocol === "file:" ? `./${clean}` : `/${clean}`;
+  return withAssetVersion(local);
+}
+
+function assetFallbackUrl(src) {
+  const raw = String(src || "");
+  if (/^(https?:)?\/\//.test(raw) || raw.startsWith("data:") || raw.startsWith("blob:")) return raw;
+  const clean = bundledAssetPath(raw);
+  const local = window.location.protocol === "file:" ? `./${clean}` : `/${clean}`;
+  return withAssetVersion(local);
 }
 
 function cssAssetUrl(src) {
@@ -120,6 +144,12 @@ function applyAssetCssVars() {
 
 function loadCanvasAsset(src) {
   const image = new Image();
+  image.onerror = () => {
+    if (image.dataset.fallbackTried === "1") return;
+    image.dataset.fallbackTried = "1";
+    const fallback = assetFallbackUrl(src);
+    image.src = fallback;
+  };
   image.src = assetUrl(src);
   image.onload = () => setTimeout(() => {
     try {
@@ -13186,24 +13216,20 @@ function renderDiscipleDetail() {
   }
   els.discipleDetailTitle.textContent = d.name;
   const bonds = discipleBonds(d);
+  const traitText = d.traits.map((t) => `${t.name}（${t.note}）`).join("、") || "暂无";
+  const bondText = bonds.length ? bonds.map(bondLabel).join("；") : "暂无";
   els.discipleDetail.innerHTML = `
     ${discipleProfileCardHtml(d)}
-    <div class="detail-grid">
-      <span>境界<strong>${realms[d.realm]} ${d.exp}/100</strong></span>
-      <span>资质<strong>${d.aptitude}</strong></span>
-      <span>成长<strong>${d.grow}</strong></span>
-      <span>心性<strong>${d.temper}</strong></span>
-      <span>体魄<strong>${d.hp}</strong></span>
-      <span>攻伐<strong>${d.atk}</strong></span>
-      <span>守御<strong>${d.def}</strong></span>
-      <span>身法<strong>${d.speed}</strong></span>
-      <span>阵道<strong>Lv.${d.arrayLevel || 0}</strong></span>
-      <span>心魔<strong>${d.mind || 0}/100</strong></span>
-      <span>寿元<strong>${d.age || 18}/${d.lifespan || discipleLifeExpectancy(d)}</strong></span>
-      <span>委派<strong>${delegationTasks.find((task) => task.id === d.assignment)?.name || "无"}</strong></span>
+    <div class="disciple-detail-summary">
+      <span><b>状态</b>${tradeEscape(d.elder ? `${d.elderRole} / ${d.status}` : d.status)}</span>
+      <span><b>战斗</b>体${d.hp} 攻${d.atk} 御${d.def} 速${d.speed}</span>
+      <span><b>阵道</b>Lv.${d.arrayLevel || 0}</span>
+      <span><b>心魔</b>${d.mind || 0}/100</span>
+      <span><b>寿元</b>${d.age || 18}/${d.lifespan || discipleLifeExpectancy(d)}</span>
+      <span><b>委派</b>${tradeEscape(delegationTasks.find((task) => task.id === d.assignment)?.name || "无")}</span>
+      <span><b>词条</b>${tradeEscape(traitText)}</span>
+      <span><b>羁绊</b>${tradeEscape(bondText)}</span>
     </div>
-    <p>当前状态：${d.elder ? `${d.elderRole} / ` : ""}${d.status}。词条：${d.traits.map((t) => `${t.name}（${t.note}）`).join("、")}。</p>
-    <p>羁绊：${bonds.length ? bonds.map(bondLabel).join("；") : "暂无"}。</p>
   `;
   const heart = daoHeartOf(d);
   const con = constitutionOf(d);
