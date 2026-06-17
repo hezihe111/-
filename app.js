@@ -106,7 +106,7 @@ function bundledAssetPath(src) {
 }
 
 function assetVersion() {
-  return String(window.SECT_ASSET_VERSION || "20260617-mobile-artfix").trim();
+  return String(window.SECT_ASSET_VERSION || "20260617-art-imgfix").trim();
 }
 
 function withAssetVersion(url) {
@@ -121,8 +121,11 @@ function assetUrl(src) {
   const clean = bundledAssetPath(raw);
   const base = configuredAssetBase();
   if (base) return withAssetVersion(`${base}/${clean}`);
-  const local = window.location.protocol === "file:" ? `./${clean}` : `/${clean}`;
-  return withAssetVersion(local);
+  try {
+    return withAssetVersion(new URL(clean, document.baseURI).href);
+  } catch {
+    return withAssetVersion(`./${clean}`);
+  }
 }
 
 function assetFallbackUrl(src) {
@@ -162,6 +165,13 @@ function loadCanvasAsset(src) {
 }
 
 applyAssetCssVars();
+
+document.addEventListener("error", (evt) => {
+  const img = evt.target;
+  if (!(img instanceof HTMLImageElement) || !img.dataset.fallbackSrc || img.dataset.fallbackTried === "1") return;
+  img.dataset.fallbackTried = "1";
+  img.src = img.dataset.fallbackSrc;
+}, true);
 
 const mapBackgroundImages = {
   central: loadCanvasAsset("./assets/maps/map-xianshu.webp"),
@@ -6234,6 +6244,7 @@ function disciplePortraitHtml(d, size = "") {
   const style = [`--portrait-hue:${hue}`];
   if (asset) style.push(`--portrait-image:${cssAssetUrl(asset)}`);
   return `<div class="portrait-slot ${size} portrait-${portraitStyleOf(d)} ${asset ? "has-portrait-asset" : ""}" style="${style.join(";")}" title="${tradeEscape(d?.portraitId || "默认立绘槽")}">
+    ${asset ? `<img class="portrait-slot-img" src="${tradeEscape(assetUrl(asset))}" data-fallback-src="${tradeEscape(assetFallbackUrl(asset))}" alt="${tradeEscape(d?.name || "弟子头像")}" loading="lazy" decoding="async">` : ""}
     <span>${tradeEscape((d?.name || "?").slice(0, 1))}</span>
     <i></i>
   </div>`;
@@ -6278,6 +6289,7 @@ function discipleProfileCardHtml(d) {
           <strong>${tradeEscape(sectName)}</strong>
         </div>
         <div class="cultivator-art">
+          ${asset ? `<img class="cultivator-portrait-img" src="${tradeEscape(assetUrl(asset))}" data-fallback-src="${tradeEscape(assetFallbackUrl(asset))}" alt="${tradeEscape(d.name)}立绘" loading="eager" decoding="async">` : ""}
           <div class="ink-orbit" aria-hidden="true"></div>
           <div class="ink-mountains" aria-hidden="true"></div>
           <svg class="cultivator-silhouette" viewBox="0 0 220 300" aria-hidden="true" focusable="false">
