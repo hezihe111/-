@@ -115,6 +115,7 @@ function cssAssetUrl(src) {
 
 function applyAssetCssVars() {
   document.documentElement.style.setProperty("--ui-map-bg", cssAssetUrl("assets/maps/map-xianshu.webp"));
+  document.documentElement.style.setProperty("--disciple-card-frame", cssAssetUrl("assets/ui/disciple-card-frame-clean.webp"));
 }
 
 function loadCanvasAsset(src) {
@@ -851,7 +852,7 @@ const resourceUpgradeCatalog = [
 ];
 const councilTopics = [
   { key: "peace", name: "止戈令", text: "未来三年敌宗偷袭概率下降，但主动掠夺收益也会略降。" },
-  { key: "relic", name: "开秘境", text: "大地图额外刷新机缘，世界奇遇更容易提前出现。" },
+  { key: "relic", name: "开秘境", text: "大地图更容易显现独立分层秘境，世界奇遇更容易提前出现。" },
   { key: "trade", name: "商税令", text: "市集价格波动更大，擅长交易的宗门能获利，判断失误也更伤。" },
   { key: "frontier", name: "边境戍守", text: "本宗资源点防守提高，仙盟要求各宗投入资源建设。" },
   { key: "crusade", name: "讨伐强宗", text: "削弱最强敌宗的底蕴与态度，声誉提高但会增加敌意。" },
@@ -1054,6 +1055,12 @@ const secretRealmRooms = [
   { id: "trial", name: "问心阶", risk: 28, reward: "mind", text: "风险高，但可压心魔、涨道心。" },
 ];
 
+const secretRealmTactics = [
+  { id: "scout", name: "探查", stat: "luck", risk: -8, rewardRate: 0.66, text: "先辨气机，收益较低但能保命。" },
+  { id: "break", name: "破阵", stat: "aptitude", risk: 2, rewardRate: 1, text: "按阵理推进，收益与风险均衡。" },
+  { id: "force", name: "强取", stat: "atk", risk: 13, rewardRate: 1.28, text: "硬闯禁制，奖励上浮但危险陡增。" },
+];
+
 const portraitAssetMap = {
   "male-01": "assets/portraits/male-01.webp",
   "male-02": "assets/portraits/male-02.webp",
@@ -1184,6 +1191,7 @@ const state = {
   rivals: [],
   resources: [],
   events: [],
+  secretRealms: [],
   particles: [],
 };
 window.__cultivationStateReady = true;
@@ -1559,6 +1567,7 @@ function initWorld() {
     { id: "spirit-2", type: "resource", kind: "spring", name: "星髓灵穴", x: 824, y: 112, value: 86, owner: null, yields: { arrayMats: 2, affixLock: 1 } },
   ];
   state.events = createOpportunityNodes(9, "init");
+  state.secretRealms = [];
   showStartScreen();
   showStartMenuPanel();
   els.startPanel.classList.remove("is-collapsed");
@@ -1608,6 +1617,60 @@ function addOpportunityNodes(count, source = "wild") {
   state.events = state.events
     .sort((a, b) => b.value - a.value || b.ttl - a.ttl)
     .slice(0, 18);
+}
+
+const secretRealmNodeTemplates = [
+  ["三叠玉阙", "阙", "玉阶悬浮，阵纹层叠，越深处越容易惊动守境残灵。"],
+  ["雾锁丹丘", "雾", "丹霞入雾，药香暗藏，适合谨慎试探而非强取。"],
+  ["玄门残境", "玄", "古宗遗留的小界，残阵密集，破阵能力会明显影响结果。"],
+  ["星砂沉宫", "星", "星砂铺地，灵器碎片散落，危险会随探索层数迅速升高。"],
+  ["青冥镜界", "镜", "镜湖映心，问心房间较多，心性不稳者容易受挫。"],
+  ["赤霞兵藏", "兵", "旧日兵藏沉在赤霞之下，装备收益较高，但守藏杀阵凶险。"],
+  ["灵潮暗谷", "潮", "灵潮周期不定，进退选择会影响最终收益与伤势。"],
+  ["无相石窟", "窟", "石窟路径不断变化，气运与身法能降低迷失风险。"],
+];
+
+function createSecretRealmNode(source = "year") {
+  const [name, glyph, text] = pick(secretRealmNodeTemplates);
+  const value = rand(46, 86);
+  return {
+    id: `secret-${source}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    type: "secretRealm",
+    name,
+    glyph,
+    text,
+    x: rand(96, 948),
+    y: rand(86, 600),
+    value,
+    danger: rand(34, 68),
+    ttl: rand(2, 4),
+    layers: 3,
+    resolving: false,
+  };
+}
+
+function maybeSpawnSecretRealm(force = false, source = "year") {
+  state.secretRealms = Array.isArray(state.secretRealms) ? state.secretRealms : [];
+  if (!state.founded) return null;
+  const maxRealms = state.sect?.buildings?.scoutTower >= 2 ? 2 : 1;
+  state.secretRealms = state.secretRealms.filter((realm) => realm.ttl > 0 && !realm.expired).slice(0, maxRealms);
+  if (!force && state.secretRealms.length >= maxRealms) return null;
+  const scoutBonus = Math.min(0.05, (state.sect?.buildings?.scoutTower || 0) * 0.018);
+  const relicBonus = state.councilEdict?.key === "relic" ? 0.05 : 0;
+  const chance = force ? 1 : 0.105 + scoutBonus + relicBonus;
+  if (Math.random() > chance) return null;
+  const realm = createSecretRealmNode(source);
+  state.secretRealms.push(realm);
+  state.secretRealms = state.secretRealms.slice(-maxRealms);
+  log(`山野灵机暗涌，${realm.name}在地图上短暂显现。`, "good");
+  return realm;
+}
+
+function refreshSecretRealms() {
+  state.secretRealms = Array.isArray(state.secretRealms) ? state.secretRealms : [];
+  for (const realm of state.secretRealms) realm.ttl -= 1;
+  state.secretRealms = state.secretRealms.filter((realm) => realm.ttl > 0 && !realm.resolving);
+  maybeSpawnSecretRealm(false, "year");
 }
 
 function createDisciple(options = {}) {
@@ -2170,6 +2233,7 @@ function ensureSectDefaults() {
   state.currentMap = state.currentMap || "central";
   state.remotePlayers = Array.isArray(state.remotePlayers) ? state.remotePlayers : [];
   state.readyPlayers = Array.isArray(state.readyPlayers) ? state.readyPlayers : [];
+  state.secretRealms = Array.isArray(state.secretRealms) ? state.secretRealms : [];
   state.roomBlockedByForbidden = state.roomBlockedByForbidden || null;
   state.roomAlliances = state.roomAlliances || {};
   state.roomAllianceTrust = state.roomAllianceTrust || {};
@@ -4181,6 +4245,7 @@ function createSharedWorldSnapshot() {
     resources: state.resources,
     rivals: state.rivals,
     events: state.events,
+    secretRealms: state.secretRealms,
     market: state.market,
     frontier: state.frontier,
     worldCrisis: state.worldCrisis,
@@ -4204,6 +4269,7 @@ function applySharedWorldSnapshot(snapshot) {
   if (Array.isArray(snapshot.resources)) state.resources = snapshot.resources;
   if (Array.isArray(snapshot.rivals)) state.rivals = snapshot.rivals;
   if (Array.isArray(snapshot.events)) state.events = snapshot.events;
+  if (Array.isArray(snapshot.secretRealms)) state.secretRealms = snapshot.secretRealms;
   if (snapshot.market) state.market = snapshot.market;
   if (snapshot.frontier) state.frontier = snapshot.frontier;
   if (Number(snapshot.year) > state.year) state.year = Number(snapshot.year);
@@ -6901,6 +6967,7 @@ function resolveYearAdvance() {
   if (!worldAdventureDue && Math.random() < 0.25) triggerWorldEvent();
   if (Math.random() < state.sect.risk / (state.councilEdict?.key === "peace" || state.yearlyBoon?.key === "peaceOmen" ? 700 : 400)) rivalHarass();
   refreshEvents();
+  refreshSecretRealms();
   const targetOpportunityCount = clamp(8 + Math.floor(state.year / 4) + state.sect.buildings.scoutTower, 8, 15);
   if (state.events.length < targetOpportunityCount) addOpportunityNodes(targetOpportunityCount - state.events.length, "year");
   state.yearlyBoon = null;
@@ -7210,7 +7277,8 @@ function resolveCouncilTopic(topic, afterClose = null, ballot = [topic], forceLo
     dip.infamy = Math.max(0, dip.infamy - 5);
   }
   if (topic.key === "relic") {
-    addOpportunityNodes(5, "council");
+    addOpportunityNodes(2, "council");
+    maybeSpawnSecretRealm(true, "council");
     state.nextWorldAdventureYear = Math.min(state.nextWorldAdventureYear, state.year + rand(2, 4));
     state.sect.prestige += 20;
   }
@@ -10386,12 +10454,16 @@ function exploreEvent(event) {
   els.modalCloseBtn.onclick = cancelExplore;
 }
 
-function openLayeredSecretRealm(event) {
-  if (!state.founded || !event || event.resolving) return;
+function findSecretRealmNode(id) {
+  return (state.secretRealms || []).find((item) => item.id === id) || state.events.find((item) => item.id === id);
+}
+
+function openLayeredSecretRealm(realm) {
+  if (!state.founded || !realm || realm.resolving) return;
   if (!spendAction(1, "分层秘境")) return;
-  event.resolving = true;
+  realm.resolving = true;
   const cancelSecretRealm = () => {
-    event.resolving = false;
+    realm.resolving = false;
     state.actionPoints += 1;
     closeModal();
     render();
@@ -10401,9 +10473,16 @@ function openLayeredSecretRealm(event) {
     .sort((a, b) => discipleBattleScore(b) - discipleBattleScore(a));
   showModal({
     kicker: "分层秘境",
-    title: `${event.name}：选择主探弟子`,
+    title: `${realm.name}：选择主探弟子`,
     body: `
-      <p>分层秘境会连续探索三层，奖励更明确，但中途风险会累积。若提前撤离，可保留已获得奖励。</p>
+      <div class="secret-realm-ui is-pick">
+        <div class="secret-realm-banner">
+          <span>低概率显现的小界秘境</span>
+          <strong>${tradeEscape(realm.name)}</strong>
+          <em>危险 ${Math.round(realm.danger || 0)} · 剩余 ${realm.ttl || 1} 年 · 三层探索</em>
+        </div>
+        <p>秘境已从普通机缘中独立。每层需在不同房间与处理方式中选择，探查安全但收益低，强取收益高但容易负伤或坍塌。撤离可保留已取得奖励。</p>
+      </div>
       <div class="adventure-roster">
         ${roster.map((d) => `<article class="adventure-candidate">
           <div><strong>${d.name}</strong><span>${realms[d.realm]} / 战力 ${Math.round(discipleBattleScore(d))} / 气运 ${d.luck}</span></div>
@@ -10418,15 +10497,24 @@ function openLayeredSecretRealm(event) {
     btn.addEventListener("click", () => {
       const d = state.sect.disciples.find((item) => item.id === btn.dataset.id);
       if (!d) return;
-      renderSecretRealmLayer({ eventId: event.id, eventName: event.name, discipleId: d.id, layer: 1, danger: Math.max(8, Math.floor(event.value / 8)), rewards: [] });
+      renderSecretRealmLayer({
+        realmId: realm.id,
+        eventId: realm.id,
+        realmName: realm.name,
+        eventName: realm.name,
+        discipleId: d.id,
+        layer: 1,
+        danger: Math.max(18, Math.floor((realm.danger || realm.value || 48) * 0.55)),
+        rewards: [],
+      });
     });
   }
 }
 
 function renderSecretRealmLayer(run) {
   const d = state.sect.disciples.find((item) => item.id === run.discipleId);
-  const event = state.events.find((item) => item.id === run.eventId);
-  if (!d || !event) {
+  const realm = findSecretRealmNode(run.realmId || run.eventId);
+  if (!d || !realm) {
     closeModal();
     render();
     return;
@@ -10438,69 +10526,126 @@ function renderSecretRealmLayer(run) {
   }
   showModal({
     kicker: "分层秘境",
-    title: `${run.eventName} 第 ${run.layer}/3 层`,
+    title: `${run.realmName || run.eventName} 第 ${run.layer}/${realm.layers || 3} 层`,
     body: `
-      <p>${d.name}正在深入秘境。当前危险 ${run.danger}，已获：${run.rewards.length ? run.rewards.join("、") : "暂无"}。</p>
-      <div class="system-grid">
-        ${choices.map((room) => `<article class="system-card"><strong>${room.name}</strong><span>${room.text}</span><em>风险 +${room.risk}</em></article>`).join("")}
+      <div class="secret-realm-ui">
+        <div class="secret-realm-banner">
+          <span>${tradeEscape(realm.text || "古界灵雾涌动，残阵忽明忽暗。")}</span>
+          <strong>${tradeEscape(d.name)}正在深入第 ${run.layer} 层</strong>
+          <em>当前危险 ${Math.round(run.danger || 0)} · 已获 ${run.rewards.length ? tradeEscape(run.rewards.join("、")) : "暂无"}</em>
+        </div>
+        <div class="secret-realm-meter"><span style="width:${clamp(run.danger || 0, 0, 100)}%"></span></div>
+        <div class="secret-room-grid">
+          ${choices.map((room) => `<article class="secret-room-card">
+            <strong>${tradeEscape(room.name)}</strong>
+            <span>${tradeEscape(room.text)}</span>
+            <em>基础风险 +${room.risk}</em>
+            <div class="secret-room-actions">
+              ${secretRealmTactics.map((tactic) => `<button class="secret-room-action" data-room="${room.id}" data-tactic="${tactic.id}" title="${tradeEscape(tactic.text)}">${tactic.name}</button>`).join("")}
+            </div>
+          </article>`).join("")}
+        </div>
       </div>
     `,
-    actions: choices.map((room) => ({
-      label: room.name,
-      handler: () => resolveSecretRealmRoom(run, room),
-    })).concat([
-      { label: "带着奖励撤离", handler: () => finishSecretRealmRun(run, false) },
-    ]),
+    actions: [{ label: "带着奖励撤离", handler: () => finishSecretRealmRun(run, false) }],
   });
   els.modalCloseBtn.onclick = () => finishSecretRealmRun(run, false);
+  for (const btn of els.modalBody.querySelectorAll(".secret-room-action")) {
+    btn.addEventListener("click", () => {
+      const room = choices.find((item) => item.id === btn.dataset.room);
+      const tactic = secretRealmTactics.find((item) => item.id === btn.dataset.tactic);
+      if (room && tactic) resolveSecretRealmRoom(run, room, tactic);
+    });
+  }
 }
 
-function resolveSecretRealmRoom(run, room) {
+function resolveSecretRealmRoom(run, room, tactic = secretRealmTactics[1]) {
   const d = state.sect.disciples.find((item) => item.id === run.discipleId);
-  if (!d) return;
-  const risk = run.danger + room.risk + run.layer * 8;
-  const score = d.luck + d.speed * 0.75 + d.aptitude * 0.35 + d.realm * 18 + rand(1, 100);
+  const realm = findSecretRealmNode(run.realmId || run.eventId);
+  if (!d || !realm) return;
+  const statValue = Number(d[tactic.stat] || d.luck || 0);
+  const risk = Math.max(12, Math.round((realm.danger || 42) * 0.45 + run.danger + room.risk + tactic.risk + run.layer * 8));
+  const score = statValue * 0.78 + d.luck * 0.42 + d.speed * 0.25 + d.temper * 0.24 + d.realm * 16 + rand(1, 70);
+  const success = score >= risk;
   const rewards = [];
-  if (score < risk) {
-    const loss = rand(5, 16) + run.layer * 4;
-    d.hp = Math.max(16, d.hp - loss);
-    adjustMind(d, 4 + run.layer, "秘境受挫");
-    rewards.push(`负伤 -${loss}`);
+  if (!success) {
+    const severe = score + 22 < risk;
+    const loss = rand(8, 20) + run.layer * 5 + Math.max(0, Math.floor((risk - score) / 9));
+    d.hp = Math.max(8, d.hp - loss);
+    adjustMind(d, 5 + run.layer * 2 + (severe ? 5 : 0), "秘境受挫");
+    rewards.push(`${tactic.name}${room.name}失败，气血 -${loss}`);
+    run.rewards.push(...rewards);
+    run.danger = clamp(Math.round((run.danger || 0) + 12 + Math.max(0, room.risk + tactic.risk) * 0.35), 0, 110);
+    if (severe || d.hp <= 12 || run.danger >= 100) {
+      finishSecretRealmRun(run, false, severe ? "秘境禁制坍塌，被迫撤离" : "弟子重伤，被迫撤离");
+      return;
+    }
   } else if (room.reward === "gear") {
-    const item = pick(equipmentItemIds);
-    const quality = clamp(Math.floor(run.layer / 2) + rand(1, 3), 1, 4);
-    addItem(item, 1, quality);
-    rewards.push(`${gearTierName(quality)}${itemCatalog[item]?.name || item}`);
+    const quality = clamp(Math.floor(((realm.value || 50) - 40) / 24) + (run.layer >= 3 ? 1 : 0) + (Math.random() < 0.15 * tactic.rewardRate ? 1 : 0), 0, 3);
+    if (Math.random() < clamp(0.34 + run.layer * 0.08 + (tactic.rewardRate - 1) * 0.25, 0.26, 0.68)) {
+      const item = pick(equipmentItemIds);
+      addItem(item, 1, quality);
+      rewards.push(`${tactic.name}得${gearTierName(quality)}${itemCatalog[item]?.name || item}`);
+    } else {
+      addItem("refineStone", 1, 0);
+      state.sect.forgingMats += 1;
+      rewards.push("器材 +1，洗练灵砂 +1");
+    }
   } else if (room.reward === "method") {
-    const item = pick(methodItemIds);
-    const quality = clamp(Math.floor(run.layer / 2) + rand(1, 3), 1, 4);
-    addItem(item, 1, quality);
-    d.exp += 8 + run.layer * 3;
-    rewards.push(`${gearTierName(quality)}${itemCatalog[item]?.name || item}`);
+    const quality = clamp(Math.floor(((realm.value || 50) - 40) / 26) + (run.layer >= 3 ? 1 : 0) + (Math.random() < 0.12 * tactic.rewardRate ? 1 : 0), 0, 3);
+    if (Math.random() < clamp(0.30 + run.layer * 0.07 + (tactic.rewardRate - 1) * 0.2, 0.22, 0.58)) {
+      const item = pick(methodItemIds);
+      addItem(item, 1, quality);
+      rewards.push(`${tactic.name}悟${gearTierName(quality)}${itemCatalog[item]?.name || item}`);
+    } else {
+      const insight = 10 + run.layer * 4;
+      state.sect.insight += insight;
+      rewards.push(`参悟 +${insight}`);
+    }
+    d.exp += 4 + run.layer * 2;
   } else if (room.reward === "alchemy") {
-    state.sect.alchemyMats += 1 + run.layer;
-    state.sect.grain += 30 + run.layer * 20;
-    rewards.push(`丹材 +${1 + run.layer}`);
+    const mats = 1 + (run.layer >= 3 ? 1 : 0) + (tactic.id === "force" && Math.random() < 0.35 ? 1 : 0);
+    state.sect.alchemyMats += mats;
+    state.sect.grain += 18 + run.layer * 12;
+    rewards.push(`丹材 +${mats}，粮草 +${18 + run.layer * 12}`);
   } else {
-    d.mind = Math.max(0, (d.mind || 0) - 8 - run.layer * 2);
-    state.sect.insight += 18 + run.layer * 8;
-    rewards.push(`参悟 +${18 + run.layer * 8}`);
+    const insight = 8 + run.layer * 5;
+    d.mind = Math.max(0, (d.mind || 0) - 5 - run.layer);
+    state.sect.insight += insight;
+    rewards.push(`问心成功，参悟 +${insight}`);
   }
-  run.rewards.push(...rewards);
-  run.danger += Math.floor(room.risk * 0.72);
-  if (run.layer >= 3) finishSecretRealmRun(run, true);
+  if (success) {
+    gainSpecializationExp(d, 3 + run.layer, "分层秘境");
+    run.rewards.push(...rewards);
+    run.danger = clamp(Math.round((run.danger || 0) + Math.max(4, (room.risk + tactic.risk) * 0.48)), 0, 110);
+  }
+  if (run.layer >= (realm.layers || 3)) finishSecretRealmRun(run, success, success ? "" : "未能突破最终禁制");
   else renderSecretRealmLayer({ ...run, layer: run.layer + 1 });
 }
 
-function finishSecretRealmRun(run, cleared) {
-  const event = state.events.find((item) => item.id === run.eventId);
-  if (event) state.events = state.events.filter((item) => item.id !== event.id);
+function finishSecretRealmRun(run, cleared, reason = "") {
+  const id = run.realmId || run.eventId;
+  const realm = findSecretRealmNode(id);
+  if (realm) {
+    state.secretRealms = (state.secretRealms || []).filter((item) => item.id !== realm.id);
+    state.events = state.events.filter((item) => item.id !== realm.id);
+  }
   const d = state.sect.disciples.find((item) => item.id === run.discipleId);
   if (d) {
-    d.exp += cleared ? 18 : 7;
+    d.exp += cleared ? 12 : 4;
     d.status = cleared ? "通秘境三层" : "秘境撤离";
   }
-  log(`分层秘境${cleared ? "完成" : "撤离"}：${run.rewards.length ? run.rewards.join("、") : "未取得奖励"}。`, cleared ? "good" : "");
+  if (cleared) {
+    state.sect.prestige += 6;
+    state.sect.insight += 8;
+    run.rewards.push("声望 +6", "参悟 +8");
+    if (Math.random() < 0.35) {
+      addItem("affixLock", 1, 0);
+      run.rewards.push("定纹玉扣 +1");
+    }
+  }
+  log(`分层秘境${cleared ? "完成" : "撤离"}：${reason ? `${reason}；` : ""}${run.rewards.length ? run.rewards.join("、") : "未取得奖励"}。`, cleared ? "good" : "warn");
+  if (state.multiplayer && state.roomConnected && state.roomHost) syncSharedWorld(true);
   closeModal();
   render();
 }
@@ -11939,6 +12084,89 @@ function resourceIconKey(node) {
   return "spring";
 }
 
+function siteProfile(site) {
+  const aura = Number(site?.aura || 0);
+  const resource = Number(site?.resource || 0);
+  const risk = Number(site?.risk || 0);
+  if (risk >= 82 && resource >= 78) return { key: "wild", name: "险富边地", short: "险富", glyph: "险", color: "#9f3d35", accent: "#d89b51", text: "高风险高资源，适合掠夺、防守和边境路线。" };
+  if (aura >= 88 && risk >= 70) return { key: "mystic", name: "高灵险境", short: "险灵", glyph: "玄", color: "#7f4eaa", accent: "#b9d8d0", text: "灵气极盛但压力很高，适合功法、奇遇和高压养成。" };
+  if (aura >= 84) return { key: "aura", name: "灵脉仙山", short: "灵脉", glyph: "灵", color: "#2f6690", accent: "#b7d2c4", text: "灵气优势明显，弟子成长与高境界培养更顺。" };
+  if (resource >= 86 && risk <= 58) return { key: "trade", name: "富饶商路", short: "商路", glyph: "商", color: "#aa762a", accent: "#e3ca82", text: "资源和商路强，适合稳健经营、市集和炼制。" };
+  if (resource >= 82) return { key: "resource", name: "资源宝地", short: "宝地", glyph: "富", color: "#8b6b2f", accent: "#e1be64", text: "物产充足，前期经济与材料压力更小。" };
+  if (risk >= 76) return { key: "danger", name: "凶险战场", short: "险地", glyph: "战", color: "#9f3d35", accent: "#efb08b", text: "冲突频繁，适合激进扩张、掠夺和战斗路线。" };
+  return { key: "balanced", name: "均衡山门", short: "均衡", glyph: "稳", color: "#286c58", accent: "#b7d2c4", text: "三项较平衡，适合正常经营和新手开局。" };
+}
+
+function drawSiteStatPill(x, y, label, value, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  roundRect(-18, -7, 36, 14, 7);
+  ctx.fillStyle = "rgba(255, 252, 242, 0.86)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(123, 103, 61, 0.28)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.font = "900 9px Microsoft YaHei";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(`${label}${Math.round(value)}`, 0, 0);
+  ctx.restore();
+}
+
+function drawSiteNode(site, selected = false) {
+  const profile = siteProfile(site);
+  const glow = selected ? 1.08 : 1;
+  ctx.save();
+  ctx.fillStyle = `${profile.color}${selected ? "32" : "18"}`;
+  ctx.beginPath();
+  ctx.arc(0, 0, 23 * glow, 0, Math.PI * 2);
+  ctx.fill();
+  drawMapArtIcon("site", profile.color, "址", selected ? 48 : 42);
+
+  ctx.fillStyle = profile.color;
+  ctx.strokeStyle = "rgba(255, 246, 207, 0.92)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(17, -17, 9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#fff8df";
+  ctx.font = "900 10px Microsoft YaHei";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(profile.glyph, 17, -16);
+
+  if (selected) {
+    ctx.strokeStyle = profile.accent;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 28, -Math.PI * 0.75, Math.PI * 1.25);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function renderSiteDetail(site) {
+  const profile = siteProfile(site);
+  const score = Math.round(site.aura * 0.42 + site.resource * 0.34 + (100 - site.risk) * 0.24);
+  return `
+    <div class="site-choice-card site-${profile.key}">
+      <div class="site-choice-head">
+        <i>${profile.glyph}</i>
+        <div><strong>${tradeEscape(site.name)}</strong><span>${profile.name}｜${tradeEscape(profile.text)}</span></div>
+        <b>${score}</b>
+      </div>
+      <p>${tradeEscape(site.text)}</p>
+      <div class="site-score-grid">
+        <span style="--value:${site.aura}%"><em>灵气</em><strong>${site.aura}</strong><i></i></span>
+        <span style="--value:${site.resource}%"><em>资源</em><strong>${site.resource}</strong><i></i></span>
+        <span style="--value:${site.risk}%"><em>风险</em><strong>${site.risk}</strong><i></i></span>
+      </div>
+    </div>
+  `;
+}
+
 function drawNode(node, view = node) {
   const selected = state.selected && state.selected.id === node.id;
   ctx.save();
@@ -11955,7 +12183,7 @@ function drawNode(node, view = node) {
   }
 
   if (node.type === "site") {
-    drawMapArtIcon("site", "#2f6f58", "址", 50);
+    drawSiteNode(node, selected);
   } else if (node.type === "rival") {
     drawMapArtIcon(node.alive === false ? "forbidden" : node.alliance ? "alliance" : "rival", node.alive === false ? "#6d6257" : node.alliance ? "#2f6690" : "#9f3d35", node.alive === false ? "墟" : node.name.replace("遗址·", "").slice(0, 1), 52);
   } else if (node.type === "remotePlayer") {
@@ -11970,7 +12198,13 @@ function drawNode(node, view = node) {
     ctx.arc(0, 0, 26 * pulse, 0, Math.PI * 2);
     ctx.fill();
     drawMapArtIcon("event", node.value > 92 ? "#9f3d35" : "#aa762a", node.glyph || "缘", 48);
-    addAction("分层秘境", () => openLayeredSecretRealm(node), !state.founded || state.actionPoints < 1);
+  } else if (node.type === "secretRealm") {
+    const pulse = 1 + Math.sin(Date.now() / 240) * 0.12;
+    ctx.fillStyle = "rgba(95, 69, 111, 0.24)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 30 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    drawMapArtIcon("forbidden", "#5f456f", node.glyph || "境", 52);
   } else if (node.type === "player") {
     drawMapArtIcon("player", "#286c58", node.icon || "宗", 58);
   } else if (node.type === "frontierDungeon") {
@@ -12004,7 +12238,8 @@ function drawNode(node, view = node) {
     drawMapArtIcon("site", "#2f6690", "锁", 54);
   }
 
-  drawMapNodeLabel(node.name, node.type === "frontierBoss" ? 38 : 28);
+  const label = node.type === "site" ? node.name : node.name;
+  drawMapNodeLabel(label, node.type === "site" ? 30 : node.type === "frontierBoss" ? 38 : 28);
   ctx.restore();
 }
 
@@ -12724,7 +12959,7 @@ const guidePages = [
   {
     title: "分层秘境、暗线与仙盟榜单",
     body: `
-      <p><strong>分层秘境</strong>是普通机缘的进阶探索。点击地图机缘后可选择“三层秘境”，连续探索遗宝、残经、灵药和问心房间，奖励更明确但危险会累积。</p>
+      <p><strong>分层秘境</strong>已从普通机缘中独立出来，会以较低概率短暂出现在大地图上。进入后连续探索遗宝、残经、灵药和问心房间，每层还要选择探查、破阵或强取，奖励更明确但负伤和坍塌风险会累积。</p>
       <p><strong>情报暗线</strong>在观星楼或情报天命下可用。安插暗线能削弱强宗底蕴、揭示风险；反谍清查能提高影网和护山稳定度。</p>
       <p><strong>仙盟榜单</strong>按战力、声望和灵石底蕴排序，联机玩家也会进入榜单。每十年结算一次排名奖励。</p>
       <p><strong>世界事件链</strong>会跨数年推进，例如魔门复苏、灵脉崩裂和仙盟内争。它们会改变心魔、资源、情报或声望环境。</p>
@@ -12830,8 +13065,8 @@ const tutorialSteps = [
     id: "secretRealmIntel",
     maxYear: 8,
     selector: ".map-wrap",
-    title: "机缘可进分层秘境",
-    text: "地图机缘除了普通探索，还能选择分层秘境，连续三层获得更明确的装备、功法和材料奖励。观星楼解锁后也可以查看暗线与榜单。",
+    title: "地图会低概率显现分层秘境",
+    text: "分层秘境不再挂在普通机缘里。它会短暂出现在地图上，进入后按层选择房间和处理方式；探查稳、破阵均衡、强取高收益高风险。",
     condition: () => state.founded && state.events?.length > 0,
   },
   {
@@ -13276,9 +13511,9 @@ function renderTarget() {
   } else if (node.type === "overseasLocked") {
     els.targetDetail.textContent = "海外仙洲暂未开放。这个区域后续适合扩展海贸、散仙岛、跨海远征、外域宗门和全服事件。";
   } else if (node.type === "site") {
-    const siteSummary = `${node.text} 灵气 ${node.aura}，资源 ${node.resource}，风险 ${node.risk}。`;
-    els.targetDetail.textContent = siteSummary;
-    els.hint.textContent = `选址：${node.name}｜灵气 ${node.aura}｜资源 ${node.resource}｜风险 ${node.risk}`;
+    const profile = siteProfile(node);
+    els.targetDetail.innerHTML = renderSiteDetail(node);
+    els.hint.textContent = `选址：${node.name}｜${profile.name}，可在右侧查看详情或直接立宗。`;
     addAction("在此立宗", () => foundSect(node), state.founded);
   } else if (node.type === "remotePlayer") {
     const allied = arePlayersAllied(state.clientId, node.id);
@@ -13333,6 +13568,10 @@ function renderTarget() {
     els.targetDetail.textContent = `${node.name}，机缘价值 ${node.value}，剩余 ${node.ttl} 季。派弟子探索可能获得灵石、修为和声望。`;
     els.hint.textContent = `机缘：${node.name}｜价值 ${node.value}｜剩余 ${node.ttl} 季`;
     addAction("探索机缘", () => exploreEvent(node), !state.founded || state.actionPoints < 1);
+  } else if (node.type === "secretRealm") {
+    els.targetDetail.textContent = `${node.name}，独立分层秘境。危险 ${Math.round(node.danger || 0)}，秘境价值 ${node.value}，剩余 ${node.ttl} 年。每层需要选择房间与处理方式，失败会负伤、积累危险，严重时会坍塌撤离。`;
+    els.hint.textContent = `分层秘境：${node.name}｜危险 ${Math.round(node.danger || 0)}｜剩余 ${node.ttl} 年`;
+    addAction("进入秘境", () => openLayeredSecretRealm(node), !state.founded || state.actionPoints < 1);
   } else if (node.type === "player") {
     const b = state.sect.buildings;
     const mountain = state.sect.mountainFormation ? `${formationQualityNames[state.sect.mountainFormation.quality]}护山大阵，阵势 ${Math.round(state.sect.mountainFormation.power)}` : "未布设护山大阵";
@@ -13376,10 +13615,14 @@ function renderMapActionBubble(node) {
     els.mapActionBubble.appendChild(box);
   };
   if (node.type === "site") {
-    addInfo(`<strong>${node.name}</strong><span>${node.text}</span><em>灵气 ${node.aura} · 资源 ${node.resource} · 风险 ${node.risk}</em>`);
+    const profile = siteProfile(node);
+    addInfo(`<strong>${node.name}</strong><span>${profile.name}</span><em>详细属性见右侧选中目标</em>`);
   }
   if (node.type === "resource") {
     addInfo(`<strong>${node.name}</strong><span>价值 ${node.value}，归属：${node.owner === "player" ? "本宗" : node.owner ? "其他宗门" : "无主"}</span>`);
+  }
+  if (node.type === "secretRealm") {
+    addInfo(`<strong>${node.name}</strong><span>分层秘境 · 危险 ${Math.round(node.danger || 0)} · 剩余 ${node.ttl || 1} 年</span><em>选择房间与处理方式，奖励已下调且会负伤</em>`);
   }
   if (node.type === "remotePlayer") {
     addInfo(`
@@ -13409,7 +13652,7 @@ function renderMapActionBubble(node) {
   if (node.type === "resource") add(node.owner === "player" ? "已占领" : "争夺", () => contestResource(node), node.owner === "player" || state.actionPoints < 1);
   if (node.type === "resource" && node.owner === "player") add("建设", () => openResourceUpgrade(node), state.actionPoints < 1);
   if (node.type === "event") add("探索", () => exploreEvent(node), state.actionPoints < 1);
-  if (node.type === "event") add("秘境", () => openLayeredSecretRealm(node), state.actionPoints < 1);
+  if (node.type === "secretRealm") add("入境", () => openLayeredSecretRealm(node), state.actionPoints < 1);
   if (node.type === "frontierLocked") add("要求", () => showModal({ kicker: "边境要求", title: "金丹三人方可开关", body: `<p>拥有 3 名金丹及以上弟子后，边境妖域会正式开放。</p>` }));
   if (node.type === "frontierDungeon") add("讨伐", () => openFrontierDungeon(node), state.actionPoints < 1);
   if (node.type === "frontierBoss") add("挑战巨兽", () => openFrontierBossRaid(node), state.actionPoints < 1 || node.defeated);
@@ -13436,6 +13679,7 @@ function addAction(label, handler, disabled = false) {
 }
 
 function addActionTo(container, label, handler, disabled = false) {
+  if (container === els.targetActions && [...container.querySelectorAll("button")].some((btn) => btn.textContent === label)) return;
   const btn = document.createElement("button");
   btn.textContent = label;
   btn.disabled = disabled;
@@ -13473,6 +13717,7 @@ function updateButtons() {
 }
 
 function allNodes() {
+  if (!state.founded) return state.sites;
   if (state.currentMap === "frontier") return frontierNodes();
   if (state.currentMap === "forbidden") return forbiddenNodes();
   if (state.currentMap === "overseas") return [{ id: "overseas-lock", type: "overseasLocked", name: "海外仙洲", x: W * 0.5, y: H * 0.5 }];
@@ -13481,6 +13726,7 @@ function allNodes() {
     ...(state.founded ? state.remotePlayers.filter((p) => p.founded).map((p) => ({ ...p, type: "remotePlayer" })) : []),
     ...state.resources,
     ...state.rivals,
+    ...(state.secretRealms || []).filter((realm) => !realm.resolving),
     ...state.events.filter((event) => !event.resolving),
   ];
 }
@@ -13491,7 +13737,7 @@ function mapNodePriority(node) {
   if (node.type === "rival" || node.type === "remotePlayer") return 3;
   if (node.type === "frontierBoss") return 4;
   if (node.type === "resource" || node.type === "frontierPoint") return 5;
-  if (node.type === "event" || node.type === "frontierDungeon") return 6;
+  if (node.type === "secretRealm" || node.type === "event" || node.type === "frontierDungeon") return 6;
   return 7;
 }
 
@@ -13499,7 +13745,8 @@ function mapNodeRadius(node) {
   if (node.type === "frontierBoss") return 58;
   if (node.type === "player") return 50;
   if (node.type === "rival" || node.type === "remotePlayer") return 46;
-  if (node.type === "site") return 44;
+  if (node.type === "site") return 36;
+  if (node.type === "secretRealm") return 42;
   if (node.type === "resource" || node.type === "frontierPoint") return 40;
   return 36;
 }
@@ -13621,7 +13868,7 @@ canvas.addEventListener("mousemove", (evt) => {
   els.tip.hidden = false;
   els.tip.style.left = `${evt.clientX - canvas.getBoundingClientRect().left + 14}px`;
   els.tip.style.top = `${evt.clientY - canvas.getBoundingClientRect().top + 14}px`;
-  els.tip.innerHTML = `<strong>${node.name}</strong><br>${node.type === "rival" || node.type === "remotePlayer" ? `战力 ${Math.round(node.power || 0)}` : node.type === "resource" ? `价值 ${node.value}` : node.type === "event" ? `剩余 ${node.ttl} 季` : node.type === "frontierDungeon" ? `推荐战力 ${Math.round(node.value)}` : node.type === "frontierBoss" ? `血量 ${Math.round(node.hp || 0)}/${Math.round(node.totalHp || 1)}` : node.type === "forbiddenFloor" ? `第 ${node.floor} 层` : node.type === "forbiddenGate" ? "禁地入口" : "可选山门"}`;
+  els.tip.innerHTML = `<strong>${node.name}</strong><br>${node.type === "rival" || node.type === "remotePlayer" ? `战力 ${Math.round(node.power || 0)}` : node.type === "resource" ? `价值 ${node.value}` : node.type === "secretRealm" ? `危险 ${Math.round(node.danger || 0)} · 剩余 ${node.ttl || 1} 年` : node.type === "event" ? `剩余 ${node.ttl} 季` : node.type === "frontierDungeon" ? `推荐战力 ${Math.round(node.value)}` : node.type === "frontierBoss" ? `血量 ${Math.round(node.hp || 0)}/${Math.round(node.totalHp || 1)}` : node.type === "forbiddenFloor" ? `第 ${node.floor} 层` : node.type === "forbiddenGate" ? "禁地入口" : "可选山门"}`;
 });
 
 canvas.addEventListener("touchstart", (evt) => {

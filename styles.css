@@ -11,6 +11,7 @@
   --blue: #2f6690;
   --shadow: 0 14px 40px rgba(26, 34, 31, 0.14);
   --ui-map-bg: url("./assets/maps/map-xianshu.webp");
+  --disciple-card-frame: url("./assets/ui/disciple-card-frame-clean.webp");
 }
 
 * {
@@ -2239,6 +2240,136 @@ h1 {
   font-weight: 800;
 }
 
+.secret-realm-ui {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(126, 87, 55, 0.34);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(255, 252, 244, 0.78), rgba(246, 238, 218, 0.84)),
+    url("./assets/ui/layered-secret-realm-panel.webp") center / cover no-repeat;
+  box-shadow: inset 0 0 0 1px rgba(255, 252, 244, 0.62), 0 14px 32px rgba(24, 32, 28, 0.14);
+}
+
+.secret-realm-ui::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 18% 20%, rgba(255, 252, 244, 0.56), transparent 28%),
+    linear-gradient(90deg, rgba(255, 252, 244, 0.72), rgba(255, 252, 244, 0.2));
+  pointer-events: none;
+}
+
+.secret-realm-ui > * {
+  position: relative;
+  z-index: 1;
+}
+
+.secret-realm-ui p {
+  margin: 0;
+  max-width: 62ch;
+  color: #473c2a;
+  line-height: 1.7;
+}
+
+.secret-realm-banner {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  max-width: 520px;
+  border: 1px solid rgba(170, 118, 42, 0.28);
+  border-radius: 9px;
+  background: rgba(255, 252, 244, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.secret-realm-banner span,
+.secret-realm-banner em {
+  color: #6d5b3d;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.5;
+}
+
+.secret-realm-banner strong {
+  color: #24372f;
+  font-family: "KaiTi", "STKaiti", serif;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.secret-realm-meter {
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(126, 87, 55, 0.38);
+  border-radius: 999px;
+  background: rgba(255, 252, 244, 0.64);
+}
+
+.secret-realm-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5c7469, #aa762a, #9f3d35);
+  box-shadow: 0 0 14px rgba(159, 61, 53, 0.28);
+}
+
+.secret-room-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.secret-room-card {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid rgba(95, 69, 111, 0.24);
+  border-radius: 9px;
+  background: rgba(255, 252, 244, 0.74);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.34);
+}
+
+.secret-room-card strong {
+  color: #27392f;
+  font-size: 15px;
+}
+
+.secret-room-card span,
+.secret-room-card em {
+  color: #655640;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.45;
+}
+
+.secret-room-card em {
+  color: #85443c;
+  font-weight: 800;
+}
+
+.secret-room-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.secret-room-actions button {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 6px;
+  border-color: rgba(126, 87, 55, 0.32);
+  background: linear-gradient(180deg, rgba(255, 252, 244, 0.92), rgba(237, 226, 203, 0.82));
+  color: #2f2920;
+  font-weight: 900;
+}
+
 .cultivation-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2554,6 +2685,22 @@ h1 {
     flex: 1 1 130px;
     padding: 7px 8px;
     text-align: center;
+  }
+
+  .secret-realm-ui {
+    padding: 12px;
+  }
+
+  .secret-realm-banner strong {
+    font-size: 20px;
+  }
+
+  .secret-room-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .secret-room-actions {
+    grid-template-columns: repeat(3, minmax(64px, 1fr));
   }
 
   .app-shell {
@@ -3361,6 +3508,124 @@ input {
   box-shadow: 0 12px 28px rgba(24, 32, 28, 0.18);
 }
 
+.site-choice-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(123, 103, 61, 0.2);
+  border-radius: 10px;
+  background:
+    linear-gradient(90deg, rgba(111, 143, 127, 0.1), transparent 38%),
+    linear-gradient(180deg, rgba(255, 252, 242, 0.9), rgba(236, 229, 208, 0.72));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
+}
+
+.site-choice-head {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.site-choice-head i {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255, 246, 207, 0.72);
+  border-radius: 50%;
+  background: #286c58;
+  color: #fff8df;
+  font-style: normal;
+  font-weight: 900;
+  box-shadow: 0 6px 12px rgba(24, 32, 28, 0.1);
+}
+
+.site-choice-head strong,
+.site-choice-head span {
+  display: block;
+}
+
+.site-choice-head strong {
+  font-size: 16px;
+}
+
+.site-choice-head span,
+.site-choice-card p {
+  color: rgba(56, 64, 58, 0.78);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.site-choice-head b {
+  min-width: 34px;
+  padding: 4px 7px;
+  border: 1px solid rgba(123, 103, 61, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 252, 242, 0.58);
+  color: #5c4b26;
+  text-align: center;
+  font-size: 12px;
+}
+
+.site-score-grid {
+  display: grid;
+  gap: 6px;
+}
+
+.site-score-grid span {
+  display: grid;
+  grid-template-columns: 38px 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  background: transparent;
+}
+
+.site-score-grid em {
+  color: rgba(96, 112, 103, 0.8);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.site-score-grid strong {
+  color: #292920;
+  font-size: 14px;
+  text-align: right;
+}
+
+.site-score-grid i {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(123, 103, 61, 0.12);
+}
+
+.site-score-grid i::before {
+  content: "";
+  display: block;
+  width: var(--value, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(111, 143, 127, 0.72), rgba(183, 154, 90, 0.68));
+}
+
+.site-aura .site-choice-head i,
+.site-mystic .site-choice-head i {
+  background: #2f6690;
+}
+
+.site-trade .site-choice-head i,
+.site-resource .site-choice-head i {
+  background: #aa762a;
+}
+
+.site-danger .site-choice-head i,
+.site-wild .site-choice-head i {
+  background: #9f3d35;
+}
+
 .guide-btn {
   border-color: rgba(181, 151, 88, 0.55);
   background: rgba(255, 252, 242, 0.9);
@@ -3489,29 +3754,24 @@ input {
   --card-jade: #6f8f7f;
   --card-ink: #282821;
   position: relative;
-  width: min(100%, 398px);
+  width: min(100%, 430px);
   margin: 0 auto 12px;
-  padding: 8px;
-  border: 1px solid rgba(123, 103, 61, 0.74);
-  border-radius: 9px;
+  padding: 14px 15px 18px;
+  border: 0;
+  border-radius: 18px;
+  background-color: #f4eedc;
   background:
-    linear-gradient(135deg, rgba(111, 143, 127, 0.22), transparent 18% 82%, rgba(183, 154, 90, 0.2)),
+    var(--disciple-card-frame) center / 100% 100% no-repeat,
+    linear-gradient(135deg, rgba(111, 143, 127, 0.2), transparent 18% 82%, rgba(183, 154, 90, 0.18)),
     linear-gradient(180deg, rgba(255, 252, 242, 0.96), rgba(235, 227, 207, 0.94));
-  box-shadow: 0 18px 36px rgba(24, 32, 28, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.68);
+  box-shadow: 0 18px 34px rgba(24, 32, 28, 0.15), 0 0 0 1px rgba(255, 248, 224, 0.22);
   color: var(--card-ink);
   font-family: "KaiTi", "STKaiti", "FangSong", serif;
 }
 
 .cultivator-card::before,
 .cultivator-card::after {
-  content: "";
-  position: absolute;
-  z-index: 2;
-  width: 30px;
-  height: 30px;
-  border-color: var(--card-gold);
-  border-style: solid;
-  pointer-events: none;
+  content: none;
 }
 
 .cultivator-card::before {
@@ -3531,22 +3791,14 @@ input {
 .cultivator-card-inner {
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--card-gold-soft);
-  border-radius: 7px;
-  padding: 12px 12px 14px;
-  background:
-    radial-gradient(circle at 16% 10%, rgba(111, 143, 127, 0.12), transparent 26%),
-    radial-gradient(circle at 86% 16%, rgba(183, 154, 90, 0.1), transparent 28%),
-    linear-gradient(160deg, rgba(255, 252, 243, 0.88), rgba(242, 237, 222, 0.84));
+  border: 0;
+  border-radius: 14px;
+  padding: 10px 13px 18px;
+  background: transparent;
 }
 
 .cultivator-card-inner::before {
-  content: "";
-  position: absolute;
-  inset: 12px;
-  border: 1px solid rgba(183, 154, 90, 0.28);
-  border-radius: 8px;
-  pointer-events: none;
+  content: none;
 }
 
 .jade-pendant {
@@ -3943,43 +4195,45 @@ input {
 
 .cultivator-card.has-portrait-asset {
   background:
-    radial-gradient(circle at 10% 7%, rgba(111, 143, 127, 0.18), transparent 23%),
+    var(--disciple-card-frame) center / 100% 100% no-repeat,
+    radial-gradient(circle at 10% 7%, rgba(111, 143, 127, 0.16), transparent 23%),
     linear-gradient(135deg, rgba(183, 154, 90, 0.2), transparent 18% 82%, rgba(111, 143, 127, 0.18)),
     linear-gradient(180deg, rgba(255, 252, 242, 0.98), rgba(229, 221, 198, 0.96));
-  box-shadow: 0 22px 44px rgba(18, 24, 22, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+  box-shadow: 0 24px 48px rgba(18, 24, 22, 0.22);
 }
 
 .cultivator-card.has-portrait-asset .cultivator-card-inner {
-  background:
-    radial-gradient(circle at 22% 16%, rgba(255, 252, 242, 0.64), transparent 22%),
-    radial-gradient(circle at 86% 12%, rgba(111, 143, 127, 0.14), transparent 30%),
-    linear-gradient(165deg, rgba(255, 252, 243, 0.92), rgba(230, 223, 202, 0.9));
+  background: transparent;
 }
 
 .cultivator-card.has-portrait-asset .cultivator-art {
   isolation: isolate;
-  height: clamp(262px, 59vw, 334px);
-  margin: 9px 6px 0;
-  border: 1px solid rgba(183, 154, 90, 0.5);
-  border-radius: 13px;
+  width: min(74%, 286px);
+  height: auto;
+  aspect-ratio: 1;
+  margin: 18px auto 18px;
+  border: 1px solid rgba(183, 154, 90, 0.34);
+  border-radius: 50%;
+  background-color: #efe7d3;
   background:
     radial-gradient(circle at 50% 23%, rgba(255, 252, 242, 0.5), transparent 30%),
     linear-gradient(180deg, rgba(43, 54, 49, 0.14), rgba(255, 252, 242, 0.24));
   box-shadow:
-    inset 0 0 0 7px rgba(255, 252, 242, 0.2),
-    inset 0 -46px 70px rgba(37, 39, 33, 0.18),
-    0 12px 24px rgba(24, 32, 28, 0.13);
+    inset 0 0 0 7px rgba(255, 252, 242, 0.22),
+    inset 0 -20px 36px rgba(116, 95, 56, 0.08),
+    0 10px 20px rgba(24, 32, 28, 0.1);
 }
 
 .cultivator-card.has-portrait-asset .cultivator-art::before {
   content: "";
   position: absolute;
-  inset: 7px 9px 0;
+  inset: 7px;
   z-index: 1;
-  border-radius: 10px 10px 22px 22px;
+  border-radius: 50%;
+  background-color: #efe7d3;
   background:
-    linear-gradient(180deg, rgba(255, 252, 242, 0.12), rgba(255, 252, 242, 0.03) 42%, rgba(21, 26, 23, 0.12)),
-    var(--portrait-image) center 18% / cover no-repeat;
+    linear-gradient(180deg, rgba(255, 252, 242, 0.16), rgba(255, 252, 242, 0.04) 48%, rgba(119, 102, 64, 0.08)),
+    var(--portrait-image) center 14% / cover no-repeat;
   filter: saturate(0.9) contrast(0.98) sepia(0.05);
   transform: scale(1.015);
 }
@@ -3992,10 +4246,36 @@ input {
   pointer-events: none;
   border-radius: inherit;
   background:
-    linear-gradient(90deg, rgba(255, 252, 242, 0.5), transparent 18% 77%, rgba(255, 252, 242, 0.56)),
-    linear-gradient(180deg, rgba(255, 252, 242, 0.7), transparent 24%, rgba(33, 38, 34, 0.1) 66%, rgba(244, 238, 218, 0.88)),
-    radial-gradient(circle at 50% 38%, transparent 0 42%, rgba(241, 234, 211, 0.34) 65%, rgba(241, 234, 211, 0.72) 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 246, 207, 0.34), inset 0 0 46px rgba(41, 39, 31, 0.14);
+    linear-gradient(90deg, rgba(255, 252, 242, 0.48), transparent 18% 77%, rgba(255, 252, 242, 0.52)),
+    linear-gradient(180deg, rgba(255, 252, 242, 0.66), transparent 28%, rgba(244, 238, 218, 0.78)),
+    radial-gradient(circle at 50% 38%, transparent 0 43%, rgba(241, 234, 211, 0.3) 66%, rgba(241, 234, 211, 0.7) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 246, 207, 0.38), inset 0 0 30px rgba(132, 112, 70, 0.08);
+}
+
+.cultivator-card.has-portrait-asset .cultivator-sect {
+  margin: 0 0 0 42px;
+  background: rgba(255, 252, 242, 0.68);
+}
+
+.cultivator-card.has-portrait-asset .cultivator-name-plaque {
+  right: -2px;
+  top: 34px;
+}
+
+.cultivator-card.has-portrait-asset .cultivator-stat-grid {
+  gap: 10px 16px;
+  margin: 8px 24px 0;
+}
+
+.cultivator-card.has-portrait-asset .cultivator-stat {
+  min-height: 40px;
+  border-color: rgba(183, 154, 90, 0.18);
+  background: rgba(255, 252, 242, 0.42);
+  box-shadow: none;
+}
+
+.cultivator-card.has-portrait-asset .cultivator-progress {
+  margin: 24px 30px 2px;
 }
 
 .cultivator-card.has-portrait-asset .ink-orbit,
@@ -4022,13 +4302,14 @@ input {
 .portrait-slot.has-portrait-asset {
   border: 1px solid rgba(183, 154, 90, 0.5);
   border-radius: 9px;
+  background-color: #efe7d3;
   background:
-    linear-gradient(180deg, rgba(255, 252, 242, 0.05), rgba(26, 32, 29, 0.2)),
+    linear-gradient(180deg, rgba(255, 252, 242, 0.12), rgba(120, 96, 56, 0.08)),
     var(--portrait-image) center 20% / cover no-repeat;
   box-shadow:
-    inset 0 0 0 3px rgba(255, 252, 242, 0.22),
-    inset 0 -18px 28px rgba(24, 32, 28, 0.2),
-    0 8px 16px rgba(24, 32, 28, 0.12);
+    inset 0 0 0 3px rgba(255, 252, 242, 0.26),
+    inset 0 -12px 22px rgba(120, 96, 56, 0.1),
+    0 7px 14px rgba(24, 32, 28, 0.1);
 }
 
 .portrait-slot.has-portrait-asset::before {
@@ -4043,7 +4324,7 @@ input {
   border-radius: inherit;
   background:
     radial-gradient(circle at 42% 20%, rgba(255, 255, 255, 0.26), transparent 28%),
-    linear-gradient(180deg, rgba(255, 252, 242, 0.1), transparent 45%, rgba(23, 30, 27, 0.28));
+    linear-gradient(180deg, rgba(255, 252, 242, 0.16), transparent 48%, rgba(119, 102, 64, 0.12));
   box-shadow: inset 0 0 0 1px rgba(255, 246, 207, 0.28);
   transform: none;
 }
