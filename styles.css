@@ -1516,6 +1516,59 @@ h1 {
   animation: modal-rise 0.22s ease both;
 }
 
+.event-modal.disciple-detail-dialog {
+  width: min(1060px, 100%);
+  max-height: min(900px, calc(100vh - 28px));
+}
+
+.disciple-detail-modal {
+  display: grid;
+  grid-template-columns: minmax(390px, 520px) minmax(320px, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.disciple-modal-profile,
+.disciple-modal-tools {
+  min-width: 0;
+}
+
+.disciple-modal-profile .cultivator-card {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.disciple-modal-tools {
+  display: grid;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+}
+
+.disciple-modal-tools h3 {
+  margin: 0;
+  color: #263a33;
+  font-size: 16px;
+}
+
+.disciple-modal-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.disciple-modal-action-grid button {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 7px 9px;
+  white-space: normal;
+  line-height: 1.25;
+}
+
 .modal-head {
   display: flex;
   align-items: flex-start;
@@ -4237,10 +4290,10 @@ input {
 
 .cultivator-card.has-portrait-asset .cultivator-art {
   isolation: isolate;
-  width: min(90%, 372px);
+  width: min(calc(100% - 96px), 390px);
   height: auto;
   aspect-ratio: 512 / 720;
-  margin: 14px auto 18px;
+  margin: 14px 78px 18px 18px;
   border: 1px solid rgba(183, 154, 90, 0.34);
   border-radius: 18px;
   background-color: #efe7d3;
@@ -4298,8 +4351,8 @@ input {
 }
 
 .cultivator-card.has-portrait-asset .cultivator-name-plaque {
-  right: -2px;
-  top: 78px;
+  right: -74px;
+  top: 62px;
 }
 
 .cultivator-card.has-portrait-asset .cultivator-stat-grid {
@@ -4312,6 +4365,25 @@ input {
   border-color: rgba(183, 154, 90, 0.18);
   background: rgba(255, 252, 242, 0.42);
   box-shadow: none;
+}
+
+.cultivator-stat {
+  grid-template-columns: 31px max-content minmax(0, 1fr);
+  column-gap: 6px;
+  min-height: 40px;
+}
+
+.cultivator-stat span {
+  overflow: visible;
+  padding: 0;
+  white-space: nowrap;
+  text-overflow: clip;
+}
+
+.cultivator-stat strong {
+  min-width: 0;
+  padding: 0 7px 0 1px;
+  font-size: 14px;
 }
 
 .cultivator-card.has-portrait-asset .cultivator-progress {
@@ -4422,6 +4494,20 @@ input {
 }
 
 @media (max-width: 760px) {
+  .event-modal.disciple-detail-dialog {
+    width: 100%;
+    max-height: 92vh;
+  }
+
+  .disciple-detail-modal {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .disciple-modal-tools {
+    position: static;
+  }
+
   .app-shell {
     grid-template-columns: minmax(0, 1fr);
     gap: 10px;
@@ -4505,7 +4591,7 @@ input {
   }
 
   .cultivator-card.has-portrait-asset .cultivator-art {
-    width: min(94%, 330px);
+    width: min(100%, 360px);
     height: auto;
     aspect-ratio: 512 / 720;
     margin: 10px auto 14px;
@@ -4517,8 +4603,31 @@ input {
   }
 
   .cultivator-card.has-portrait-asset .cultivator-name-plaque {
-    top: 62px;
-    right: -1px;
+    right: 10px;
+    top: auto;
+    bottom: 12px;
+    min-height: 0;
+    gap: 6px;
+  }
+
+  .cultivator-card.has-portrait-asset .cultivator-name-plaque strong,
+  .cultivator-card.has-portrait-asset .cultivator-name-plaque span {
+    writing-mode: horizontal-tb;
+    text-orientation: mixed;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .cultivator-card.has-portrait-asset .cultivator-name-plaque strong {
+    padding: 8px 13px;
+    border-radius: 8px;
+    font-size: 20px;
+  }
+
+  .cultivator-card.has-portrait-asset .cultivator-name-plaque span {
+    padding: 7px 10px;
+    border-radius: 999px;
+    font-size: 13px;
   }
 
   .cultivator-name-plaque strong {
@@ -4536,12 +4645,20 @@ input {
   }
 
   .cultivator-stat {
-    grid-template-columns: 29px 36px minmax(0, 1fr);
+    grid-template-columns: 29px max-content minmax(0, 1fr);
+    column-gap: 5px;
   }
 
-  .cultivator-stat span,
+  .cultivator-stat span {
+    padding: 0;
+    overflow: visible;
+    white-space: nowrap;
+    text-overflow: clip;
+    font-size: 13px;
+  }
+
   .cultivator-stat strong {
-    padding: 0 5px;
+    padding: 0 6px 0 1px;
     font-size: 13px;
   }
 
@@ -4557,4 +4674,379 @@ input {
   .start-panel .mode-select {
     grid-template-columns: 1fr;
   }
+}
+
+@media (max-width: 430px) {
+  .disciple-modal-action-grid,
+  .cultivator-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cultivator-card.has-portrait-asset .cultivator-stat-grid {
+    margin: 9px 8px 0;
+  }
+
+  .cultivator-card.has-portrait-asset .cultivator-progress {
+    margin: 18px 10px 2px;
+  }
+}
+
+/* The painted disciple frame is the layout: every value below is pinned to its
+   matching ornament instead of drawing a second set of cards on top of it. */
+.cultivator-card,
+.cultivator-card.has-portrait-asset {
+  position: relative;
+  width: min(100%, 500px);
+  aspect-ratio: 990 / 1515;
+  margin: 0 auto 14px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 4.2% / 2.4%;
+  background: var(--disciple-card-frame) center / 100% 100% no-repeat, #f4eedc;
+  box-shadow: 0 22px 44px rgba(18, 24, 22, 0.2);
+}
+
+.cultivator-card .cultivator-card-inner,
+.cultivator-card.has-portrait-asset .cultivator-card-inner {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  padding: 0;
+  background: transparent;
+}
+
+.cultivator-card .jade-pendant {
+  display: none;
+}
+
+.cultivator-card .cultivator-sect {
+  position: absolute;
+  left: 50%;
+  top: 3.2%;
+  z-index: 5;
+  min-width: 0;
+  max-width: 58%;
+  min-height: 0;
+  padding: 5px 14px 5px 5px;
+  transform: translateX(-50%);
+  background: rgba(246, 241, 225, 0.86);
+  backdrop-filter: blur(3px);
+}
+
+.cultivator-card .cultivator-sect i {
+  width: 27px;
+  height: 27px;
+}
+
+.cultivator-card .cultivator-sect strong {
+  font-size: 17px;
+}
+
+.cultivator-card .cultivator-art,
+.cultivator-card.has-portrait-asset .cultivator-art {
+  position: absolute;
+  left: 17.6%;
+  top: 11.3%;
+  z-index: 2;
+  width: 68.5%;
+  height: 44.8%;
+  margin: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  clip-path: none;
+}
+
+.cultivator-card.has-portrait-asset .cultivator-art::before {
+  content: none;
+}
+
+.cultivator-card .cultivator-portrait-img {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center 14%;
+  clip-path: circle(49% at 50% 50%);
+  filter: saturate(0.98) contrast(1.02) sepia(0.03);
+}
+
+.cultivator-card .ink-orbit,
+.cultivator-card .ink-mountains {
+  display: none;
+}
+
+.cultivator-card .cultivator-name-plaque,
+.cultivator-card.has-portrait-asset .cultivator-name-plaque {
+  position: absolute;
+  right: -7%;
+  bottom: -2.5%;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  min-height: 0;
+  gap: 7px;
+}
+
+.cultivator-card .cultivator-name-plaque strong,
+.cultivator-card .cultivator-name-plaque span,
+.cultivator-card.has-portrait-asset .cultivator-name-plaque strong,
+.cultivator-card.has-portrait-asset .cultivator-name-plaque span {
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
+  min-width: 0;
+  min-height: 0;
+}
+
+.cultivator-card .cultivator-name-plaque strong,
+.cultivator-card.has-portrait-asset .cultivator-name-plaque strong {
+  padding: 9px 15px;
+  border-radius: 9px;
+  font-size: 21px;
+}
+
+.cultivator-card .cultivator-name-plaque span,
+.cultivator-card.has-portrait-asset .cultivator-name-plaque span {
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.cultivator-card .cultivator-stat-grid,
+.cultivator-card.has-portrait-asset .cultivator-stat-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: block;
+  margin: 0;
+}
+
+.cultivator-card .cultivator-stat {
+  position: absolute;
+  display: block;
+  width: 43.2%;
+  height: 6.8%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: translateY(-50%);
+}
+
+.cultivator-card .cultivator-stat::before,
+.cultivator-card .cultivator-stat::after {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  transform: translateY(-50%);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.cultivator-card .cultivator-stat::before {
+  left: 22.5%;
+  color: rgba(39, 39, 32, 0.9);
+  font-size: clamp(12px, 3vw, 16px);
+}
+
+.cultivator-card .cultivator-stat::after {
+  left: 12.7%;
+  color: rgba(255, 252, 242, 0.96);
+  font-size: clamp(11px, 2.8vw, 14px);
+  transform: translate(-50%, -50%);
+}
+
+.cultivator-card .cultivator-stat strong {
+  position: absolute;
+  right: 6.5%;
+  top: 50%;
+  overflow: visible;
+  max-width: 60%;
+  padding: 0;
+  white-space: nowrap;
+  text-overflow: clip;
+  font-size: clamp(12px, 3vw, 16px);
+  text-align: right;
+  transform: translateY(-50%);
+}
+
+.cultivator-card .cultivator-stat:nth-child(1) { left: 6.2%; top: 65.8%; }
+.cultivator-card .cultivator-stat:nth-child(2) { left: 52.8%; top: 65.8%; }
+.cultivator-card .cultivator-stat:nth-child(3) { left: 6.2%; top: 72.9%; }
+.cultivator-card .cultivator-stat:nth-child(4) { left: 52.8%; top: 72.9%; }
+.cultivator-card .cultivator-stat:nth-child(5) { left: 6.2%; top: 80.1%; }
+.cultivator-card .cultivator-stat:nth-child(6) { left: 52.8%; top: 80.1%; }
+
+.cultivator-card .cultivator-stat:nth-child(1)::before { content: "境界"; }
+.cultivator-card .cultivator-stat:nth-child(2)::before { content: "根骨"; }
+.cultivator-card .cultivator-stat:nth-child(3)::before { content: "灵根"; }
+.cultivator-card .cultivator-stat:nth-child(4)::before { content: "悟性"; }
+.cultivator-card .cultivator-stat:nth-child(5)::before { content: "战力"; }
+.cultivator-card .cultivator-stat:nth-child(6)::before { content: "机缘"; }
+.cultivator-card .cultivator-stat:nth-child(1)::after { content: "境"; }
+.cultivator-card .cultivator-stat:nth-child(2)::after { content: "骨"; }
+.cultivator-card .cultivator-stat:nth-child(3)::after { content: "灵"; }
+.cultivator-card .cultivator-stat:nth-child(4)::after { content: "悟"; }
+.cultivator-card .cultivator-stat:nth-child(5)::after { content: "战"; }
+.cultivator-card .cultivator-stat:nth-child(6)::after { content: "缘"; }
+
+.cultivator-card .cultivator-progress,
+.cultivator-card.has-portrait-asset .cultivator-progress {
+  position: absolute;
+  left: 11.7%;
+  right: 20.6%;
+  top: 92.2%;
+  z-index: 4;
+  height: 2.2%;
+  margin: 0;
+}
+
+.cultivator-card .cultivator-progress div {
+  position: absolute;
+  left: 0;
+  right: -27%;
+  bottom: 118%;
+  margin: 0;
+  font-size: clamp(11px, 2.7vw, 14px);
+}
+
+.cultivator-card .cultivator-progress em {
+  height: 100%;
+  border: 1px solid rgba(123, 103, 61, 0.62);
+  background: rgba(52, 53, 47, 0.78);
+}
+
+.disciple-detail-summary span {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.disciple-detail-summary b {
+  font-size: 13px;
+}
+
+.disciple-detail-summary .is-wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 760px) {
+  .cultivator-card,
+  .cultivator-card.has-portrait-asset {
+    width: min(100%, 460px);
+    padding: 0;
+  }
+
+  .cultivator-card .cultivator-stat::before,
+  .cultivator-card .cultivator-stat strong {
+    font-size: clamp(11px, 3.4vw, 15px);
+  }
+
+  .disciple-detail-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 430px) {
+  .cultivator-card .cultivator-sect {
+    top: 2.8%;
+  }
+
+  .cultivator-card .cultivator-name-plaque,
+  .cultivator-card.has-portrait-asset .cultivator-name-plaque {
+    right: -4%;
+  }
+
+  .disciple-detail-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .disciple-detail-summary .is-wide {
+    grid-column: auto;
+  }
+}
+
+.cultivator-portrait-img[role="button"] {
+  cursor: zoom-in;
+}
+
+.cultivator-portrait-img[role="button"]:focus-visible {
+  outline: 3px solid rgba(111, 143, 127, 0.9);
+  outline-offset: -5px;
+}
+
+.portrait-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(8, 12, 10, 0.88);
+  backdrop-filter: blur(8px);
+}
+
+.portrait-preview {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  max-width: min(92vw, 860px);
+  max-height: calc(100dvh - 40px);
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgba(223, 204, 156, 0.65);
+  border-radius: 14px;
+  background: #171c19;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+}
+
+.portrait-preview img {
+  display: block;
+  min-height: 0;
+  max-width: 100%;
+  max-height: calc(100dvh - 115px);
+  object-fit: contain;
+}
+
+.portrait-preview figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 11px 15px;
+  background: rgba(246, 241, 225, 0.96);
+  color: #263a33;
+}
+
+.portrait-preview figcaption strong {
+  font-size: 18px;
+}
+
+.portrait-preview figcaption span {
+  color: #645a49;
+  font-size: 13px;
+}
+
+.portrait-preview-close {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  border-radius: 50%;
+  background: rgba(16, 22, 19, 0.72);
+  color: #fff;
+  font-size: 25px;
+  line-height: 1;
 }

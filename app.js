@@ -106,7 +106,7 @@ function bundledAssetPath(src) {
 }
 
 function assetVersion() {
-  return String(window.SECT_ASSET_VERSION || "20260617-art-imgfix").trim();
+  return String(window.SECT_ASSET_VERSION || "20260618-major-choice-frontier-stable").trim();
 }
 
 function withAssetVersion(url) {
@@ -115,25 +115,52 @@ function withAssetVersion(url) {
   return `${url}${url.includes("?") ? "&" : "?"}v=${encodeURIComponent(version)}`;
 }
 
-function assetUrl(src) {
-  const raw = String(src || "");
-  if (/^(https?:)?\/\//.test(raw) || raw.startsWith("data:") || raw.startsWith("blob:")) return raw;
-  const clean = bundledAssetPath(raw);
-  const base = configuredAssetBase();
-  if (base) return withAssetVersion(`${base}/${clean}`);
+function backendAssetBase() {
+  const url = String(window.SECT_BACKEND_URL || "").trim();
+  if (!url) return "";
   try {
-    return withAssetVersion(new URL(clean, document.baseURI).href);
+    const parsed = new URL(url);
+    return parsed.origin;
   } catch {
-    return withAssetVersion(`./${clean}`);
+    return url.replace(/\/+$/, "");
   }
 }
 
-function assetFallbackUrl(src) {
+function assetCandidates(src) {
   const raw = String(src || "");
-  if (/^(https?:)?\/\//.test(raw) || raw.startsWith("data:") || raw.startsWith("blob:")) return raw;
+  if (/^(https?:)?\/\//.test(raw) || raw.startsWith("data:") || raw.startsWith("blob:")) return [raw];
   const clean = bundledAssetPath(raw);
-  const local = window.location.protocol === "file:" ? `./${clean}` : `/${clean}`;
-  return withAssetVersion(local);
+  const base = configuredAssetBase();
+  const candidates = [];
+  const add = (url) => {
+    if (!url) return;
+    const versioned = withAssetVersion(url);
+    if (!candidates.includes(versioned)) candidates.push(versioned);
+  };
+  if (base) add(`${base}/${clean}`);
+  try {
+    add(new URL(clean, document.baseURI).href);
+  } catch {
+    add(`./${clean}`);
+  }
+  if (window.location?.origin) add(`${window.location.origin}/${clean}`);
+  const backend = backendAssetBase();
+  if (backend) add(`${backend}/${clean}`);
+  add(`./${clean}`);
+  add(`/${clean}`);
+  return candidates;
+}
+
+function assetUrl(src) {
+  return assetCandidates(src)[0] || "";
+}
+
+function assetFallbackUrl(src) {
+  return assetCandidates(src)[1] || assetCandidates(src)[0] || "";
+}
+
+function assetFallbackList(src) {
+  return assetCandidates(src).slice(1).join("|");
 }
 
 function cssAssetUrl(src) {
@@ -143,17 +170,31 @@ function cssAssetUrl(src) {
 function applyAssetCssVars() {
   document.documentElement.style.setProperty("--ui-map-bg", cssAssetUrl("assets/maps/map-xianshu.webp"));
   document.documentElement.style.setProperty("--disciple-card-frame", cssAssetUrl("assets/ui/disciple-card-frame-clean.webp"));
+  resolveCssAsset("--ui-map-bg", "assets/maps/map-xianshu.webp");
+  resolveCssAsset("--disciple-card-frame", "assets/ui/disciple-card-frame-clean.webp");
+}
+
+function resolveCssAsset(variable, src) {
+  const candidates = assetCandidates(src);
+  const probe = new Image();
+  let index = 0;
+  probe.onload = () => document.documentElement.style.setProperty(variable, `url('${probe.src.replace(/'/g, "%27")}')`);
+  probe.onerror = () => {
+    index += 1;
+    if (index < candidates.length) probe.src = candidates[index];
+  };
+  probe.src = candidates[0] || "";
 }
 
 function loadCanvasAsset(src) {
   const image = new Image();
+  const candidates = assetCandidates(src);
+  let index = 0;
   image.onerror = () => {
-    if (image.dataset.fallbackTried === "1") return;
-    image.dataset.fallbackTried = "1";
-    const fallback = assetFallbackUrl(src);
-    image.src = fallback;
+    index += 1;
+    if (index < candidates.length) image.src = candidates[index];
   };
-  image.src = assetUrl(src);
+  image.src = candidates[0] || "";
   image.onload = () => setTimeout(() => {
     try {
       renderMap();
@@ -168,9 +209,15 @@ applyAssetCssVars();
 
 document.addEventListener("error", (evt) => {
   const img = evt.target;
-  if (!(img instanceof HTMLImageElement) || !img.dataset.fallbackSrc || img.dataset.fallbackTried === "1") return;
-  img.dataset.fallbackTried = "1";
-  img.src = img.dataset.fallbackSrc;
+  if (!(img instanceof HTMLImageElement)) return;
+  const fallbacks = String(img.dataset.fallbackSrcs || img.dataset.fallbackSrc || "")
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const tried = Number(img.dataset.fallbackIndex || 0);
+  if (tried >= fallbacks.length) return;
+  img.dataset.fallbackIndex = String(tried + 1);
+  img.src = fallbacks[tried];
 }, true);
 
 const mapBackgroundImages = {
@@ -1024,10 +1071,43 @@ const ascensionMaterials = {
 const frontierDungeonTemplates = [
   { tier: 2, name: "铁脊狼巢", glyph: "狼", material: "nascentBead", minPower: 900, reward: { stones: 160, grain: 100 }, text: "金丹级妖兽巢穴，适合中期队伍练手。" },
   { tier: 2, name: "赤角妖蟒窟", glyph: "蟒", material: "nascentBead", minPower: 1080, reward: { alchemyMats: 1 }, text: "毒瘴与药材并存，掉落元婴晋升材料。" },
+  { tier: 2, name: "黑风鬣犬原", glyph: "犬", material: "nascentBead", minPower: 1180, reward: { grain: 180, prestige: 18 }, text: "成群妖犬擅长围猎，适合磨炼队伍协同。" },
+  { tier: 2, name: "腐木药兽泽", glyph: "药", material: "nascentBead", minPower: 1260, reward: { alchemyMats: 2 }, text: "药兽与毒草共生，丹材收益显著。" },
   { tier: 3, name: "荒原兽王岭", glyph: "王", material: "spiritInfantJade", minPower: 1680, reward: { stones: 260, prestige: 30 }, text: "元婴级首领盘踞，能产出化神晋升材料。" },
+  { tier: 3, name: "霜牙白猿谷", glyph: "猿", material: "spiritInfantJade", minPower: 1880, reward: { forgingMats: 1, grain: 160 }, text: "白猿守护寒铁矿脉，防御极高。" },
+  { tier: 3, name: "千眼妖蛛林", glyph: "蛛", material: "spiritInfantJade", minPower: 2050, reward: { alchemyMats: 1, arrayMats: 1 }, text: "蛛网封路，适合身法与毒修队伍。" },
   { tier: 4, name: "裂空鹰渊", glyph: "鹰", material: "voidScale", minPower: 2450, reward: { forgingMats: 2, prestige: 45 }, text: "化神级妖禽盘踞，刷新较少，收益更高。" },
+  { tier: 4, name: "雷角夔牛泽", glyph: "雷", material: "voidScale", minPower: 2780, reward: { forgingMats: 2, arrayMats: 1 }, text: "雷暴常年不息，雷修可从中获得额外历练。" },
+  { tier: 4, name: "焚骨赤蝎海", glyph: "蝎", material: "voidScale", minPower: 2960, reward: { stones: 360, alchemyMats: 2 }, text: "赤蝎甲壳可入器，毒囊可入丹。" },
   { tier: 5, name: "劫骨古战场", glyph: "劫", material: "tribulationBone", minPower: 3500, reward: { arrayMats: 2, prestige: 65 }, text: "炼虚级高危战场，失败代价极高。" },
+  { tier: 5, name: "吞城黑蛟河", glyph: "蛟", material: "tribulationBone", minPower: 4050, reward: { stones: 480, forgingMats: 2 }, text: "黑蛟盘踞断河，适合高爆发讨伐队。" },
+  { tier: 5, name: "万骸兽潮眼", glyph: "潮", material: "tribulationBone", minPower: 4400, reward: { prestige: 85, grain: 320 }, text: "持续兽潮副本，胜利可显著降低边境压力。" },
   { tier: 6, name: "仙灰天坑", glyph: "灰", material: "immortalAsh", minPower: 5100, reward: { stones: 520, prestige: 90 }, text: "顶级边境副本，掉落大乘以上晋升材料。" },
+  { tier: 6, name: "葬日金乌巢", glyph: "日", material: "immortalAsh", minPower: 5900, reward: { stones: 680, prestige: 110, arrayMats: 2 }, text: "金乌残血焚烧天幕，是边境最危险的巢穴之一。" },
+];
+
+const frontierHazards = [
+  { id: "frenzy", name: "狂暴兽群", text: "敌方强度 +16%，胜利修为更多。", enemy: 1.16, exp: 6 },
+  { id: "miasma", name: "腐骨瘴毒", text: "敌方强度 +9%，失败时心魔与伤势更重。", enemy: 1.09, injury: 6 },
+  { id: "thunder", name: "边荒雷暴", text: "敌方强度 +12%，材料掉率提高。", enemy: 1.12, material: 10 },
+  { id: "migration", name: "妖兽迁徙", text: "敌方强度较低，但副本仅短暂存在。", enemy: 0.9, ttl: -1 },
+  { id: "spiritTide", name: "灵潮喷涌", text: "敌方强度 +6%，资源与参悟收益提高。", enemy: 1.06, reward: 0.25 },
+  { id: "ancientBlood", name: "古血返祖", text: "敌方强度 +22%，晋升材料掉率大幅提高。", enemy: 1.22, material: 18 },
+];
+
+const frontierIncidentTemplates = [
+  { id: "caravan", name: "断路商队", glyph: "商", text: "商队被妖群围困，护送可得灵石与边境声望。" },
+  { id: "herbField", name: "兽王药圃", glyph: "药", text: "妖兽暂时离巢，可抢收稀有丹材。" },
+  { id: "scouts", name: "失联斥候", glyph: "斥", text: "边寨斥候失去联系，可能遭遇伏击。" },
+  { id: "refugees", name: "边民迁徙", glyph: "民", text: "流民请求进入边寨，接纳会消耗粮草。" },
+  { id: "ruins", name: "古关残阵", glyph: "阵", text: "风沙下显露古代关隘，可拆取阵材或参悟阵纹。" },
+];
+
+const frontierExpansionPoints = [
+  { id: "frontier-site-west", type: "frontierPoint", name: "西风哨口", x: 250, y: 470, value: 110, owner: "" },
+  { id: "frontier-site-north", type: "frontierPoint", name: "镇妖旧关", x: 470, y: 170, value: 145, owner: "" },
+  { id: "frontier-site-east", type: "frontierPoint", name: "赤水渡营", x: 760, y: 430, value: 165, owner: "" },
+  { id: "frontier-site-deep", type: "frontierPoint", name: "万兽裂谷", x: 890, y: 210, value: 210, owner: "" },
 ];
 
 const forbiddenRelics = [
@@ -1203,6 +1283,8 @@ const state = {
   pendingBoon: false,
   worldEvent: null,
   nextWorldAdventureYear: 0,
+  nextDiscipleEncounterYear: 0,
+  lastDiscipleEncounterYear: 0,
   worldAdventure: null,
   aiReports: [],
   market: null,
@@ -1550,6 +1632,8 @@ function initWorld() {
   state.forbidden = createForbiddenState();
   state.forbiddenRun = null;
   state.nextWorldAdventureYear = rand(3, 6);
+  state.nextDiscipleEncounterYear = rand(2, 4);
+  state.lastDiscipleEncounterYear = 0;
   state.worldAdventure = null;
   state.selectedDiscipleId = null;
   state.selected = null;
@@ -1805,7 +1889,12 @@ function createFrontierState() {
   return {
     dungeons: [],
     outposts: [],
+    incidents: [],
+    claimedPointIds: [],
     clears: 0,
+    renown: 0,
+    supply: 0,
+    beastPressure: 0,
     lastRefreshYear: 0,
     beastTideYear: 0,
     worldBoss: null,
@@ -2094,13 +2183,13 @@ function offerYearlyBoons(force = false) {
   showModal({
     kicker: "年度天命",
     title: `太初 ${state.year} 年开局抉择`,
-    body: `<p>本年天象变动，宗门可顺势选择一条发展倾向。每年随机三选一，本局路线会因此产生差异。</p>`,
+    body: `<p>本年天象变动，宗门必须选择一条发展倾向后才能继续行动。每年随机三选一，本局路线会因此产生差异。</p>`,
     actions: choices.map((omen) => ({
       label: omen.name,
       handler: () => selectYearlyBoon(omen),
     })),
+    dismissible: false,
   });
-  els.modalCloseBtn.onclick = () => selectYearlyBoon(choices[0]);
 }
 
 function selectYearlyBoon(omen) {
@@ -2296,6 +2385,11 @@ function ensureSectDefaults() {
   state.frontier = state.frontier || createFrontierState();
   state.frontier.dungeons = Array.isArray(state.frontier.dungeons) ? state.frontier.dungeons : [];
   state.frontier.outposts = Array.isArray(state.frontier.outposts) ? state.frontier.outposts : [];
+  state.frontier.incidents = Array.isArray(state.frontier.incidents) ? state.frontier.incidents : [];
+  state.frontier.claimedPointIds = Array.isArray(state.frontier.claimedPointIds) ? state.frontier.claimedPointIds : [];
+  state.frontier.renown = Number(state.frontier.renown || 0);
+  state.frontier.supply = Number(state.frontier.supply || 0);
+  state.frontier.beastPressure = Number(state.frontier.beastPressure || 0);
   state.frontier.bossDamageLog = Array.isArray(state.frontier.bossDamageLog) ? state.frontier.bossDamageLog : [];
   state.frontier.worldBoss = state.frontier.worldBoss || null;
   state.forbidden = state.forbidden || createForbiddenState();
@@ -2311,6 +2405,9 @@ function ensureSectDefaults() {
   state.lastCouncilYear = Number(state.lastCouncilYear || 0);
   state.lastTournamentYear = Number(state.lastTournamentYear || 0);
   state.lastMerchantYear = Number(state.lastMerchantYear || 0);
+  state.lastDiscipleEncounterYear = Number(state.lastDiscipleEncounterYear || 0);
+  state.nextDiscipleEncounterYear = Number(state.nextDiscipleEncounterYear || 0);
+  if (!state.nextDiscipleEncounterYear) state.nextDiscipleEncounterYear = Number(state.year || 1) + rand(1, 3);
   state.sect.arrayMats = Number(state.sect.arrayMats || 0);
   state.sect.unlockedAlchemyRecipes = Array.isArray(state.sect.unlockedAlchemyRecipes) && state.sect.unlockedAlchemyRecipes.length
     ? state.sect.unlockedAlchemyRecipes
@@ -4704,9 +4801,12 @@ function handlePvpReport(report) {
   }
 }
 
-function showModal({ kicker = "事件", title = "山门传讯", body = "", actions = [{ label: "知道了", handler: closeModal }] }) {
+function showModal({ kicker = "事件", title = "山门传讯", body = "", actions = [{ label: "知道了", handler: closeModal }], dismissible = true }) {
   clearTutorialHighlight();
+  els.eventModal.querySelector(".event-modal")?.classList.remove("disciple-detail-dialog");
   els.modalCloseBtn.onclick = null;
+  els.modalCloseBtn.hidden = !dismissible;
+  els.eventModal.dataset.dismissible = dismissible ? "true" : "false";
   els.modalProgress.hidden = true;
   els.modalKicker.textContent = kicker;
   els.modalTitle.textContent = title;
@@ -4725,6 +4825,9 @@ function showModal({ kicker = "事件", title = "山门传讯", body = "", actio
 
 function closeModal() {
   els.modalCloseBtn.onclick = null;
+  els.modalCloseBtn.hidden = false;
+  els.eventModal.dataset.dismissible = "true";
+  els.eventModal.querySelector(".event-modal")?.classList.remove("disciple-detail-dialog");
   els.modalProgress.hidden = true;
   els.eventModal.hidden = true;
   els.modalBody.innerHTML = "";
@@ -5112,7 +5215,7 @@ function cultivationSummaryHtml(d) {
   return `
     <div class="cultivation-summary">
       <article><span>道心</span><strong>${heart?.name || "未定"}</strong><em>${heart?.text || ""}</em></article>
-      <article><span>体质</span><strong>${con ? con.name : "凡骨未显"}</strong><em>${con ? con.text : "特殊体质刷新率很低，可用洗髓探体尝试觉醒。"}</em></article>
+      <article><span>体质</span><strong>${con ? con.name : "凡骨未显"}</strong><em>${con ? con.text : "特殊体质只能在弟子重大抉择事件中觉醒。"}</em></article>
       <article><span>专精</span><strong>${spec?.name || "未定"} Lv.${d.specializationLevel || 0}</strong><em>熟练 ${d.specializationExp || 0}/${Math.min(20, (d.specializationLevel || 0) + 1) * 100}</em></article>
       <article><span>师承</span><strong>${mentor ? mentor.name : "未拜师"}</strong><em>${mentor ? `${realms[mentor.realm]}，每年提供修行与专精经验` : "高境界弟子可作为师父传承经验"}</em></article>
       <article><span>本命法宝</span><strong>${artifact ? `${artifact.name} Lv.${artifact.level}` : "未炼成本命法宝"}</strong><em>${artifact ? `战力 +${Math.round((artifact.power || 0) + artifact.level * 38)}` : "消耗器材和洗练材料打造，可长期升级"}</em></article>
@@ -5135,28 +5238,26 @@ function openDiscipleCultivationPanel(d) {
       ${cultivationSummaryHtml(d)}
       <div class="cultivation-grid">
         <article class="cultivation-card"><strong>路线成长</strong><span>${heart?.name}提供 ${(Number(heart?.growth || 0) * 100).toFixed(0)}% 年度修行加成；当前综合养成战力 +${Math.round(cultivationPowerBonus(d))}。</span></article>
-        <article class="cultivation-card"><strong>体质规则</strong><span>新弟子约 5.5% 概率天生特殊体质。未显体质可消耗行动和材料洗髓探体，但成功率依旧较低。</span></article>
-        <article class="cultivation-card"><strong>专精定位</strong><span>${spec?.text || "专精会影响战力、炼制、阵法和属性伤害。"} 专精参与战斗、闭关、试炼都会成长。</span></article>
+        <article class="cultivation-card"><strong>重大抉择</strong><span>专精转修、道心变化、体质觉醒与师承变更，只能通过随机年份出现的弟子重大抉择事件发生。</span></article>
+        <article class="cultivation-card"><strong>专精定位</strong><span>${spec?.text || "专精会影响战力、炼制、阵法和属性伤害。"} 当前路线可正常成长，但不能在面板中主动改修。</span></article>
         <article class="cultivation-card"><strong>闭关状态</strong><span>${d.seclusion ? `正在闭关：${d.seclusion.focusName}，剩余 ${d.seclusion.yearsLeft} 年。` : "可安排短期闭关，提高修为、功法熟练度或降低心魔。"}</span></article>
       </div>
     `,
     actions: [
-      { label: "选择专精", handler: () => openSpecializationPanel(d), disabled: state.actionPoints < 1 },
-      { label: "师徒传承", handler: () => openMentorPanel(d), disabled: state.sect.disciples.length < 2 },
       { label: d.seclusion ? "闭关中" : "安排闭关", handler: () => openSeclusionPanel(d), disabled: Boolean(d.seclusion) || Boolean(d.travel) || state.actionPoints < 1 },
       { label: d.travel ? "游历中" : "外出游历", handler: () => openDiscipleTravelPanel(d), disabled: Boolean(d.travel) || Boolean(d.seclusion) || state.actionPoints < 1 },
       { label: d.sectPosition ? "调整职位" : "宗门职位", handler: () => openSectPositionPanel(d) },
       { label: d.legacyGiven ? "已传承" : "代际传承", handler: () => openLegacyInheritancePanel(d), disabled: d.legacyGiven || state.sect.disciples.length < 2 || state.actionPoints < 1 },
       { label: "本命法宝", handler: () => openNatalArtifactPanel(d), disabled: state.actionPoints < 1 },
       { label: "突破试炼", handler: () => openBreakthroughTrialPanel(d), disabled: state.actionPoints < 1 },
-      { label: con ? "体质已显" : "洗髓探体", handler: () => attemptConstitutionAwakening(d), disabled: Boolean(con) || state.actionPoints < 1 },
-      { label: "个人事件", handler: () => openDisciplePersonalEvent(d, true), disabled: state.actionPoints < 1 || d.lastPersonalEventYear === state.year },
       { label: "关闭", handler: closeModal },
     ],
   });
 }
 
 function openSpecializationPanel(d) {
+  flashFeedback("专精转修只能通过弟子重大抉择事件发生。", "warn");
+  return;
   showModal({
     kicker: "弟子专精",
     title: `${d.name}选择修行定位`,
@@ -5179,6 +5280,8 @@ function openSpecializationPanel(d) {
 }
 
 function chooseSpecialization(d) {
+  flashFeedback("专精转修入口已关闭，请等待弟子重大抉择事件。", "warn");
+  return;
   const picked = els.modalBody.querySelector('input[name="spec-pick"]:checked')?.value;
   const spec = catalogById(specializationCatalog, picked);
   if (!spec) return;
@@ -5200,6 +5303,8 @@ function chooseSpecialization(d) {
 }
 
 function openMentorPanel(d) {
+  flashFeedback("师承变更只能通过弟子重大抉择事件发生。", "warn");
+  return;
   const candidates = state.sect.disciples.filter((item) => item.id !== d.id && item.realm >= d.realm);
   showModal({
     kicker: "师徒传承",
@@ -5387,6 +5492,8 @@ function runBreakthroughTrial(d, trial) {
 }
 
 function attemptConstitutionAwakening(d) {
+  flashFeedback("特殊体质只能通过弟子重大抉择事件觉醒。", "warn");
+  return;
   if (!d || d.constitution) return;
   if (!spendAction(1, "洗髓探体")) return;
   const stoneCost = 180 + d.realm * 80;
@@ -5418,6 +5525,8 @@ function attemptConstitutionAwakening(d) {
 }
 
 function openDisciplePersonalEvent(d, manual = false) {
+  flashFeedback("主动个人事件入口已关闭，重大抉择会在随机年份触发。", "warn");
+  return;
   if (!d) return;
   const heart = daoHeartOf(d);
   const events = [
@@ -5476,12 +5585,185 @@ function resolveDisciplePersonalEvent(d, eventId, manual = false) {
   render();
 }
 
-function maybeTriggerDisciplePersonalEvent() {
-  if (!state.sect?.disciples?.length || Math.random() > 0.18) return;
-  const candidates = state.sect.disciples.filter((d) => d.lastPersonalEventYear !== state.year && !d.seclusion);
-  const d = pick(candidates.length ? candidates : state.sect.disciples);
-  const eventId = pick(["wander", "debate", "trial"]);
-  resolveDisciplePersonalEvent(d, eventId, false);
+function shouldOpenDiscipleMajorDecision() {
+  if (!state.founded || !state.sect?.disciples?.length || state.lastDiscipleEncounterYear === state.year) return false;
+  if (!state.nextDiscipleEncounterYear) state.nextDiscipleEncounterYear = state.year + rand(1, 3);
+  return state.year >= state.nextDiscipleEncounterYear;
+}
+
+function buildDiscipleMajorDecision(d) {
+  const kinds = ["specialization", "daoHeart"];
+  if (!d.constitution) kinds.push("constitution");
+  const mentorCandidates = state.sect.disciples.filter((item) => item.id !== d.id && item.realm >= d.realm);
+  if (d.mentorId || mentorCandidates.length) kinds.push("mentor");
+  if ((d.mind || 0) >= 28) kinds.push("heartCrisis");
+  const kind = pick(kinds);
+  if (kind === "specialization") {
+    const current = specializationOf(d);
+    const alternatives = specializationCatalog.filter((item) => item.id !== current?.id);
+    const first = pick(alternatives);
+    const second = pick(alternatives.filter((item) => item.id !== first?.id));
+    return {
+      kind,
+      title: "旧法已至岔路",
+      text: `${d.name}修行现有${current?.name || "法门"}时屡感桎梏，两条陌生道途同时显现。转修会永久改变其培养定位。`,
+      choices: [first, second].filter(Boolean).map((spec) => ({ type: "specialization", target: spec.id, label: `转修${spec.name}`, text: spec.text })).concat({ type: "keepSpecialization", label: `坚守${current?.name || "本途"}`, text: "不改变路线，转而夯实当前专精与心境。" }),
+    };
+  }
+  if (kind === "daoHeart" || kind === "heartCrisis") {
+    const current = daoHeartOf(d);
+    const pool = kind === "heartCrisis"
+      ? daoHeartCatalog.filter((item) => item.id === "demonic" || item.id === "benevolent")
+      : daoHeartCatalog.filter((item) => item.id !== current?.id);
+    const first = pick(pool);
+    const second = pick(pool.filter((item) => item.id !== first?.id));
+    return {
+      kind: "daoHeart",
+      title: kind === "heartCrisis" ? "一念仙魔" : "道心重问",
+      text: kind === "heartCrisis"
+        ? `${d.name}的心魔化作两条截然相反的道路：顺从力量，或以仁心镇压执念。`
+        : `${d.name}经历多年修行后重新审视初心。道心一旦改变，成长倾向与战斗定位也会永久变化。`,
+      choices: [first, second].filter(Boolean).map((heart) => ({ type: "daoHeart", target: heart.id, label: `立${heart.name}`, text: heart.text })).concat({ type: "keepDaoHeart", label: `守住${current?.name || "初心"}`, text: "不改变道心，稳固心境并降低心魔。" }),
+    };
+  }
+  if (kind === "constitution") {
+    const first = rollConstitution(true);
+    const secondPool = constitutionCatalog.filter((item) => item.id !== first.id);
+    const second = pick(secondPool);
+    return {
+      kind,
+      title: "血脉异象",
+      text: `${d.name}闭关时经脉出现异象，两种古老体质的气息争相显化。体质觉醒只能在此类重大事件中完成。`,
+      choices: [first, second].filter(Boolean).map((con) => ({ type: "constitution", target: con.id, label: `承受${con.name}`, text: con.text })).concat({ type: "resistConstitution", label: "压下异象", text: "放弃觉醒，换取根骨、悟性与修为的稳定成长。" }),
+    };
+  }
+  const currentMentor = mentorOf(d);
+  const firstMentor = pick(mentorCandidates.filter((item) => item.id !== currentMentor?.id));
+  return {
+    kind: "mentor",
+    title: "师承之问",
+    text: currentMentor
+      ? `${d.name}与${currentMentor.name}对道途产生分歧，必须决定延续、改投或独行。`
+      : `${d.name}的修行引来宗门前辈关注，是否接受师承将长期影响成长。`,
+    choices: [
+      currentMentor ? { type: "mentor", target: currentMentor.id, label: `续承${currentMentor.name}`, text: "维持现有师承，并加深传承积累。" } : null,
+      firstMentor ? { type: "mentor", target: firstMentor.id, label: `拜入${firstMentor.name}`, text: "永久改立师承，接受新的修行影响。" } : null,
+      { type: "loneCultivator", label: "独行问道", text: "解除师承，以心性和个人声望换取独立成长。" },
+    ].filter(Boolean),
+  };
+}
+
+function openDiscipleMajorDecision(afterClose = null) {
+  const available = state.sect.disciples.filter((d) => !d.seclusion && !d.travel);
+  const d = pick(available.length ? available : state.sect.disciples);
+  if (!d) {
+    afterClose?.();
+    return;
+  }
+  const decision = buildDiscipleMajorDecision(d);
+  showModal({
+    kicker: "弟子重大抉择",
+    title: `${d.name} · ${decision.title}`,
+    body: `
+      <div class="ai-report-summary">
+        <div><span>当前境界</span><strong>${realms[d.realm]}</strong></div>
+        <div><span>当前专精</span><strong>${specializationOf(d)?.name || "未定"}</strong></div>
+        <div><span>当前道心</span><strong>${daoHeartOf(d)?.name || "未定"}</strong></div>
+        <div><span>当前体质</span><strong>${constitutionOf(d)?.name || "凡骨未显"}</strong></div>
+      </div>
+      <p>${tradeEscape(decision.text)}</p>
+      <div class="system-grid">
+        ${decision.choices.map((choice) => `<article class="system-card"><strong>${tradeEscape(choice.label)}</strong><span>${tradeEscape(choice.text)}</span></article>`).join("")}
+      </div>
+      <p>这是不可撤销的路线抉择，不消耗年度行动点。</p>
+    `,
+    actions: decision.choices.map((choice) => ({
+      label: choice.label,
+      handler: () => resolveDiscipleMajorDecision(d, decision, choice, afterClose),
+    })),
+    dismissible: false,
+  });
+}
+
+function resolveDiscipleMajorDecision(d, decision, choice, afterClose = null) {
+  let result = "";
+  let tone = "good";
+  if (choice.type === "specialization") {
+    const before = specializationOf(d)?.name || "旧法";
+    const spec = catalogById(specializationCatalog, choice.target);
+    d.specialization = spec.id;
+    d.specializationLevel = Math.max(0, Number(d.specializationLevel || 0) - 1);
+    d.specializationExp = Math.round(Number(d.specializationExp || 0) * 0.55);
+    d.exp += 10;
+    adjustMind(d, 6, "转修新途");
+    d.status = `由${before}转修${spec.name}`;
+    result = `${d.name}舍弃${before}，正式转修${spec.name}。专精等级略有回落，但新路线已永久确立。`;
+  } else if (choice.type === "keepSpecialization") {
+    gainSpecializationExp(d, 48, "坚守本途");
+    d.temper += 3;
+    d.exp += 8;
+    d.status = "本途愈坚";
+    result = `${d.name}拒绝改修，当前专精获得大量熟练，悟性与修为有所提升。`;
+  } else if (choice.type === "daoHeart") {
+    const before = daoHeartOf(d)?.name || "旧念";
+    const heart = catalogById(daoHeartCatalog, choice.target);
+    d.daoHeart = heart.id;
+    applyDiscipleTemplateStats(d, heart, 0.55);
+    adjustMind(d, heart.id === "demonic" ? 12 : -6, "道心蜕变");
+    d.status = `道心化为${heart.name}`;
+    result = `${d.name}舍去${before}，道心永久转变为${heart.name}，成长倾向与战斗定位随之改变。`;
+    tone = heart.id === "demonic" ? "warn" : "good";
+  } else if (choice.type === "keepDaoHeart") {
+    d.temper += 4;
+    d.exp += 8;
+    adjustMind(d, -10, "守住初心");
+    d.status = "初心不改";
+    result = `${d.name}守住原本道心，心魔下降，悟性与修为得到巩固。`;
+  } else if (choice.type === "constitution") {
+    const con = catalogById(constitutionCatalog, choice.target);
+    d.constitution = con.id;
+    d.constitutionAwakened = true;
+    applyDiscipleTemplateStats(d, con, 1);
+    adjustMind(d, 8, "血脉觉醒");
+    d.status = `觉醒${con.name}`;
+    result = `${d.name}承受血脉蜕变，永久觉醒特殊体质${con.name}。`;
+  } else if (choice.type === "resistConstitution") {
+    d.aptitude += 5;
+    d.temper += 5;
+    d.exp += 14;
+    d.status = "压下血脉异象";
+    result = `${d.name}放弃特殊体质，以异象淬炼根骨与悟性，基础成长得到提升。`;
+  } else if (choice.type === "mentor") {
+    const mentor = state.sect.disciples.find((item) => item.id === choice.target);
+    d.mentorId = mentor?.id || "";
+    d.exp += 10;
+    gainSpecializationExp(d, 22, "师承抉择");
+    d.status = `师承${mentor?.name || "未定"}`;
+    result = `${d.name}正式确立${mentor?.name || "新的"}师承，今后的年度修行将受其影响。`;
+  } else {
+    d.mentorId = "";
+    d.temper += 4;
+    d.personalFame = Number(d.personalFame || 0) + 6;
+    d.status = "独行问道";
+    result = `${d.name}解除师承，选择独行问道，心性与个人声望永久提升。`;
+  }
+  d.lastPersonalEventYear = state.year;
+  state.lastDiscipleEncounterYear = state.year;
+  state.nextDiscipleEncounterYear = state.year + rand(2, 5);
+  refreshDiscipleTitles(d);
+  log(`弟子重大抉择：${result}`, tone);
+  const continueYear = () => {
+    closeModal();
+    afterClose?.();
+    render();
+  };
+  showModal({
+    kicker: "重大抉择结果",
+    title: d.status,
+    body: `<p>${tradeEscape(result)}</p><div class="ai-report-summary"><div><span>下次弟子事件</span><strong>不晚于太初 ${state.nextDiscipleEncounterYear} 年</strong></div><div><span>当前战力</span><strong>${Math.round(discipleBattleScore(d))}</strong></div></div>`,
+    actions: [{ label: "继续年度结算", handler: continueYear }],
+    dismissible: false,
+  });
 }
 
 function adjustMind(d, amount, reason = "") {
@@ -6244,7 +6526,7 @@ function disciplePortraitHtml(d, size = "") {
   const style = [`--portrait-hue:${hue}`];
   if (asset) style.push(`--portrait-image:${cssAssetUrl(asset)}`);
   return `<div class="portrait-slot ${size} portrait-${portraitStyleOf(d)} ${asset ? "has-portrait-asset" : ""}" style="${style.join(";")}" title="${tradeEscape(d?.portraitId || "默认立绘槽")}">
-    ${asset ? `<img class="portrait-slot-img" src="${tradeEscape(assetUrl(asset))}" data-fallback-src="${tradeEscape(assetFallbackUrl(asset))}" alt="${tradeEscape(d?.name || "弟子头像")}" loading="lazy" decoding="async">` : ""}
+    ${asset ? `<img class="portrait-slot-img" src="${tradeEscape(assetUrl(asset))}" data-fallback-srcs="${tradeEscape(assetFallbackList(asset))}" alt="${tradeEscape(d?.name || "弟子头像")}" loading="lazy" decoding="async">` : ""}
     <span>${tradeEscape((d?.name || "?").slice(0, 1))}</span>
     <i></i>
   </div>`;
@@ -6275,7 +6557,7 @@ function discipleProfileCardHtml(d) {
     ["根骨", d.aptitude, "骨"],
     ["灵根", discipleRootLabel(d), "灵"],
     ["悟性", d.temper, "悟"],
-    ["灵力", Math.round(discipleBattleScore(d)), "力"],
+    ["战力", Math.round(discipleBattleScore(d)), "战"],
     ["机缘", d.luck, "缘"],
   ];
   const style = [`--portrait-hue:${hue}`];
@@ -6289,7 +6571,7 @@ function discipleProfileCardHtml(d) {
           <strong>${tradeEscape(sectName)}</strong>
         </div>
         <div class="cultivator-art">
-          ${asset ? `<img class="cultivator-portrait-img" src="${tradeEscape(assetUrl(asset))}" data-fallback-src="${tradeEscape(assetFallbackUrl(asset))}" alt="${tradeEscape(d.name)}立绘" loading="eager" decoding="async">` : ""}
+          ${asset ? `<img class="cultivator-portrait-img" src="${tradeEscape(assetUrl(asset))}" data-fallback-srcs="${tradeEscape(assetFallbackList(asset))}" alt="${tradeEscape(d.name)}立绘" loading="eager" decoding="async">` : ""}
           <div class="ink-orbit" aria-hidden="true"></div>
           <div class="ink-mountains" aria-hidden="true"></div>
           <svg class="cultivator-silhouette" viewBox="0 0 220 300" aria-hidden="true" focusable="false">
@@ -6312,7 +6594,7 @@ function discipleProfileCardHtml(d) {
           </aside>
         </div>
         <div class="cultivator-stat-grid">
-          ${stats.map(([label, value, icon]) => `<div class="cultivator-stat"><i>${icon}</i><span>${label}</span><strong>${tradeEscape(String(value))}</strong></div>`).join("")}
+          ${stats.map(([label, value]) => `<div class="cultivator-stat" aria-label="${tradeEscape(`${label} ${value}`)}"><strong>${tradeEscape(String(value))}</strong></div>`).join("")}
         </div>
         <div class="cultivator-progress">
           <div><span>修炼进度</span><strong>${progress} / ${total}</strong></div>
@@ -6321,6 +6603,50 @@ function discipleProfileCardHtml(d) {
       </div>
     </section>
   `;
+}
+
+function bindDisciplePortraitPreview(container, d) {
+  const image = container?.querySelector(".cultivator-portrait-img");
+  if (!image) return;
+  image.setAttribute("role", "button");
+  image.setAttribute("tabindex", "0");
+  image.setAttribute("aria-label", `放大查看${d.name}原画`);
+  const open = () => openDisciplePortraitPreview(d);
+  image.addEventListener("click", open);
+  image.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    open();
+  });
+}
+
+function openDisciplePortraitPreview(d) {
+  normalizeDisciplePortrait(d);
+  const asset = portraitAssetMap[d?.portraitId] || "";
+  if (!asset) return;
+  document.querySelector(".portrait-preview-backdrop")?.remove();
+  const backdrop = document.createElement("div");
+  backdrop.className = "portrait-preview-backdrop";
+  backdrop.innerHTML = `
+    <figure class="portrait-preview" role="dialog" aria-modal="true" aria-label="${tradeEscape(d.name)}原画预览">
+      <button type="button" class="portrait-preview-close" aria-label="关闭原画预览">×</button>
+      <img src="${tradeEscape(assetUrl(asset))}" data-fallback-srcs="${tradeEscape(assetFallbackList(asset))}" alt="${tradeEscape(d.name)}原画" decoding="async">
+      <figcaption><strong>${tradeEscape(d.name)}</strong><span>${tradeEscape(realms[d.realm] || "未入道")} · 战力 ${Math.round(discipleBattleScore(d))}</span></figcaption>
+    </figure>
+  `;
+  const close = () => {
+    backdrop.remove();
+    document.removeEventListener("keydown", onKeydown);
+  };
+  const onKeydown = (event) => {
+    if (event.key === "Escape") close();
+  };
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop || event.target.closest(".portrait-preview-close")) close();
+  });
+  document.addEventListener("keydown", onKeydown);
+  document.body.appendChild(backdrop);
+  backdrop.querySelector(".portrait-preview-close")?.focus();
 }
 
 function discipleLifeExpectancy(d) {
@@ -7001,7 +7327,6 @@ function resolveYearAdvance() {
   processMindAndLegacy();
   processLifespanYear();
   maybeCreateYearlyBond();
-  maybeTriggerDisciplePersonalEvent();
 
   if (Math.random() < 0.42) randomEvent();
   const worldAdventureDue = state.year >= state.nextWorldAdventureYear;
@@ -7118,6 +7443,7 @@ function continuePendingYearEvent(kind, fallback = null) {
 
 function runYearStartEvents(endingBoonKey = "") {
   const queue = [
+    { check: () => shouldOpenDiscipleMajorDecision(), run: (next) => openDiscipleMajorDecision(next) },
     { check: () => state.year >= state.nextWorldAdventureYear, run: (next) => { if (!maybeStartWorldAdventure(next)) next(); } },
     { check: () => state.year % 10 === 0 && state.lastTournamentYear !== state.year, run: (next) => openTournamentPicker(true, next) },
     { check: () => shouldOpenCouncilMeeting(endingBoonKey), run: (next) => openCouncilMeeting(next) },
@@ -9527,7 +9853,13 @@ function openFrontierDungeon(dungeon) {
     kicker: "边境讨伐",
     title: `${dungeon.name}：选择最多 5 名弟子`,
     body: `
-      <p>${dungeon.text} 推荐战力 ${Math.round(dungeon.value)}。妖兽同阶更强，建议携带回血丹。元婴以上晋升材料主要来自此类副本。</p>
+      <p>${dungeon.text} 推荐战力 ${Math.round(dungeon.value)}。环境：<strong>${dungeon.hazard?.name || "普通妖域"}</strong>，${dungeon.hazard?.text || "无额外影响"}</p>
+      <div class="method-list">
+        <label class="method-card"><strong>稳扎稳打</strong><span>队伍战力 +3%，失败伤势降低。</span><input type="radio" name="frontier-tactic" value="steady" checked></label>
+        <label class="method-card"><strong>强攻斩首</strong><span>队伍战力 +10%，胜利修为更多，材料率略降。</span><input type="radio" name="frontier-tactic" value="assault"></label>
+        <label class="method-card"><strong>搜猎取材</strong><span>队伍战力 -4%，晋升材料掉率 +20%。</span><input type="radio" name="frontier-tactic" value="hunt"></label>
+        <label class="method-card"><strong>边寨补给</strong><span>消耗 1 点边境补给，队伍战力 +15%且降低伤势。当前补给 ${state.frontier.supply || 0}。</span><input type="radio" name="frontier-tactic" value="supply" ${(state.frontier.supply || 0) < 1 ? "disabled" : ""}></label>
+      </div>
       <div class="adventure-roster">
         ${roster.map((d, i) => `<label class="adventure-candidate ${d.core ? "is-core" : ""}">
           <input class="frontier-team" type="checkbox" value="${d.id}" ${i < 3 ? "checked" : ""} />
@@ -9559,9 +9891,15 @@ function startFrontierDungeon(dungeon) {
     flashFeedback("至少选择 1 名弟子。", "warn");
     return;
   }
+  const tactic = els.modalBody.querySelector('input[name="frontier-tactic"]:checked')?.value || "steady";
+  if (tactic === "supply" && (state.frontier.supply || 0) < 1) {
+    flashFeedback("边境补给不足。", "warn");
+    return;
+  }
   if (!spendAction(1, "边境讨伐")) return;
+  if (tactic === "supply") state.frontier.supply -= 1;
   closeModal();
-  resolveFrontierDungeon(dungeon, team, 0);
+  resolveFrontierDungeon(dungeon, team, 0, tactic);
 }
 
 function frontierDisciplePower(d) {
@@ -9575,8 +9913,9 @@ function bestHealingPillSlot() {
     .sort((a, b) => (itemCatalog[b.id].combatHeal + (b.quality || 0) * 12) - (itemCatalog[a.id].combatHeal + (a.quality || 0) * 12))[0] || null;
 }
 
-function resolveFrontierDungeon(dungeon, team, healBoost = 0) {
-  const our = team.reduce((sum, d) => sum + frontierDisciplePower(d), 0) + state.sect.barrier * 3 + healBoost + rand(0, 260);
+function resolveFrontierDungeon(dungeon, team, healBoost = 0, tactic = "steady") {
+  const tacticPower = tactic === "assault" ? 1.1 : tactic === "hunt" ? 0.96 : tactic === "supply" ? 1.15 : 1.03;
+  const our = (team.reduce((sum, d) => sum + frontierDisciplePower(d), 0) + state.sect.barrier * 3 + healBoost + rand(0, 260)) * tacticPower;
   const enemy = dungeon.value + dungeon.tier * rand(80, 160) + rand(0, 420);
   const monster = frontierMonsterFromPower(`${dungeon.name.slice(0, 4)}首领`, enemy, `${dungeon.id}:${state.year}:${healBoost}`, 1 + dungeon.tier * 0.12);
   const battle = simulateTeamVsMonsterBattle(team, monster, { enemyPower: enemy, maxRounds: 15 });
@@ -9587,11 +9926,11 @@ function resolveFrontierDungeon(dungeon, team, healBoost = 0) {
     teamLabel: "讨伐队",
     enemyLabel: dungeon.name,
     scores: { our, enemy },
-    onComplete: () => resolveFrontierDungeonAfterBattle(dungeon, team, battle, our, enemy, healBoost),
+    onComplete: () => resolveFrontierDungeonAfterBattle(dungeon, team, battle, our, enemy, healBoost, tactic),
   });
 }
 
-function resolveFrontierDungeonAfterBattle(dungeon, team, battle, our, enemy, healBoost = 0) {
+function resolveFrontierDungeonAfterBattle(dungeon, team, battle, our, enemy, healBoost = 0, tactic = "steady") {
   const won = battle.won;
   const pill = bestHealingPillSlot();
   const teamNames = team.map((d) => d.name).join("、");
@@ -9618,20 +9957,20 @@ function resolveFrontierDungeonAfterBattle(dungeon, team, battle, our, enemy, he
           consumeItemCount(pill.id, 1);
           team.forEach((d) => { d.hp += Math.round((itemCatalog[pill.id].combatHeal || 20) * 0.35); });
           closeModal();
-          resolveFrontierDungeon(dungeon, team, (itemCatalog[pill.id].combatHeal || 20) * 16 + (pill.quality || 0) * 90);
+          resolveFrontierDungeon(dungeon, team, (itemCatalog[pill.id].combatHeal || 20) * 16 + (pill.quality || 0) * 90, tactic);
         } },
-        { label: "撤退认负", handler: () => finishFrontierDungeon(dungeon, team, false, our, enemy) },
+        { label: "撤退认负", handler: () => finishFrontierDungeon(dungeon, team, false, our, enemy, tactic) },
       ],
     });
     return;
   }
-  finishFrontierDungeon(dungeon, team, won, our, enemy);
+  finishFrontierDungeon(dungeon, team, won, our, enemy, tactic);
 }
 
-function finishFrontierDungeon(dungeon, team, won, our, enemy) {
+function finishFrontierDungeon(dungeon, team, won, our, enemy, tactic = "steady") {
   if (won) {
     applyRewardToSect(dungeon.reward, "边境讨伐");
-    const materialChance = clamp(54 + team.reduce((s, d) => s + d.luck, 0) / Math.max(1, team.length * 12) - dungeon.tier * 3, 32, 78);
+    const materialChance = clamp(54 + team.reduce((s, d) => s + d.luck, 0) / Math.max(1, team.length * 12) - dungeon.tier * 3 + Number(dungeon.hazard?.material || 0) + (tactic === "hunt" ? 20 : tactic === "assault" ? -5 : 0), 32, 95);
     const gotMaterial = rand(1, 100) <= materialChance;
     if (gotMaterial) addItem(dungeon.material, 1, 0);
     if (dungeon.reward?.alchemyMats || gotMaterial) {
@@ -9639,14 +9978,21 @@ function finishFrontierDungeon(dungeon, team, won, our, enemy) {
       state.sect.alchemyMats += extra;
       grantAlchemyMaterialsFromEvent({ name: dungeon.name, materialRich: dungeon.reward?.alchemyMats }, extra);
     }
-    const expGain = 10 + dungeon.tier * 4;
+    const expGain = 10 + dungeon.tier * 4 + Number(dungeon.hazard?.exp || 0) + (tactic === "assault" ? 6 : 0);
     team.forEach((d) => { d.exp += expGain; d.status = "边境归来"; });
     state.frontier.clears = (state.frontier.clears || 0) + 1;
+    state.frontier.renown = Number(state.frontier.renown || 0) + 8 + dungeon.tier * 4;
+    if (dungeon.hazard?.reward) {
+      state.sect.stones += Math.round((dungeon.reward?.stones || 120) * dungeon.hazard.reward);
+      state.sect.insight += Math.round(12 * dungeon.hazard.reward);
+    }
+    if (dungeon.name.includes("兽潮")) state.frontier.beastPressure = Math.max(0, Number(state.frontier.beastPressure || 0) - 24);
     state.frontier.dungeons = state.frontier.dungeons.filter((item) => item.id !== dungeon.id);
     log(`讨伐${dungeon.name}获胜，${gotMaterial ? `获得${itemCatalog[dungeon.material].name}` : `${itemCatalog[dungeon.material].name}未掉落`}，并推进边境威望。`, gotMaterial ? "good" : "warn");
   } else {
     team.forEach((d) => {
-      d.hp = Math.max(18, d.hp - rand(10, 28) - dungeon.tier * 3);
+      const injuryRelief = tactic === "steady" ? 6 : tactic === "supply" ? 9 : 0;
+      d.hp = Math.max(18, d.hp - Math.max(4, rand(10, 28) + dungeon.tier * 3 + Number(dungeon.hazard?.injury || 0) - injuryRelief));
       d.status = "边境负伤";
       adjustMind(d, 7 + dungeon.tier, "边境讨伐失利");
     });
@@ -9677,18 +10023,129 @@ function occupyFrontierPoint(node) {
   if (!frontierUnlocked()) return;
   if (!spendAction(1, "边境扩张")) return;
   const point = {
-    id: `frontier-point-${uid()}`,
+    id: node.id || `frontier-point-${uid()}`,
     type: "frontierPoint",
-    name: pick(["落霞边寨", "断河营", "伏妖关", "霜火堡", "青旗哨"]),
-    x: clamp(node.x + rand(-90, 90), 80, W - 80),
-    y: clamp(node.y + rand(-70, 70), 90, H - 90),
+    name: node.name || pick(["落霞边寨", "断河营", "伏妖关", "霜火堡", "青旗哨"]),
+    x: node.x,
+    y: node.y,
     owner: "player",
-    value: rand(90, 180),
+    value: Number(node.value || rand(90, 180)),
+    level: 1,
   };
   state.frontier.outposts.push(point);
+  state.frontier.claimedPointIds = [...new Set([...(state.frontier.claimedPointIds || []), point.id])];
+  state.frontier.supply = clamp(Number(state.frontier.supply || 0) + 2, 0, 20);
   state.sect.prestige += 24;
-  log(`本宗在边境立下${point.name}，边境副本收益与兽潮抵抗略有提高。`, "good");
+  log(`本宗占领${point.name}并立下一级边寨，边境补给 +2。`, "good");
   syncSharedWorld();
+  render();
+}
+
+function openFrontierOutpost(point) {
+  const real = state.frontier.outposts.find((item) => item.id === point.id) || point;
+  const level = Number(real.level || 1);
+  const isHome = real.id === "frontier-home";
+  const stoneCost = 220 * level;
+  const grainCost = 100 * level;
+  showModal({
+    kicker: "边境据点",
+    title: `${real.name} Lv.${level}`,
+    body: `
+      <div class="ai-report-summary">
+        <div><span>边境声望</span><strong>${state.frontier.renown || 0}</strong></div>
+        <div><span>边境补给</span><strong>${state.frontier.supply || 0}/20</strong></div>
+        <div><span>兽潮压力</span><strong>${state.frontier.beastPressure || 0}/100</strong></div>
+        <div><span>据点等级</span><strong>${level}/3</strong></div>
+      </div>
+      <p>据点每年提供等同等级的边境补给，并压低兽潮压力。补给可在讨伐中选择“边寨补给”战术。</p>
+    `,
+    actions: [
+      { label: isHome ? "本宗总寨" : `升级据点（${stoneCost}灵石/${grainCost}粮）`, handler: () => upgradeFrontierOutpost(real), disabled: isHome || level >= 3 || state.actionPoints < 1 },
+      { label: "调拨粮草换补给", handler: () => provisionFrontierOutpost(real), disabled: state.sect.grain < 140 || (state.frontier.supply || 0) >= 20 },
+      { label: "关闭", handler: closeModal },
+    ],
+  });
+}
+
+function upgradeFrontierOutpost(point) {
+  const level = Number(point.level || 1);
+  if (level >= 3 || !spendAction(1, "升级边境据点")) return;
+  const stoneCost = 220 * level;
+  const grainCost = 100 * level;
+  if (state.sect.stones < stoneCost || state.sect.grain < grainCost) {
+    state.actionPoints += 1;
+    flashFeedback(`需要 ${stoneCost} 灵石和 ${grainCost} 粮草。`, "warn");
+    render();
+    return;
+  }
+  state.sect.stones -= stoneCost;
+  state.sect.grain -= grainCost;
+  point.level = level + 1;
+  point.value = Math.round(Number(point.value || 100) * 1.25);
+  state.frontier.supply = clamp(Number(state.frontier.supply || 0) + point.level, 0, 20);
+  state.frontier.beastPressure = Math.max(0, Number(state.frontier.beastPressure || 0) - 8);
+  log(`${point.name}升至 Lv.${point.level}，补给能力与兽潮压制提高。`, "good");
+  closeModal();
+  render();
+}
+
+function provisionFrontierOutpost(point) {
+  if (state.sect.grain < 140) return;
+  state.sect.grain -= 140;
+  state.frontier.supply = clamp(Number(state.frontier.supply || 0) + 3 + Number(point.level || 1), 0, 20);
+  log(`向${point.name}调拨粮草，边境补给得到补充。`, "good");
+  closeModal();
+  render();
+}
+
+function openFrontierIncident(incident) {
+  const optionMap = {
+    caravan: [["护送脱险", "escort"], ["收购残货", "salvage"]],
+    herbField: [["抢收灵药", "harvest"], ["设伏猎兽", "ambush"]],
+    scouts: [["立即搜救", "rescue"], ["追查妖踪", "track"]],
+    refugees: [["接纳入寨", "shelter"], ["发粮遣返", "relief"]],
+    ruins: [["拆取阵材", "dismantle"], ["参悟残阵", "study"]],
+  };
+  const options = optionMap[incident.id.split("-").pop()] || optionMap[incident.id] || optionMap.ruins;
+  showModal({
+    kicker: "边境事件",
+    title: incident.name,
+    body: `<p>${incident.text}</p><p>处理边境事件消耗 1 点行动，但会提供补给、声望或稀有资源。</p>`,
+    actions: options.map(([label, choice]) => ({ label, handler: () => resolveFrontierIncident(incident, choice) })).concat({ label: "暂不处理", handler: closeModal }),
+  });
+}
+
+function resolveFrontierIncident(incident, choice) {
+  if (!spendAction(1, "处理边境事件")) return;
+  let result = "";
+  if (choice === "escort") {
+    state.sect.stones += 240; state.sect.prestige += 16; state.frontier.supply = clamp(state.frontier.supply + 2, 0, 20); result = "商队脱险，获得灵石、声望与补给。";
+  } else if (choice === "salvage") {
+    state.sect.stones += 360; state.sect.forgingMats += 1; result = "低价收下残货，获得大量灵石与器材。";
+  } else if (choice === "harvest") {
+    state.sect.alchemyMats += 3; grantAlchemyMaterialsFromEvent({ name: incident.name, materialRich: true }, 2); result = "抢收药圃，获得丹材与专用灵药。";
+  } else if (choice === "ambush") {
+    state.frontier.renown += 18; state.frontier.beastPressure = Math.max(0, state.frontier.beastPressure - 12); result = "伏击归巢妖兽，边境声望提高、兽潮压力下降。";
+  } else if (choice === "rescue") {
+    state.frontier.supply = clamp(state.frontier.supply + 4, 0, 20); state.sect.prestige += 20; result = "斥候获救并带回完整补给。";
+  } else if (choice === "track") {
+    const tpl = pick(frontierDungeonTemplates.filter((item) => item.tier <= 4));
+    const hazard = pick(frontierHazards);
+    state.frontier.dungeons.push({ ...tpl, hazard, id: `tracked-${uid()}`, type: "frontierDungeon", x: incident.x, y: incident.y, value: Math.round(tpl.minPower * 1.08 * hazard.enemy), ttl: 3 });
+    result = "沿妖踪发现一处额外精英副本，持续三年。";
+  } else if (choice === "shelter") {
+    state.sect.grain = Math.max(0, state.sect.grain - 160); state.sect.prestige += 32; state.frontier.renown += 12; result = "接纳边民，消耗粮草并获得大量声望。";
+  } else if (choice === "relief") {
+    state.sect.grain = Math.max(0, state.sect.grain - 70); state.sect.prestige += 12; result = "发放粮草安置边民，宗门声誉略有提升。";
+  } else if (choice === "dismantle") {
+    state.sect.arrayMats += 3; state.sect.forgingMats += 1; result = "拆取古关残阵，获得阵材与器材。";
+  } else {
+    state.sect.insight += 90; const learner = pick(state.sect.disciples); if (learner) { learner.arrayLevel = Number(learner.arrayLevel || 0) + 1; learner.temper += 2; } result = `参悟残阵，参悟 +90${learner ? `，${learner.name}阵道提升` : ""}。`;
+  }
+  state.frontier.renown = Number(state.frontier.renown || 0) + 4;
+  state.frontier.incidents = state.frontier.incidents.filter((item) => item.id !== incident.id);
+  log(`${incident.name}：${result}`, "good");
+  closeModal();
   render();
 }
 
@@ -12256,6 +12713,13 @@ function drawNode(node, view = node) {
     ctx.arc(0, 0, 28 * pulse, 0, Math.PI * 2);
     ctx.fill();
     drawMapArtIcon("boss", node.tier >= 5 ? "#7f2f45" : "#9f3d35", node.glyph || "妖", 54);
+  } else if (node.type === "frontierIncident") {
+    const pulse = 1 + Math.sin(Date.now() / 280) * 0.1;
+    ctx.fillStyle = "rgba(170, 118, 42, 0.2)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 25 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    drawMapArtIcon("event", "#aa762a", node.glyph || "事", 48);
   } else if (node.type === "frontierBoss") {
     const pulse = 1 + Math.sin(Date.now() / 180) * 0.16;
     ctx.fillStyle = "rgba(127, 47, 69, 0.22)";
@@ -12433,7 +12897,7 @@ function drawMapModeOverlay() {
   ctx.font = "900 18px Microsoft YaHei";
   ctx.fillText(mapModeName(), 40, 49);
   ctx.font = "12px Microsoft YaHei";
-  const sub = state.currentMap === "frontier" ? "讨伐妖兽 / 晋升材料 / 扩张驻守"
+  const sub = state.currentMap === "frontier" ? "妖兽副本 / 环境词缀 / 边寨补给 / 区域事件"
     : state.currentMap === "forbidden" ? "20 层爬塔 / 三岔路线 / 通关带出遗物"
       : state.currentMap === "overseas" ? "暂未开放"
         : "宗门战争 / 资源点 / 机缘";
@@ -12452,8 +12916,10 @@ function refreshFrontierDungeons(force = false) {
   const maxRealm = state.sect ? Math.max(0, ...state.sect.disciples.map((d) => d.realm)) : 0;
   const templates = frontierDungeonTemplates.filter((tpl) => tpl.tier <= Math.max(2, maxRealm + 2) && (tpl.tier <= 4 || Math.random() < 0.45));
   const count = frontierUnlocked() ? rand(5, 8) : 3;
-  state.frontier.dungeons = Array.from({ length: count }, (_, i) => {
+  const existingDungeons = force ? state.frontier.dungeons.filter((item) => Number(item.ttl || 0) > 0) : [];
+  const freshDungeons = Array.from({ length: count }, (_, i) => {
     const tpl = pick(templates.length ? templates : frontierDungeonTemplates.slice(0, 2));
+    const hazard = pick(frontierHazards);
     const tierScale = 1 + Math.max(0, tpl.tier - 2) * 0.22 + Math.min(0.65, state.year / 32);
     return {
       ...tpl,
@@ -12461,10 +12927,19 @@ function refreshFrontierDungeons(force = false) {
       type: "frontierDungeon",
       x: rand(86, 960),
       y: rand(92, 590),
-      value: Math.round(tpl.minPower * tierScale),
-      ttl: rand(1, 3),
+      hazard,
+      value: Math.round(tpl.minPower * tierScale * Number(hazard?.enemy || 1)),
+      ttl: Math.max(1, rand(1, 3) + Number(hazard?.ttl || 0)),
     };
   });
+  state.frontier.dungeons = [...existingDungeons, ...freshDungeons].slice(0, 10);
+  const incidentCount = rand(1, 3);
+  const existingIncidents = force ? state.frontier.incidents.filter((item) => Number(item.ttl || 0) > 0) : [];
+  const freshIncidents = Array.from({ length: incidentCount }, (_, i) => {
+    const tpl = pick(frontierIncidentTemplates);
+    return { ...tpl, id: `frontier-incident-${state.year}-${i}-${tpl.id}`, type: "frontierIncident", x: rand(100, 930), y: rand(100, 565), ttl: rand(1, 2) };
+  });
+  state.frontier.incidents = [...existingIncidents, ...freshIncidents].slice(0, 4);
   state.frontier.lastRefreshYear = state.year;
 }
 
@@ -12477,16 +12952,23 @@ function refreshFrontierYear() {
   }
   if (!frontierUnlocked()) return;
   expireFrontierBossIfNeeded();
-  refreshFrontierDungeons(true);
   state.frontier.dungeons = state.frontier.dungeons
-    .map((dungeon) => ({ ...dungeon, ttl: Math.max(0, (dungeon.ttl || 1) - 1) }))
+    .map((dungeon) => ({ ...dungeon, ttl: Math.max(0, Number(dungeon.ttl || 1) - 1) }))
     .filter((dungeon) => dungeon.ttl > 0 || dungeon.tier <= 2);
+  state.frontier.incidents = state.frontier.incidents
+    .map((incident) => ({ ...incident, ttl: Math.max(0, Number(incident.ttl || 1) - 1) }))
+    .filter((incident) => incident.ttl > 0);
+  refreshFrontierDungeons(true);
+  const outpostSupply = (state.frontier.outposts || []).reduce((sum, point) => sum + Number(point.level || 1), 0);
+  state.frontier.supply = clamp(Number(state.frontier.supply || 0) + outpostSupply, 0, 20);
+  state.frontier.beastPressure = clamp(Number(state.frontier.beastPressure || 0) + rand(4, 10) - outpostSupply * 2, 0, 100);
   if (Math.random() < 0.2 + Math.min(0.18, state.year / 60)) {
     const pressure = Math.round(sectPower() * (0.18 + Math.random() * 0.12));
     const outpost = state.frontier.outposts[0];
     if (outpost) {
       const loss = Math.min(state.sect.grain, rand(40, 120));
       state.sect.grain -= loss;
+      state.frontier.beastPressure = clamp(state.frontier.beastPressure + 12, 0, 100);
       log(`边境兽潮冲击${outpost.name}，本宗调粮驰援，粮草 -${loss}。兽潮压力约 ${pressure}。`, "warn");
     } else {
       log("边境兽潮在关外游荡。若本宗开设边寨，后续会获得更多副本线索，也要承担兽潮压力。", "warn");
@@ -12577,9 +13059,13 @@ function frontierNodes() {
   }
   if (!state.frontier.dungeons?.length) refreshFrontierDungeons(true);
   const outposts = state.frontier.outposts || [];
+  const claimed = new Set(state.frontier.claimedPointIds || []);
+  const expansionPoints = frontierExpansionPoints.filter((point) => !claimed.has(point.id));
   return [
     { id: "frontier-home", type: "frontierPoint", name: "本宗边寨", x: 132, y: 552, owner: "player", value: 120 },
     ...outposts,
+    ...expansionPoints,
+    ...(state.frontier.incidents || []),
     ...(state.frontier.worldBoss && !state.frontier.worldBoss.defeated ? [state.frontier.worldBoss] : []),
     ...state.frontier.dungeons,
   ];
@@ -12675,6 +13161,7 @@ function renderUI() {
       const d = state.sect.disciples.find((item) => item.id === state.selectedDiscipleId);
       if (d) flashFeedback(`已查看弟子：${d.core ? "核心·" : ""}${d.name}`);
       render();
+      if (d) openDiscipleDetailModal(d.id);
     });
   }
   els.logCount.textContent = state.logs.length;
@@ -12826,11 +13313,11 @@ const guidePages = [
   {
     title: "弟子养成：道心、体质与专精",
     body: `
-      <p><strong>弟子养成入口</strong>在弟子详情的“弟子养成”按钮中。这里集中管理道心、体质、专精、师承、闭关、本命法宝、突破试炼和个人事件。</p>
-      <p><strong>道心</strong>是弟子的长期性格路线，会影响年度修行、战斗倾向、心魔风险和个人事件收益。道心随弟子生成，不需要玩家频繁操作。</p>
-      <p><strong>体质</strong>刷新率很低，新弟子约小概率天生拥有特殊体质。未显体质的弟子可以用“洗髓探体”尝试觉醒，但消耗材料且成功率依旧不高。</p>
-      <p><strong>专精</strong>决定弟子的培养定位：剑修、体修、丹修、器修、阵修、毒修、雷修、阴阳修。专精会随年度修行、闭关、试炼和个人事件线性成长，并直接影响战力或炼制表现。</p>
-      <p><strong>师徒传承</strong>允许低境界弟子拜高境界弟子为师，每年获得额外修为和专精经验。它不启用羁绊组合，只是稳定传承系统。</p>
+      <p><strong>弟子养成入口</strong>在弟子详情的“弟子养成”按钮中。这里管理闭关、游历、职位、本命法宝和突破试炼；重大路线不能主动修改。</p>
+      <p><strong>道心</strong>是弟子的长期性格路线，会影响年度修行、战斗倾向与心魔风险。它只能在随机重大抉择事件中改变。</p>
+      <p><strong>重大抉择事件</strong>会在随机年份从本宗现有弟子中抽取一人，触发专精转修、道心变化、体质觉醒或师承抉择。选择不可撤销且不消耗行动点。</p>
+      <p><strong>专精</strong>决定弟子的培养定位：剑修、体修、丹修、器修、阵修、毒修、雷修、阴阳修。专精可正常成长，但转修只能由重大抉择事件完成。</p>
+      <p><strong>路线唯一入口</strong>专精、道心、特殊体质与师承不能在养成面板主动修改，只能通过弟子重大抉择事件改变；新弟子入门时的初始路线不受影响。</p>
       <p><strong>闭关</strong>可选择修为、功法或问心方向。闭关会持续若干年自动结算收益，适合中后期培养核心弟子。</p>
       <p><strong>本命法宝</strong>不占装备栏，消耗器材和洗练材料打造，可长期升级。突破试炼能为下一次渡劫积累加成。</p>
     `,
@@ -12957,7 +13444,8 @@ const guidePages = [
     title: "边境妖域与境界晋升",
     body: `
       <p>拥有 3 名金丹及以上弟子后，地图上方可切换到边境妖域。</p>
-      <p>边境会每年刷新讨伐副本。最多派 5 名弟子进入，战斗用动画展示，失败会负伤，胜利有概率获得元婴以上晋升材料。</p>
+      <p>边境每年刷新多种讨伐副本与随机环境词缀。最多派 5 名弟子，并可选择稳扎、强攻、搜猎或消耗边寨补给四种战术。</p>
+      <p>地图上有可占领并升级的前线据点，每年产出补给、降低兽潮压力；随机边境事件则提供商队、药圃、斥候、边民与古关残阵等决策。</p>
       <p>弟子修为满后，金丹以前可自动渡劫；元婴及以上必须在弟子详情的“境界晋升”中放入对应材料，缺材料无法晋级。</p>
       <p>回血丹可在边境战斗中续战。回春丹初始可炼，中高阶回血丹和渡厄丹方主要通过拍卖会解锁。</p>
     `,
@@ -13076,7 +13564,7 @@ const tutorialSteps = [
     maxYear: 5,
     selector: "#discipleActions",
     title: "新增弟子养成入口",
-    text: "选中弟子后，点击“弟子养成”可以管理道心、体质、专精、师徒、闭关、本命法宝、突破试炼和个人事件。核心弟子建议尽早确定专精。",
+    text: "选中弟子后，点击“弟子养成”可安排闭关、游历、本命法宝和突破试炼。专精、道心、体质与师承只能等待随机重大抉择事件改变。",
     condition: () => state.founded && Boolean(selectedDisciple()),
   },
   {
@@ -13233,14 +13721,18 @@ function renderDiscipleDetail() {
   els.discipleDetail.innerHTML = `
     ${discipleProfileCardHtml(d)}
     <div class="disciple-detail-summary">
-      <span><b>状态</b>${tradeEscape(d.elder ? `${d.elderRole} / ${d.status}` : d.status)}</span>
-      <span><b>战斗</b>体${d.hp} 攻${d.atk} 御${d.def} 速${d.speed}</span>
-      <span><b>阵道</b>Lv.${d.arrayLevel || 0}</span>
-      <span><b>心魔</b>${d.mind || 0}/100</span>
-      <span><b>寿元</b>${d.age || 18}/${d.lifespan || discipleLifeExpectancy(d)}</span>
-      <span><b>委派</b>${tradeEscape(delegationTasks.find((task) => task.id === d.assignment)?.name || "无")}</span>
-      <span><b>词条</b>${tradeEscape(traitText)}</span>
-      <span><b>羁绊</b>${tradeEscape(bondText)}</span>
+      <span><b>当前状态</b>${tradeEscape(d.elder ? `${d.elderRole} / ${d.status}` : d.status)}</span>
+      <span><b>弟子战力</b>${Math.round(discipleBattleScore(d))}</span>
+      <span><b>当前体魄</b>${d.hp}</span>
+      <span><b>攻击属性</b>${d.atk}</span>
+      <span><b>防御属性</b>${d.def}</span>
+      <span><b>速度属性</b>${d.speed}</span>
+      <span><b>阵道等级</b>Lv.${d.arrayLevel || 0}</span>
+      <span><b>心魔值</b>${d.mind || 0} / 100</span>
+      <span><b>年龄 / 寿元</b>${d.age || 18} / ${d.lifespan || discipleLifeExpectancy(d)}</span>
+      <span><b>当前委派</b>${tradeEscape(delegationTasks.find((task) => task.id === d.assignment)?.name || "无")}</span>
+      <span class="is-wide"><b>弟子词条</b>${tradeEscape(traitText)}</span>
+      <span class="is-wide"><b>羁绊关系</b>${tradeEscape(bondText)}</span>
     </div>
   `;
   const heart = daoHeartOf(d);
@@ -13265,23 +13757,73 @@ function renderDiscipleDetail() {
     return data ? `${data.name}${method ? `(${Math.round(method.proficiency || 0)})` : ""}` : "";
   }).filter(Boolean);
   els.discipleDetail.insertAdjacentHTML("beforeend", `<p>携带功法：${activeMethods.length ? activeMethods.join(" → ") : "暂无"}。</p>`);
+  bindDisciplePortraitPreview(els.discipleDetail, d);
   renderEquipmentSlots(d);
-  addActionTo(els.discipleActions, "弟子养成", () => openDiscipleCultivationPanel(d));
-  addActionTo(els.discipleActions, d.core ? "取消核心弟子" : "设为核心弟子", () => toggleCoreDisciple(d));
-  addActionTo(els.discipleActions, "驱逐弟子", () => confirmExpelDisciple(d), state.sect.disciples.length <= 1);
-  addActionTo(els.discipleActions, "缔结羁绊", () => openBondMenu(d), state.sect.disciples.length < 2);
-  addActionTo(els.discipleActions, d.elder ? "已是长老" : "晋为长老", () => promoteElder(d), d.elder || d.realm < 2 || state.sect.prestige < 180);
-  addActionTo(els.discipleActions, "境界晋升", () => openAdvancementPanel(d), d.realm >= realms.length - 1 || d.exp < 100);
-  addActionTo(els.discipleActions, "功法配置", () => openMethodPanel(d));
-  addActionTo(els.discipleActions, `压制心魔 ${45 + Math.floor((d.mind || 0) * 1.5)}参悟`, () => suppressMindDemon(d), state.actionPoints < 1 || (d.mind || 0) < 12);
-  addActionTo(els.discipleActions, `阵道授课 ${arrayTrainCost(d)}参悟`, () => trainArrayDisciple(d), state.actionPoints < 1 || state.sect.insight < arrayTrainCost(d));
+  for (const action of discipleActionSpecs(d)) addActionTo(els.discipleActions, action.label, action.handler, action.disabled);
+}
+
+function discipleActionSpecs(d) {
+  const actions = [
+    { label: "弟子养成", handler: () => openDiscipleCultivationPanel(d) },
+    { label: d.core ? "取消核心弟子" : "设为核心弟子", handler: () => toggleCoreDisciple(d) },
+    { label: "驱逐弟子", handler: () => confirmExpelDisciple(d), disabled: state.sect.disciples.length <= 1 },
+    { label: "缔结羁绊", handler: () => openBondMenu(d), disabled: state.sect.disciples.length < 2 },
+    { label: d.elder ? "已是长老" : "晋为长老", handler: () => promoteElder(d), disabled: d.elder || d.realm < 2 || state.sect.prestige < 180 },
+    { label: "境界晋升", handler: () => openAdvancementPanel(d), disabled: d.realm >= realms.length - 1 || d.exp < 100 },
+    { label: "功法配置", handler: () => openMethodPanel(d) },
+    { label: `压制心魔 ${45 + Math.floor((d.mind || 0) * 1.5)}参悟`, handler: () => suppressMindDemon(d), disabled: state.actionPoints < 1 || (d.mind || 0) < 12 },
+    { label: `阵道授课 ${arrayTrainCost(d)}参悟`, handler: () => trainArrayDisciple(d), disabled: state.actionPoints < 1 || state.sect.insight < arrayTrainCost(d) },
+  ];
+  for (const slot of gearSlots) {
+    if (d.equipment?.[slot.key]) actions.push({ label: `卸下${slot.name}`, handler: () => unequipItem(d, slot.key) });
+  }
   for (const slot of state.sect.inventory.filter((item) => item.count > 0 && itemCatalog[item.id] && !itemCatalog[item.id]?.material)) {
     const item = itemCatalog[slot.id];
-    addActionTo(els.discipleActions, `${item.equipment ? "装备" : methodCatalog[slot.id] ? "参悟" : "使用"}${itemLabel(slot)} x${slot.count}`, () => useItemOnSelected(slot.id, slot.quality || 0, slot.gearUid || null));
+    actions.push({
+      label: `${item.equipment ? "装备" : methodCatalog[slot.id] ? "参悟" : "使用"}${itemLabel(slot)} x${slot.count}`,
+      handler: () => useItemOnSelected(slot.id, slot.quality || 0, slot.gearUid || null),
+    });
   }
   for (const relicSlot of state.sect.relicInventory || []) {
     const relic = forbiddenRelics.find((item) => item.id === relicSlot.id);
-    if (relic) addActionTo(els.discipleActions, `装备遗物：${relic.name}`, () => equipRelic(d, relicSlot));
+    if (relic) actions.push({ label: `装备遗物：${relic.name}`, handler: () => equipRelic(d, relicSlot) });
+  }
+  return actions;
+}
+
+function openDiscipleDetailModal(discipleId) {
+  const d = state.sect?.disciples.find((item) => item.id === discipleId);
+  if (!d) return;
+  state.selectedDiscipleId = d.id;
+  renderDiscipleDetail();
+  showModal({
+    kicker: "弟子详情",
+    title: `${d.core ? "核心·" : ""}${d.name}`,
+    body: `
+      <div class="disciple-detail-modal">
+        <div class="disciple-modal-profile">${els.discipleDetail.innerHTML}</div>
+        <section class="disciple-modal-tools">
+          <h3>装备与操作</h3>
+          <div class="equipment-slots">${els.equipmentSlots.innerHTML}</div>
+          <div class="disciple-modal-action-grid" data-disciple-modal-actions></div>
+        </section>
+      </div>
+    `,
+    actions: [{ label: "关闭", handler: closeModal }],
+  });
+  els.eventModal.querySelector(".event-modal")?.classList.add("disciple-detail-dialog");
+  bindDisciplePortraitPreview(els.modalBody.querySelector(".disciple-modal-profile"), d);
+  const container = els.modalBody.querySelector("[data-disciple-modal-actions]");
+  for (const action of discipleActionSpecs(d)) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = action.label;
+    btn.disabled = Boolean(action.disabled);
+    btn.addEventListener("click", () => runActionWithFeedback(action.label, () => {
+      closeModal();
+      action.handler();
+    }));
+    container.appendChild(btn);
   }
 }
 
@@ -13350,9 +13892,6 @@ function renderEquipmentSlots(d) {
     const affixes = equipped && slot.key !== "relic" ? gearAffixSummary(equipped) : "";
     return `<div class="equip-slot"><span>${slot.name}</span><strong>${label}</strong>${affixes ? `<em>${affixes}</em>` : ""}</div>`;
   }).join("");
-  for (const slot of slots) {
-    if (d.equipment?.[slot.key]) addActionTo(els.discipleActions, `卸下${slot.name}`, () => unequipItem(d, slot.key));
-  }
 }
 
 function renderInventory() {
@@ -13538,8 +14077,13 @@ function renderTarget() {
     els.targetDetail.textContent = `${node.name}，边境巨兽，血量 ${Math.round(node.hp)}/${Math.round(node.totalHp)}（${pct}%），强度 ${Math.round(node.power)}。所有联机玩家共享血量，可多次挑战造成累计伤害；本年未击杀则遁走。近期伤害：${logRows}。`;
     addAction("挑战巨兽", () => openFrontierBossRaid(node), !state.founded || state.actionPoints < 1 || node.defeated);
   } else if (node.type === "frontierPoint") {
-    els.targetDetail.textContent = `${node.name}。边境扩张点可作为本宗前线据点，能抵御兽潮并提高边境副本收益。后续 AI 宗门也可能争夺这些据点。`;
-    addAction(node.owner === "player" ? "已驻扎" : "扩张占点", () => occupyFrontierPoint(node), !state.founded || state.actionPoints < 1 || node.owner === "player");
+    els.targetDetail.textContent = node.owner === "player"
+      ? `${node.name} Lv.${node.level || 1}。当前边境声望 ${state.frontier.renown || 0}，补给 ${state.frontier.supply || 0}/20，兽潮压力 ${state.frontier.beastPressure || 0}/100。`
+      : `${node.name}是一处可扩张前线据点。占领后每年产出补给、压低兽潮压力，并可继续升级。`;
+    addAction(node.owner === "player" ? "管理边寨" : "扩张占点", () => node.owner === "player" ? openFrontierOutpost(node) : occupyFrontierPoint(node), !state.founded || (node.owner !== "player" && state.actionPoints < 1));
+  } else if (node.type === "frontierIncident") {
+    els.targetDetail.textContent = `${node.name}：${node.text} 剩余 ${node.ttl || 1} 年。处理事件会消耗 1 点行动。`;
+    addAction("处理事件", () => openFrontierIncident(node), !state.founded || state.actionPoints < 1);
   } else if (node.type === "forbiddenGate") {
     const cycle = forbiddenAttemptInfo();
     els.targetDetail.textContent = `上古禁地是独立 20 层爬塔玩法，每十年刷新 3 次尝试。当前周期剩余 ${cycle.left}/3 次。选择一名弟子进入，死亡不会删除弟子，但会重伤；通关可带出一件双面遗物。`;
@@ -13694,7 +14238,8 @@ function renderMapActionBubble(node) {
   if (node.type === "frontierLocked") add("要求", () => showModal({ kicker: "边境要求", title: "金丹三人方可开关", body: `<p>拥有 3 名金丹及以上弟子后，边境妖域会正式开放。</p>` }));
   if (node.type === "frontierDungeon") add("讨伐", () => openFrontierDungeon(node), state.actionPoints < 1);
   if (node.type === "frontierBoss") add("挑战巨兽", () => openFrontierBossRaid(node), state.actionPoints < 1 || node.defeated);
-  if (node.type === "frontierPoint") add(node.owner === "player" ? "已驻扎" : "扩张", () => occupyFrontierPoint(node), state.actionPoints < 1 || node.owner === "player");
+  if (node.type === "frontierPoint") add(node.owner === "player" ? "管理" : "扩张", () => node.owner === "player" ? openFrontierOutpost(node) : occupyFrontierPoint(node), node.owner !== "player" && state.actionPoints < 1);
+  if (node.type === "frontierIncident") add("处理", () => openFrontierIncident(node), state.actionPoints < 1);
   if (node.type === "forbiddenGate") add("进入", openForbiddenGate, forbiddenAttemptInfo().left <= 0 || Boolean(state.forbiddenRun));
   if (node.type === "overseasLocked") add("查看", () => showModal({ kicker: "海外仙洲", title: "暂未开放", body: `<p>海外地图暂时锁定，后续可做海贸与外域宗门。</p>` }));
   if (node.type === "rival") {
@@ -13775,7 +14320,7 @@ function mapNodePriority(node) {
   if (node.type === "rival" || node.type === "remotePlayer") return 3;
   if (node.type === "frontierBoss") return 4;
   if (node.type === "resource" || node.type === "frontierPoint") return 5;
-  if (node.type === "secretRealm" || node.type === "event" || node.type === "frontierDungeon") return 6;
+  if (node.type === "secretRealm" || node.type === "event" || node.type === "frontierDungeon" || node.type === "frontierIncident") return 6;
   return 7;
 }
 
@@ -13906,7 +14451,7 @@ canvas.addEventListener("mousemove", (evt) => {
   els.tip.hidden = false;
   els.tip.style.left = `${evt.clientX - canvas.getBoundingClientRect().left + 14}px`;
   els.tip.style.top = `${evt.clientY - canvas.getBoundingClientRect().top + 14}px`;
-  els.tip.innerHTML = `<strong>${node.name}</strong><br>${node.type === "rival" || node.type === "remotePlayer" ? `战力 ${Math.round(node.power || 0)}` : node.type === "resource" ? `价值 ${node.value}` : node.type === "secretRealm" ? `危险 ${Math.round(node.danger || 0)} · 剩余 ${node.ttl || 1} 年` : node.type === "event" ? `剩余 ${node.ttl} 季` : node.type === "frontierDungeon" ? `推荐战力 ${Math.round(node.value)}` : node.type === "frontierBoss" ? `血量 ${Math.round(node.hp || 0)}/${Math.round(node.totalHp || 1)}` : node.type === "forbiddenFloor" ? `第 ${node.floor} 层` : node.type === "forbiddenGate" ? "禁地入口" : "可选山门"}`;
+  els.tip.innerHTML = `<strong>${node.name}</strong><br>${node.type === "rival" || node.type === "remotePlayer" ? `战力 ${Math.round(node.power || 0)}` : node.type === "resource" ? `价值 ${node.value}` : node.type === "secretRealm" ? `危险 ${Math.round(node.danger || 0)} · 剩余 ${node.ttl || 1} 年` : node.type === "event" ? `剩余 ${node.ttl} 季` : node.type === "frontierIncident" ? `边境事件 · 剩余 ${node.ttl || 1} 年` : node.type === "frontierDungeon" ? `推荐战力 ${Math.round(node.value)}` : node.type === "frontierBoss" ? `血量 ${Math.round(node.hp || 0)}/${Math.round(node.totalHp || 1)}` : node.type === "forbiddenFloor" ? `第 ${node.floor} 层` : node.type === "forbiddenGate" ? "禁地入口" : "可选山门"}`;
 });
 
 canvas.addEventListener("touchstart", (evt) => {
@@ -13917,17 +14462,20 @@ canvas.addEventListener("touchstart", (evt) => {
 
 els.nextYearBtn.addEventListener("click", advanceYear);
 els.modalCloseBtn.addEventListener("click", () => {
+  if (els.eventModal.dataset.dismissible === "false") return;
   if (typeof els.modalCloseBtn.onclick === "function") return;
   closeModal();
 });
 els.eventModal.addEventListener("click", (evt) => {
   if (evt.target === els.eventModal) {
+    if (els.eventModal.dataset.dismissible === "false") return;
     if (typeof els.modalCloseBtn.onclick === "function") els.modalCloseBtn.onclick();
     else closeModal();
   }
 });
 window.addEventListener("keydown", (evt) => {
   if (evt.key === "Escape" && !els.eventModal.hidden) {
+    if (els.eventModal.dataset.dismissible === "false") return;
     if (typeof els.modalCloseBtn.onclick === "function") els.modalCloseBtn.onclick();
     else closeModal();
   }
