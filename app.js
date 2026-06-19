@@ -1057,6 +1057,15 @@ const missionCatalog = [
   { id: "firstBeast", name: "初讨妖兽", text: "完成一次边境讨伐副本。", reward: { stones: 120, alchemyMats: 1 }, check: () => state.frontier?.clears > 0 },
   { id: "firstArray", name: "阵道初成", text: "推演出任意阵图。", reward: { arrayMats: 1, insight: 30 }, check: () => state.sect?.formations?.length > 0 },
   { id: "forbiddenTry", name: "禁地初探", text: "进入一次禁地爬塔。", reward: { prestige: 30, insight: 30 }, check: () => (state.forbidden?.totalRuns || 0) > 0 },
+  { id: "overseasPort", name: "东海开港", text: "建设海外港口到 1 级。", reward: { stones: 120, prestige: 18 }, check: () => (state.overseas?.portLevel || 0) >= 1 },
+  { id: "overseasVoyage", name: "第一次试航", text: "完成至少一次海外航线试航。", reward: { grain: 120, insight: 30 }, check: () => (state.overseas?.voyageCount || 0) >= 1 },
+  { id: "overseasEvent", name: "不可名状归航", text: "完成任意克苏鲁远洋事件。", reward: { prestige: 45, arrayMats: 1 }, check: () => (state.overseas?.clearedEvents || []).length >= 1 },
+  { id: "overseasFaction", name: "海外立场", text: "让任意海外势力的路线影响达到 12。", reward: { insight: 45, stones: 100 }, check: () => overseasFactionTemplates.some((faction) => Number(state.overseas?.factions?.[faction.id]?.influence || 0) >= 12) },
+  { id: "overseasMutation", name: "直面异化", text: "宗门中出现第一名拥有克苏鲁异化词条的弟子。", reward: { prestige: 32, alchemyMats: 1 }, check: () => Boolean(state.sect?.disciples?.some((d) => (d.traits || []).some((trait) => trait.mutationId))) },
+  { id: "overseasTrench", name: "葬仙归航", text: "完成一次葬仙海沟远征。", reward: { stones: 220, prestige: 65, arrayMats: 1 }, check: () => Number(state.overseas?.trenchClears || 0) >= 1 },
+  { id: "outerRealmClue", name: "天外留痕", text: "从外域仙洲带回第一条天外线索。", reward: { insight: 90, prestige: 55 }, check: () => Number(state.overseas?.outerRealmClues?.length || 0) >= 1 },
+  { id: "xuanKunFall", name: "覆海终战", text: "连续击破覆海玄鲲的翻海、吞星、归墟三相。", reward: { stones: 360, prestige: 120, arrayMats: 2 }, check: () => Boolean(state.overseas?.xuanKunDefeated) },
+  { id: "overseasEnding", name: "海国史册", text: "达成任意一条海外终局。", reward: { prestige: 180, insight: 160 }, check: () => Boolean(state.overseas?.ending) },
 ];
 
 const ascensionMaterials = {
@@ -1108,6 +1117,522 @@ const frontierExpansionPoints = [
   { id: "frontier-site-north", type: "frontierPoint", name: "镇妖旧关", x: 470, y: 170, value: 145, owner: "" },
   { id: "frontier-site-east", type: "frontierPoint", name: "赤水渡营", x: 760, y: 430, value: 165, owner: "" },
   { id: "frontier-site-deep", type: "frontierPoint", name: "万兽裂谷", x: 890, y: 210, value: 210, owner: "" },
+];
+
+const overseasUnlockRequirement = {
+  year: 8,
+  goldenCore: 2,
+  market: 1,
+};
+
+const overseasRouteTemplates = [
+  { id: "pearl", name: "明珠商路", glyph: "商", x: 210, y: 455, risk: 24, value: 170, text: "近海稳定航线，适合积累远洋货物与港口经验。", reward: { stones: 280, prestige: 12 } },
+  { id: "mist", name: "雾海航线", glyph: "雾", x: 410, y: 218, risk: 42, value: 240, text: "雾中有散仙岛和失踪船队，收益高于近海，但会提高污染。", reward: { insight: 50, alchemyMats: 1 } },
+  { id: "star", name: "沉星航路", glyph: "星", x: 658, y: 155, risk: 58, value: 320, text: "星尸坠海后的诡异航路，常刷出克苏鲁事件和高阶材料。", reward: { forgingMats: 1, arrayMats: 1 } },
+  { id: "abyss", name: "归墟暗潮", glyph: "渊", x: 842, y: 392, risk: 72, value: 430, text: "远洋深处的高危路线，海怪更强，适合后期宗门争夺终局资源。", reward: { stones: 520, insight: 90 } },
+];
+
+const overseasIslandTemplates = [
+  { id: "mirefolk", name: "鲛人泪市", glyph: "鲛", x: 292, y: 316, specialty: "alchemyMats", text: "鲛人以泪炼珠，愿用远洋货物换丹材，也会要求宗门处理污染潮。" },
+  { id: "looseImmortal", name: "散仙礁庭", glyph: "仙", x: 528, y: 372, specialty: "insight", text: "散仙岛主不问仙盟规矩，只看海图和见识。交好后可获得参悟与航线情报。" },
+  { id: "blackSail", name: "黑帆坊", glyph: "帆", x: 752, y: 505, specialty: "forgingMats", text: "黑帆坊贩卖海兽骨、星砂和禁忌器材，价格便宜但会抬高深海污染。" },
+  { id: "dragonWhale", name: "龙鲸背岛", glyph: "鲸", x: 872, y: 234, specialty: "arrayMats", text: "一座缓慢迁徙的活岛，背脊上布满古阵。关系越高，航标建设越便宜。" },
+];
+
+const overseasFactionTemplates = [
+  { id: "bellTemple", name: "沉钟寺", glyph: "钟", x: 486, y: 116, color: "#58766b", text: "镇压深海低语的古寺。可净化污染、炼制镇魂灯油，并要求宗门封印危险邪物。" },
+  { id: "blackTide", name: "黑潮信众", glyph: "潮", x: 744, y: 302, color: "#6b416e", text: "侍奉旧仙的隐秘教团。能交换古神低语与异化力量，但会让宗门更靠近失控。" },
+  { id: "merfolk", name: "鲛人海国", glyph: "鲛", x: 284, y: 382, color: "#2f7280", text: "重视契约与灵智海兽的海国。擅长海药、鲛绡、修船和长期贸易。" },
+];
+
+const overseasSeaMonsterTemplates = [
+  { id: "lamprey", name: "百灯鳗君", glyph: "灯", power: 1700, text: "脊背生满昏黄灯盏，灯中映出讨伐队还未发生的死法。" },
+  { id: "mirrorKraken", name: "镜肢潮主", glyph: "镜", power: 2400, text: "触腕如镜，能折出弟子的功法倒影，是海外第一阶段的精英海怪。" },
+  { id: "starWhale", name: "星骸鲸影", glyph: "鲸", power: 3200, text: "半截星尸化作鲸影，游过之处灵石与心智一起沉底。" },
+];
+
+const overseasMutationTraits = [
+  { id: "tideEye", name: "潮下之眼", note: "海外探索与机缘更强，但更容易听见古神低语。", luck: 10, explore: 18, mindRisk: 4, stats: { luck: 6, aptitude: 3 } },
+  { id: "scaleRebirth", name: "鳞骨新生", note: "体魄与防御提高，但丹药恢复效果下降。", battle: 18, pillPenalty: 12, stats: { hp: 24, def: 9, charm: -3 } },
+  { id: "starDream", name: "星渊梦行", note: "世界奇遇与海外奖励提高，但高风险选择更容易重伤。", explore: 24, deathRisk: 5, stats: { luck: 8, speed: 5, temper: -3 } },
+  { id: "namelessHunger", name: "无名饥渴", note: "战斗伤害提高，年度可能吞噬远洋货物或补给。", battle: 32, cargoHunger: 1, stats: { atk: 14, hp: 10, charm: -5 } },
+  { id: "silentPriest", name: "静默祭司", note: "封印与镇魂检定增强，但弟子羁绊成长减慢。", barrier: 18, seal: 22, bondPenalty: 8, stats: { temper: 12, arrayLevel: 1 } },
+  { id: "oldImmortalWhisper", name: "旧仙耳语", note: "每年可能获得古神低语，同时心魔与失控风险上升。", whisper: 1, mindRisk: 6, stats: { aptitude: 10, atk: 6 } },
+];
+
+const overseasEventTemplates = [
+  {
+    id: "seaEye",
+    name: "海眼低语",
+    glyph: "眼",
+    image: "assets/concepts/overseas-cthulhu/event-sea-eye-whisper.png",
+    danger: 52,
+    intro: "航线尽头出现一只倒悬的海眼。它没有眼皮，却在每一次潮汐里眨动，低声念出弟子的乳名。",
+    finale: "海眼在船底合拢，留下半张会自己生长的航海图。",
+    rewards: { insight: 95, alchemyMats: 2, charts: 1 },
+  },
+  {
+    id: "sunkenPalace",
+    name: "沉没活体仙庭",
+    glyph: "庭",
+    image: "assets/concepts/overseas-cthulhu/event-sunken-living-palace.png",
+    danger: 60,
+    intro: "海面裂开，露出一座仍在呼吸的仙庭。宫墙像肋骨，玉阶像舌面，钟声从没有人的殿内传出。",
+    finale: "仙庭重新沉入海下，船舱里却多出一枚湿漉漉的宫印。",
+    rewards: { prestige: 65, forgingMats: 2, arrayMats: 1 },
+  },
+  {
+    id: "starCorpse",
+    name: "星尸搁浅",
+    glyph: "尸",
+    image: "assets/concepts/overseas-cthulhu/event-star-corpse-stranding.png",
+    danger: 66,
+    intro: "一具横跨礁群的星尸搁浅在黑潮上。尸体仍在梦见天外，梦境像潮水一样涌进所有人的识海。",
+    finale: "星尸翻身沉没，骨缝里落下带有星纹的矿砂。",
+    rewards: { stones: 680, forgingMats: 3, insight: 70 },
+  },
+  {
+    id: "xuanKun",
+    name: "覆海玄鲲苏醒",
+    glyph: "鲲",
+    image: "assets/concepts/overseas-cthulhu/event-xuan-kun-awakening.png",
+    danger: 76,
+    intro: "整片海域突然抬高，众人才发现自己停在一头玄鲲背上。它每一次呼吸，都让云层和船队一起倾斜。",
+    finale: "玄鲲沉回归墟，背鳞化作一座可标记在海图上的黑色岛礁。",
+    rewards: { prestige: 120, arrayMats: 2, charts: 1 },
+  },
+  {
+    id: "blackReef",
+    name: "黑礁梦港",
+    glyph: "梦",
+    image: "",
+    danger: 46,
+    intro: "黑礁之间停满没有船员的商船。每一艘船都挂着本宗未来某一年的旗号，舱内堆满尚未获得的货物。",
+    finale: "梦港在黎明前崩散，只有一部分货物真正留在甲板上。",
+    rewards: { stones: 520, cargo: 2, prestige: 35 },
+  },
+  {
+    id: "saltMonastery",
+    name: "盐骨修道院",
+    glyph: "骨",
+    image: "",
+    danger: 58,
+    intro: "一座由盐和骨搭成的修道院浮出海面。钟声响起时，所有海水都退后三丈，露出密密麻麻的脚印。",
+    finale: "修道院塌成白盐，骨缝里露出古老的海外功课。",
+    rewards: { insight: 120, alchemyMats: 1, arrayMats: 1 },
+  },
+  {
+    id: "invertedSeaMoon",
+    name: "海月倒悬",
+    glyph: "月",
+    image: "assets/concepts/overseas-cthulhu/event-sea-eye-whisper.png",
+    danger: 48,
+    faction: "bellTemple",
+    intro: "黑色海月从水下升起，照出每名弟子多年后的尸身。符灯越亮，那些尸身便漂得越近。",
+    finale: "倒悬海月碎成一捧冷光，仍有一缕月辉黏在魂灯上。",
+    rewards: { insight: 88, charts: 1, prestige: 26 },
+  },
+  {
+    id: "whaleScripture",
+    name: "鲸腹经阁",
+    glyph: "经",
+    image: "assets/concepts/overseas-cthulhu/event-xuan-kun-awakening.png",
+    danger: 55,
+    faction: "merfolk",
+    intro: "一头垂暮古鲸张口停在航线前方，腹中白骨书架上传来整齐诵经声。",
+    finale: "古鲸闭口远去，留下一段水系经文与温热龙涎。",
+    rewards: { insight: 110, alchemyMats: 2, prestige: 30 },
+  },
+  {
+    id: "blackTideSacrifice",
+    name: "黑潮献祭船",
+    glyph: "祭",
+    image: "assets/concepts/overseas-cthulhu/event-sunken-living-palace.png",
+    danger: 64,
+    faction: "blackTide",
+    whispers: 2,
+    intro: "无帆祭船从雾中靠近，甲板跪满闭眼信众。他们为本宗留出了一个空位。",
+    finale: "祭船沉入黑潮，邪教名册却在本宗船舱里自行翻页。",
+    rewards: { stones: 620, insight: 95, forgingMats: 1 },
+  },
+  {
+    id: "tentacleStarGate",
+    name: "触须星门",
+    glyph: "门",
+    image: "assets/concepts/overseas-cthulhu/event-star-corpse-stranding.png",
+    danger: 72,
+    whispers: 2,
+    intro: "海面裂成星空缝隙，巨型触须穿过另一片天，缓慢缠上旗舰桅杆。",
+    finale: "星门在镇海阵中闭合，断裂触须化成仍会搏动的异界材料。",
+    rewards: { forgingMats: 3, arrayMats: 2, insight: 70 },
+  },
+  {
+    id: "silentLighthouse",
+    name: "无声灯塔",
+    glyph: "灯",
+    image: "assets/concepts/overseas-cthulhu/event-sea-eye-whisper.png",
+    danger: 50,
+    faction: "bellTemple",
+    intro: "无人岛上立着苍白灯塔，灯光照到谁，谁便忘记自己的名字与师承。",
+    finale: "灯塔熄灭，众人重新记起名字，却忘了是谁先登上塔顶。",
+    rewards: { charts: 1, arrayMats: 1, prestige: 38 },
+  },
+  {
+    id: "dreamCoral",
+    name: "梦珊瑚礁",
+    glyph: "梦",
+    image: "assets/concepts/overseas-cthulhu/event-sunken-living-palace.png",
+    danger: 44,
+    faction: "bellTemple",
+    intro: "珊瑚像人的神经一样铺满浅海，每一根枝杈都在演示某位弟子飞升后的未来。",
+    finale: "梦境随着潮退散去，船上留下少量仍会做梦的珊瑚。",
+    rewards: { alchemyMats: 3, insight: 76, cargo: 1 },
+  },
+  {
+    id: "merfolkNightMarket",
+    name: "鲛人哭市",
+    glyph: "市",
+    image: "assets/concepts/overseas-cthulhu/event-sea-eye-whisper.png",
+    danger: 42,
+    faction: "merfolk",
+    intro: "午夜海市用眼泪、记忆和寿命标价，鲛人商贩已经提前写好了本宗的账单。",
+    finale: "海市钟响，摊位沉入水下，海约契上的墨迹仍在缓慢游动。",
+    rewards: { stones: 460, alchemyMats: 2, cargo: 2 },
+  },
+  {
+    id: "boneRoute",
+    name: "白骨航线",
+    glyph: "骨",
+    image: "assets/concepts/overseas-cthulhu/event-star-corpse-stranding.png",
+    danger: 57,
+    intro: "无数古船骨架在海面自行拼接，形成一条只通往更深海域的苍白航路。",
+    finale: "骨路在船后散架，一枚亡船罗盘记住了这次航向。",
+    rewards: { charts: 2, forgingMats: 2, renown: 24 },
+  },
+  {
+    id: "starSporeRain",
+    name: "星渊孢雨",
+    glyph: "孢",
+    image: "assets/concepts/overseas-cthulhu/event-star-corpse-stranding.png",
+    danger: 61,
+    whispers: 1,
+    mutationChance: 0.22,
+    intro: "发光孢子从没有云的夜空落下，沾到甲板后长出一排会随呼吸开合的小眼。",
+    finale: "符阵烧尽大部分孢子，仍有几枚藏进弟子的衣袖和梦境。",
+    rewards: { alchemyMats: 2, insight: 105, cargo: 1 },
+  },
+  {
+    id: "underseaBell",
+    name: "海底钟声",
+    glyph: "钟",
+    image: "assets/concepts/overseas-cthulhu/event-sunken-living-palace.png",
+    danger: 58,
+    faction: "bellTemple",
+    trenchClue: 1,
+    intro: "没有寺庙的海域传来钟声。每响一次，船舱里便少一件物品，海底也多出一盏灯。",
+    finale: "钟声停止，海图上浮现一条通往葬仙海沟的细线。",
+    rewards: { arrayMats: 2, charts: 1, insight: 80 },
+  },
+  {
+    id: "reverseDragonGate",
+    name: "逆鳞龙门",
+    glyph: "龙",
+    image: "assets/concepts/overseas-cthulhu/event-xuan-kun-awakening.png",
+    danger: 69,
+    mutationChance: 0.16,
+    intro: "一座覆满逆鳞与闭眼的龙门立在风暴中央，门后传来弟子突破时才会出现的雷声。",
+    finale: "龙门被剑阵劈开，逆鳞落满甲板，也在几名弟子皮下留下灼痕。",
+    rewards: { forgingMats: 2, insight: 120, prestige: 42 },
+  },
+  {
+    id: "deathScribe",
+    name: "深海书吏",
+    glyph: "录",
+    image: "assets/concepts/overseas-cthulhu/event-sea-eye-whisper.png",
+    danger: 63,
+    whispers: 2,
+    intro: "无脸书吏坐在孤礁上，湿漉漉的账册里写着船队每个人的死亡日期。",
+    finale: "书吏把一页账纸留在海面，本宗的名字被墨水暂时划去。",
+    rewards: { insight: 130, prestige: 32, charts: 1 },
+  },
+  {
+    id: "crackedSeaIdol",
+    name: "裂壳海神像",
+    glyph: "像",
+    image: "assets/concepts/overseas-cthulhu/event-xuan-kun-awakening.png",
+    danger: 74,
+    faction: "blackTide",
+    whispers: 3,
+    intro: "巨大海神像半沉在浪中，石壳裂缝内不是泥胎，而是一团会注视众人的星空内脏。",
+    finale: "神像外壳重新合拢，剖出的星核却仍在仓库深处跳动。",
+    rewards: { forgingMats: 3, arrayMats: 2, stones: 780 },
+  },
+  {
+    id: "seaWedding",
+    name: "海祟婚宴",
+    glyph: "喜",
+    image: "assets/concepts/overseas-cthulhu/event-sunken-living-palace.png",
+    danger: 59,
+    faction: "blackTide",
+    intro: "雾岛红灯高悬，宴席上坐着人、鱼和尸体。海祟新娘隔着盖头准确叫出核心弟子的名字。",
+    finale: "喜宴在鸡鸣前化作烂藻，只剩一张写着回礼日期的红潮喜帖。",
+    rewards: { cargo: 2, forgingMats: 1, insight: 88 },
+  },
+  {
+    id: "oldImmortalFetus",
+    name: "旧仙胎动",
+    glyph: "胎",
+    image: "assets/concepts/overseas-cthulhu/event-sunken-living-palace.png",
+    danger: 71,
+    mutationChance: 0.18,
+    trenchClue: 1,
+    intro: "整座岛屿像心脏般跳动，山体裂缝内露出尚未出生的旧仙胎壳。",
+    finale: "镇压阵纹暂时稳住胎动，海沟方向却传来更沉重的一次心跳。",
+    rewards: { alchemyMats: 3, arrayMats: 2, prestige: 52 },
+  },
+  {
+    id: "nightTideDream",
+    name: "夜潮入梦",
+    glyph: "梦",
+    image: "assets/concepts/overseas-cthulhu/event-sea-eye-whisper.png",
+    danger: 65,
+    faction: "blackTide",
+    whispers: 2,
+    mutationChance: 0.2,
+    intro: "船队全员梦见自己成为海底宗门弟子，醒来后手腕都多出一枚潮湿入门印。",
+    finale: "梦中宗门的山门暂时关闭，但入门印会在每次退潮时重新发亮。",
+    rewards: { insight: 145, charts: 1, renown: 30 },
+  },
+];
+
+const overseasEventSteps = [
+  {
+    title: "辨潮",
+    text: "船底传来不属于浪潮的敲击声，远处海面像被一根无形手指按住。",
+    options: [
+      { label: "观星定航", stat: "aptitude", safe: 10, clue: 2, text: "弟子以星斗校准航线，辨出异常潮向。" },
+      { label: "顺潮疾进", stat: "speed", danger: 7, cargo: 1, text: "舰队借怪潮提速，货舱里卷入陌生海砂。" },
+      { label: "焚香镇心", stat: "temper", safe: 8, pollution: -2, text: "香烟压住心神低语，队伍没有被第一重幻听拖住。" },
+    ],
+  },
+  {
+    title: "试探",
+    text: "海雾中出现许多灯火，像港口，又像某种巨物张开的腮孔。",
+    options: [
+      { label: "派舟试探", stat: "luck", clue: 2, supplies: -1, text: "小舟带回湿透的海图残片，也消耗了一批补给。" },
+      { label: "列阵护船", stat: "def", safe: 12, text: "阵旗沿船舷排开，雾中的灯火短暂后退。" },
+      { label: "强行破雾", stat: "atk", battle: "mistSpawn", danger: 8, text: "剑光撕开海雾，雾中影子立刻扑向船队。" },
+    ],
+  },
+  {
+    title: "交易",
+    text: "一名没有影子的摆渡人靠近船侧，愿用记忆换货物，也愿用货物换名字。",
+    options: [
+      { label: "以灵石交易", stat: "charm", stones: -120, cargo: 2, text: "摆渡人收下灵石，留下几箱不知从何处来的海外货。" },
+      { label: "只问情报", stat: "temper", clue: 3, insight: 30, text: "弟子没有接触货箱，只从摆渡人言语里记下安全路径。" },
+      { label: "扣下摆渡人", stat: "atk", battle: "ferryman", danger: 10, text: "摆渡人的影子从海面立起，化作一场近距离冲突。" },
+    ],
+  },
+  {
+    title: "污染",
+    text: "甲板木纹开始组成陌生经文，船员读到第三行时，忽然忘了自己的门派。",
+    options: [
+      { label: "刮去经文", stat: "def", safe: 8, supplies: -1, text: "阵修刮去异文，船体受损但低语中断。" },
+      { label: "抄录研究", stat: "aptitude", insight: 70, pollution: 6, text: "经文被抄入玉简，参悟大增，但污染也随之入山。" },
+      { label: "让核心弟子镇压", stat: "temper", safe: 14, clue: 1, text: "心性最稳者压住众人识海，顺手抓住一缕异神线索。" },
+    ],
+  },
+  {
+    title: "深潜",
+    text: "真正的入口在海下。水面以下不是海，而是一片倒挂的天空。",
+    options: [
+      { label: "潜入遗迹", stat: "hp", battle: "deepGuard", cargo: 1, text: "弟子入水后看见遗迹守卫睁开许多只眼。" },
+      { label: "放出探灵符", stat: "luck", clue: 2, arrayMats: 1, text: "探灵符被海下天空吞掉，吐回几枚阵眼残片。" },
+      { label: "暂避锋芒", stat: "speed", safe: 10, pollution: -1, text: "舰队绕开最深处，虽然慢了一步，却保住了神智。" },
+    ],
+  },
+  {
+    title: "抉择",
+    text: "事件核心已经显露。越靠近真相，越能感觉自己也正在被某种存在阅读。",
+    options: [
+      { label: "夺取核心", stat: "atk", battle: "core", danger: 14, text: "队伍强行夺取核心，必须压过最终守卫。" },
+      { label: "封印核心", stat: "array", safe: 18, arrayMats: 1, text: "阵纹落下，异常核心被封入海图，污染显著降低。" },
+      { label: "献祭货物换安宁", stat: "charm", cargo: -1, safe: 12, pollution: -6, text: "货物沉入黑水，海面恢复短暂平静。" },
+    ],
+  },
+  {
+    title: "梦潮",
+    text: "所有人同时梦见山门被海水倒灌。梦里有弟子喊醒自己，也有弟子劝自己继续沉下去。",
+    options: [
+      { label: "逐个唤醒", stat: "temper", safe: 12, pollution: -3, text: "队伍按姓名互相唤醒，梦潮无法完整吞下他们。" },
+      { label: "记录梦图", stat: "aptitude", clue: 3, insight: 45, pollution: 4, text: "弟子把梦中的海图刻进玉简，换来更深线索。" },
+      { label: "借梦绕路", stat: "luck", cargo: 1, danger: 6, text: "舰队沿梦中航道滑行，醒来时已经越过一片暗礁。" },
+    ],
+  },
+  {
+    title: "孤岛",
+    text: "前方出现一座只在退潮时存在的孤岛。岛上炊烟笔直向下，像从天空倒灌而来。",
+    options: [
+      { label: "登岛补给", stat: "charm", supplies: 1, cargo: 1, text: "岛民不说话，只把盐、淡水和一箱旧货推到岸边。" },
+      { label: "拒绝上岸", stat: "speed", safe: 10, pollution: -2, text: "队伍不接触孤岛，避开了可能混进船舱的陌生居民。" },
+      { label: "追问岛名", stat: "temper", clue: 2, danger: 5, text: "岛名被写在潮湿沙地上，所有人看完后都忘了一息。" },
+    ],
+  },
+  {
+    title: "祭台",
+    text: "海下升起一座黑色祭台。祭台中央没有祭品，只有一个等着被放上去的位置。",
+    options: [
+      { label: "以阵旗镇祭", stat: "array", safe: 16, arrayMats: 1, text: "阵旗钉住祭台边缘，黑色潮水被迫向两侧退开。" },
+      { label: "以血破祭", stat: "hp", battle: "altar", danger: 10, text: "弟子以血开路，祭台下方立刻传来回击。" },
+      { label: "以货赎路", stat: "charm", cargo: -1, safe: 14, pollution: -5, text: "一箱远洋货物被祭台吞没，归航路线变得清晰。" },
+    ],
+  },
+  {
+    title: "归航",
+    text: "所有线索在海图上汇成一条归航线。现在可以带着收获离开，也可以在最后一刻回头看一眼真相。",
+    options: [
+      { label: "稳妥归航", stat: "temper", safe: 20, cargo: 1, text: "舰队不再回头，带着可确认的货物和海图返回山门。" },
+      { label: "回望真相", stat: "luck", clue: 4, insight: 80, pollution: 8, text: "弟子回头看见了不应被记住的形体，参悟暴涨，污染也随之入山。" },
+      { label: "封存全船记忆", stat: "array", pollution: -10, safe: 8, text: "阵法暂封众人记忆，真相沉入海底，山门保住了清醒。" },
+    ],
+  },
+];
+
+const overseasTrenchSteps = [
+  {
+    title: "海沟入口",
+    text: "海水在船下垂直断开，葬仙海沟像一条没有底的旧伤。三方势力都在入口留下了不同标记。",
+    options: [
+      { label: "敲响沉钟寺引魂钟", stat: "temper", path: "bellTemple", safe: 16, soulOil: -1, text: "钟声为船队划出一条不会回头的下降线。" },
+      { label: "沿黑潮祭纹下潜", stat: "aptitude", path: "blackTide", whispers: 2, pollution: 6, clue: 2, text: "祭纹承认了船队，也让某个存在记住了宗门。" },
+      { label: "请鲛人引潮师领航", stat: "charm", path: "merfolk", supplies: -1, safe: 12, clue: 1, text: "鲛歌稳定水压，舰船平稳越过第一道断层。" },
+    ],
+  },
+  {
+    title: "万船墓场",
+    text: "历代远航船只悬浮在海沟壁上，亡船司舵者仍握着舵轮，阻止后来者取走遗物。",
+    options: [
+      { label: "列阵超度亡船", stat: "array", path: "bellTemple", safe: 12, arrayMats: 1, text: "阵光让一部分亡魂松开了舵轮。" },
+      { label: "强夺亡船龙骨", stat: "atk", path: "blackTide", battle: "wreckGuard", danger: 12, forgingMats: 2, text: "龙骨被撬动，整片墓场同时睁眼。" },
+      { label: "只取遇难者海图", stat: "luck", path: "merfolk", clue: 3, cargo: 1, text: "海图背面记录着遇难船员未完成的海约。" },
+    ],
+  },
+  {
+    title: "无光梦层",
+    text: "所有光芒都被水压折回船内，弟子开始梦见自己从未拜入山门的人生。",
+    options: [
+      { label: "燃烧镇魂灯油守夜", stat: "temper", path: "bellTemple", soulOil: -1, pollution: -7, safe: 14, text: "灯火守住姓名与记忆，梦层没有带走任何人。" },
+      { label: "记录梦中旧仙功课", stat: "aptitude", path: "blackTide", whispers: 3, insight: 90, pollution: 7, text: "古神知识被写进玉简，也写进了执笔者的眼底。" },
+      { label: "让全队合唱鲛歌", stat: "charm", path: "merfolk", safe: 10, supplies: -1, text: "歌声把众人的梦连在一起，谁也没有独自沉下去。" },
+    ],
+  },
+  {
+    title: "沉钟遗寺",
+    text: "一座倒悬古寺嵌在海沟壁上。寺门外跪着黑潮信众，殿内则传来鲛人求救声。",
+    options: [
+      { label: "重启镇海古钟", stat: "array", path: "bellTemple", safe: 18, arrayMats: 1, text: "古钟重新运转，附近污染被压入更深处。" },
+      { label: "与祭司交换禁忌经页", stat: "aptitude", path: "blackTide", whispers: 4, pollution: 8, clue: 3, text: "经页记载着海沟核心的真名残片。" },
+      { label: "解救被困鲛人", stat: "atk", path: "merfolk", battle: "cultGuard", danger: 8, safe: 8, text: "祭司拔出骨刃，寺门前爆发近身战。" },
+    ],
+  },
+  {
+    title: "星尸孵化场",
+    text: "大量星尸碎块沉积成山，裂缝中的幼体正模仿船上弟子的呼吸节奏。",
+    options: [
+      { label: "布阵焚尽幼体", stat: "array", path: "bellTemple", battle: "spawnSwarm", pollution: -5, text: "阵火照亮整片孵化场，也惊醒了深处母体。" },
+      { label: "让异化弟子吸收孢群", stat: "hp", path: "blackTide", mutation: 1, whispers: 2, danger: 14, text: "孢群钻入经脉，力量与饥饿同时增长。" },
+      { label: "采集未孵化星砂", stat: "luck", path: "merfolk", cargo: 2, forgingMats: 2, danger: 6, text: "船队只取最稳定的星砂，避开仍在跳动的碎块。" },
+    ],
+  },
+  {
+    title: "倒影异化",
+    text: "海沟壁映出每名弟子的异化形态。倒影隔着水层伸手，询问谁愿意成为真正的自己。",
+    options: [
+      { label: "以戒律斩断倒影", stat: "temper", path: "bellTemple", safe: 14, pollution: -4, text: "倒影被钟声切断，弟子重新确认道心。" },
+      { label: "允许一人接纳倒影", stat: "luck", path: "blackTide", mutation: 1, whispers: 3, pollution: 8, text: "一名弟子与倒影重合，得到不属于人身的力量。" },
+      { label: "以海约分担异化", stat: "charm", path: "merfolk", safe: 10, supplies: -1, clue: 2, text: "鲛人契约把异化压力分散到整艘船的护符上。" },
+    ],
+  },
+  {
+    title: "海沟守钟者",
+    text: "通往核心的石门前，半人半海祟的守钟者拖着断裂锁链，要求船队证明自己的选择。",
+    options: [
+      { label: "以镇海阵正面封锁", stat: "array", path: "bellTemple", battle: "trenchKeeper", safe: 8, text: "阵旗贯入海沟壁，守钟者挥动锁链迎战。" },
+      { label: "念出旧仙真名残片", stat: "aptitude", path: "blackTide", battle: "trenchKeeper", whispers: 3, danger: 10, text: "真名让守钟者迟疑，也让海沟核心回应。" },
+      { label: "用鲛人海约唤醒人性", stat: "charm", path: "merfolk", battle: "trenchKeeper", safe: 6, clue: 2, text: "守钟者短暂想起生前姓名，战意出现裂缝。" },
+    ],
+  },
+  {
+    title: "旧仙心脏",
+    text: "海沟核心是一颗被亿万符链束缚的旧仙心脏。它承诺给予宗门一条足以改变天下的道路。",
+    options: [
+      { label: "加固封印，永镇海沟", stat: "array", path: "bellTemple", safe: 24, pollution: -15, prestige: 80, text: "新阵纹覆盖旧符链，心跳声缓慢远去。" },
+      { label: "接纳低语，取走心血", stat: "aptitude", path: "blackTide", whispers: 6, mutation: 1, pollution: 16, insight: 160, text: "一滴黑色心血进入玉瓶，也进入所有人的梦。" },
+      { label: "缔结海约，交由鲛人看守", stat: "charm", path: "merfolk", safe: 14, cargo: 2, prestige: 55, text: "鲛人古约从海沟壁浮现，三方共同承担封印。" },
+    ],
+  },
+];
+
+const outerRealmClueCatalog = [
+  { id: "sunkenCourt", name: "沉没仙庭残印", art: "assets/concepts/overseas-cthulhu/event-sunken-living-palace.png", text: "证明旧仙庭并非毁灭，而是被某种潮汐拖向天外。" },
+  { id: "seaEyeTruth", name: "海眼低语真名", art: "assets/concepts/overseas-cthulhu/event-sea-eye-whisper.png", text: "海眼反复诵读的并非咒语，而是一道外域坐标。" },
+  { id: "starCorpseMap", name: "星尸骨缝天图", art: "assets/concepts/overseas-cthulhu/event-star-corpse-stranding.png", text: "星尸骨缝记录着穿过归墟风暴的唯一稳定路径。" },
+];
+
+const outerRealmChapters = [
+  {
+    title: "镇渊航线尽头",
+    text: "五级航标之外，海水向天空流去。船队必须选择以何种方式脱离熟悉的海域法则。",
+    choices: [
+      { label: "以镇海阵固定天地", stat: "array", tag: "seal", safe: 10, text: "阵旗钉住船影，熟悉的重力重新落回甲板。" },
+      { label: "追随低语逆流而上", stat: "aptitude", tag: "whisper", danger: 8, insight: 35, text: "低语给出近路，也把一个陌生名字写进识海。" },
+      { label: "借星尸潮汐跃迁", stat: "luck", tag: "star", danger: 5, clue: 2, text: "船队踩住星光碎片，从海面跃入另一重天幕。" },
+    ],
+  },
+  {
+    title: "无昼外海",
+    text: "这里没有日夜，远方仙洲倒悬在黑色天穹。成群的无面海鸟开始啄食船队留下的影子。",
+    battle: "shadowBirds",
+    choices: [
+      { label: "燃灯守住众人影子", stat: "temper", tag: "seal", safe: 8, text: "魂灯把影子缝回脚下，但灯油迅速变黑。" },
+      { label: "捕获海鸟研究异化", stat: "atk", tag: "whisper", danger: 10, insight: 50, text: "海鸟腹中没有血肉，只有写满经文的黑潮。" },
+      { label: "舍弃货物引开鸟群", stat: "speed", tag: "star", cargo: -1, safe: 12, text: "货箱坠入天海，鸟群随之消失在下方星云。" },
+    ],
+  },
+  {
+    title: "外域仙关",
+    text: "一座比山脉更大的仙关横断航路。守关傀儡要求船队证明自己仍属于人世。",
+    choices: [
+      { label: "以宗门史册应答", stat: "temper", tag: "seal", safe: 10, prestige: 24, text: "史册中的姓名逐一发光，傀儡承认了山门传承。" },
+      { label: "念出旧仙真名残片", stat: "aptitude", tag: "whisper", danger: 12, whispers: 2, text: "仙关为真名开启，却有更多眼睛在关后醒来。" },
+      { label: "展示星尸骨缝天图", stat: "luck", tag: "star", clue: 3, text: "傀儡辨认出天图，交出一枚通关星钥。" },
+    ],
+  },
+  {
+    title: "众生倒影城",
+    text: "城中居民都长着宗门弟子的面孔，声称自己才是留在正确世界的本体。",
+    battle: "mirrorCity",
+    choices: [
+      { label: "闭目列阵穿城", stat: "array", tag: "seal", safe: 9, text: "众人不看倒影，阵纹带着船队穿过空街。" },
+      { label: "与倒影交换记忆", stat: "charm", tag: "whisper", danger: 10, insight: 60, text: "两段人生短暂重合，换来外域宗门的禁忌情报。" },
+      { label: "追踪天空中的星路", stat: "speed", tag: "star", clue: 3, text: "星路从城市屋脊掠过，避开了最密集的倒影。" },
+    ],
+  },
+  {
+    title: "仙洲潮庭",
+    text: "外域仙洲的潮庭只剩一张王座。王座后的巨大鳞片正在呼吸，覆海玄鲲已在归墟深处睁眼。",
+    choices: [
+      { label: "重铸镇海封印", stat: "array", tag: "seal", safe: 14, pollution: -6, text: "封印暂时压住鳞片，玄鲲的苏醒慢了一拍。" },
+      { label: "接受王座的黑潮冠冕", stat: "aptitude", tag: "whisper", danger: 14, whispers: 4, text: "冠冕承认了宗门，却把玄鲲的饥饿传入每个梦境。" },
+      { label: "夺取通往天外的星门钥", stat: "luck", tag: "star", clue: 5, text: "星钥把归航线与飞升线叠在同一张海图上。" },
+    ],
+  },
+];
+
+const overseasEndingCatalog = [
+  { id: "seaGuardian", name: "镇海仙宗", text: "封印古神裂隙，以低污染和沉钟寺路线守住诸海。", art: "assets/concepts/overseas-cthulhu/event-xuan-kun-awakening.png" },
+  { id: "blackTideLord", name: "黑潮共主", text: "接纳旧仙低语，以异化弟子与黑潮信众统御深海。", art: "assets/concepts/overseas-cthulhu/event-sea-eye-whisper.png" },
+  { id: "outerAscension", name: "外域飞升", text: "集齐三条天外线索，越过外域仙洲开启宗门飞升航线。", art: "assets/concepts/overseas-cthulhu/event-star-corpse-stranding.png" },
 ];
 
 const forbiddenRelics = [
@@ -1257,8 +1782,12 @@ const state = {
   roomAdventureLobby: null,
   roomPvpDuel: null,
   roomBossLobby: null,
+  roomOverseasLobby: null,
+  roomOverseasCouncil: null,
+  roomOverseasTradeRoute: null,
   appliedRoomPvpResults: {},
   appliedRoomBossResults: {},
+  appliedRoomOverseasResults: {},
   roomWorldAdventureId: "",
   pendingTradeEscrows: {},
   cancelledIncomingTrades: {},
@@ -1305,6 +1834,11 @@ const state = {
   frontier: null,
   forbidden: null,
   forbiddenRun: null,
+  overseas: null,
+  overseasShared: null,
+  overseasRun: null,
+  overseasTrenchRun: null,
+  overseasOuterRun: null,
   selectedDiscipleId: null,
   selected: null,
   logs: [],
@@ -1596,8 +2130,12 @@ function initWorld() {
   state.roomAdventureLobby = null;
   state.roomPvpDuel = null;
   state.roomBossLobby = null;
+  state.roomOverseasLobby = null;
+  state.roomOverseasCouncil = null;
+  state.roomOverseasTradeRoute = null;
   state.appliedRoomPvpResults = {};
   state.appliedRoomBossResults = {};
+  state.appliedRoomOverseasResults = {};
   state.pendingTradeEscrows = {};
   state.cancelledIncomingTrades = {};
   state.selectedSectIcon = "峰";
@@ -1631,6 +2169,11 @@ function initWorld() {
   state.frontier = createFrontierState();
   state.forbidden = createForbiddenState();
   state.forbiddenRun = null;
+  state.overseas = createOverseasState();
+  state.overseasShared = createOverseasSharedState();
+  state.overseasRun = null;
+  state.overseasTrenchRun = null;
+  state.overseasOuterRun = null;
   state.nextWorldAdventureYear = rand(3, 6);
   state.nextDiscipleEncounterYear = rand(2, 4);
   state.lastDiscipleEncounterYear = 0;
@@ -1909,6 +2452,66 @@ function createForbiddenState() {
     totalRuns: 0,
     clears: 0,
     bestFloor: 0,
+  };
+}
+
+function createOverseasState() {
+  return {
+    portLevel: 0,
+    fleetLevel: 0,
+    supplies: 0,
+    cargo: 0,
+    charts: 0,
+    renown: 0,
+    pollution: 0,
+    whispers: 0,
+    awakening: 0,
+    awakeningMilestones: [],
+    soulOil: 0,
+    factions: {
+      bellTemple: { relation: 8, influence: 0 },
+      blackTide: { relation: 0, influence: 0 },
+      merfolk: { relation: 12, influence: 0 },
+    },
+    routeUpgrades: {},
+    routes: [],
+    islands: [],
+    encounters: [],
+    monsters: [],
+    pollutionEvents: [],
+    mutationHistory: [],
+    pendingCorruption: null,
+    trenchClues: 0,
+    trenchClears: 0,
+    trenchCooldownUntil: 0,
+    outerRealmClues: [],
+    outerRealmExpeditions: 0,
+    outerRealmCleared: false,
+    outerRealmLastYear: 0,
+    xuanKunDefeated: false,
+    xuanKunAttempts: 0,
+    xuanKunLastYear: 0,
+    ending: "",
+    endingYear: 0,
+    compendium: { events: [], monsters: [], arts: [], endings: [] },
+    clearedEvents: [],
+    voyageCount: 0,
+    lastRefreshYear: 0,
+    lastPollutionYear: 0,
+    lastMutationYear: 0,
+    lastFactionYear: 0,
+    lastAwakeningYear: 0,
+  };
+}
+
+function createOverseasSharedState() {
+  return {
+    worldBoss: null,
+    bossDamageLog: [],
+    bossContributions: {},
+    lastBossYear: 0,
+    council: null,
+    tradeRoute: null,
   };
 }
 
@@ -2372,8 +2975,12 @@ function ensureSectDefaults() {
   state.roomAdventureLobby = state.roomAdventureLobby || null;
   state.roomPvpDuel = state.roomPvpDuel || null;
   state.roomBossLobby = state.roomBossLobby || null;
+  state.roomOverseasLobby = state.roomOverseasLobby || null;
+  state.roomOverseasCouncil = state.roomOverseasCouncil || null;
+  state.roomOverseasTradeRoute = state.roomOverseasTradeRoute || null;
   state.appliedRoomPvpResults = state.appliedRoomPvpResults || {};
   state.appliedRoomBossResults = state.appliedRoomBossResults || {};
+  state.appliedRoomOverseasResults = state.appliedRoomOverseasResults || {};
   state.pendingTradeEscrows = state.pendingTradeEscrows || {};
   state.cancelledIncomingTrades = state.cancelledIncomingTrades || {};
   state.completedMissions = Array.isArray(state.completedMissions) ? state.completedMissions : [];
@@ -2394,6 +3001,65 @@ function ensureSectDefaults() {
   state.frontier.worldBoss = state.frontier.worldBoss || null;
   state.forbidden = state.forbidden || createForbiddenState();
   state.forbiddenRun = state.forbiddenRun || null;
+  state.overseas = state.overseas || createOverseasState();
+  state.overseasShared = state.overseasShared || createOverseasSharedState();
+  state.overseasShared.bossDamageLog = Array.isArray(state.overseasShared.bossDamageLog) ? state.overseasShared.bossDamageLog : [];
+  state.overseasShared.bossContributions = state.overseasShared.bossContributions && typeof state.overseasShared.bossContributions === "object" ? state.overseasShared.bossContributions : {};
+  state.overseasShared.lastBossYear = Number(state.overseasShared.lastBossYear || 0);
+  state.overseasShared.council = state.overseasShared.council || null;
+  state.overseasShared.tradeRoute = state.overseasShared.tradeRoute || null;
+  state.overseas.portLevel = Number(state.overseas.portLevel || 0);
+  state.overseas.fleetLevel = Number(state.overseas.fleetLevel || 0);
+  state.overseas.supplies = Number(state.overseas.supplies || 0);
+  state.overseas.cargo = Number(state.overseas.cargo || 0);
+  state.overseas.charts = Number(state.overseas.charts || 0);
+  state.overseas.renown = Number(state.overseas.renown || 0);
+  state.overseas.pollution = Number(state.overseas.pollution || 0);
+  state.overseas.whispers = Number(state.overseas.whispers || 0);
+  state.overseas.awakening = Number(state.overseas.awakening || 0);
+  state.overseas.awakeningMilestones = Array.isArray(state.overseas.awakeningMilestones) ? state.overseas.awakeningMilestones : [];
+  state.overseas.soulOil = Number(state.overseas.soulOil || 0);
+  state.overseas.factions = state.overseas.factions && typeof state.overseas.factions === "object" ? state.overseas.factions : {};
+  for (const faction of overseasFactionTemplates) {
+    state.overseas.factions[faction.id] = state.overseas.factions[faction.id] || { relation: faction.id === "merfolk" ? 12 : faction.id === "bellTemple" ? 8 : 0, influence: 0 };
+    state.overseas.factions[faction.id].relation = clamp(Number(state.overseas.factions[faction.id].relation || 0), -100, 100);
+    state.overseas.factions[faction.id].influence = Math.max(0, Number(state.overseas.factions[faction.id].influence || 0));
+  }
+  state.overseas.voyageCount = Number(state.overseas.voyageCount || 0);
+  state.overseas.routeUpgrades = state.overseas.routeUpgrades && typeof state.overseas.routeUpgrades === "object" ? state.overseas.routeUpgrades : {};
+  state.overseas.routes = Array.isArray(state.overseas.routes) ? state.overseas.routes : [];
+  state.overseas.islands = Array.isArray(state.overseas.islands) ? state.overseas.islands : [];
+  state.overseas.encounters = Array.isArray(state.overseas.encounters) ? state.overseas.encounters : [];
+  state.overseas.monsters = Array.isArray(state.overseas.monsters) ? state.overseas.monsters : [];
+  state.overseas.pollutionEvents = Array.isArray(state.overseas.pollutionEvents) ? state.overseas.pollutionEvents : [];
+  state.overseas.mutationHistory = Array.isArray(state.overseas.mutationHistory) ? state.overseas.mutationHistory : [];
+  state.overseas.pendingCorruption = state.overseas.pendingCorruption || null;
+  state.overseas.trenchClues = Number(state.overseas.trenchClues || 0);
+  state.overseas.trenchClears = Number(state.overseas.trenchClears || 0);
+  state.overseas.trenchCooldownUntil = Number(state.overseas.trenchCooldownUntil || 0);
+  state.overseas.outerRealmClues = Array.isArray(state.overseas.outerRealmClues) ? [...new Set(state.overseas.outerRealmClues)] : [];
+  state.overseas.outerRealmExpeditions = Number(state.overseas.outerRealmExpeditions || 0);
+  state.overseas.outerRealmCleared = Boolean(state.overseas.outerRealmCleared) || state.overseas.outerRealmClues.length >= outerRealmClueCatalog.length;
+  state.overseas.outerRealmLastYear = Number(state.overseas.outerRealmLastYear || 0);
+  state.overseas.xuanKunDefeated = Boolean(state.overseas.xuanKunDefeated);
+  state.overseas.xuanKunAttempts = Number(state.overseas.xuanKunAttempts || 0);
+  state.overseas.xuanKunLastYear = Number(state.overseas.xuanKunLastYear || 0);
+  state.overseas.ending = state.overseas.ending || "";
+  state.overseas.endingYear = Number(state.overseas.endingYear || 0);
+  state.overseas.compendium = state.overseas.compendium && typeof state.overseas.compendium === "object" ? state.overseas.compendium : {};
+  state.overseas.compendium.events = Array.isArray(state.overseas.compendium.events) ? [...new Set(state.overseas.compendium.events)] : [];
+  state.overseas.compendium.monsters = Array.isArray(state.overseas.compendium.monsters) ? [...new Set(state.overseas.compendium.monsters)] : [];
+  state.overseas.compendium.arts = Array.isArray(state.overseas.compendium.arts) ? [...new Set(state.overseas.compendium.arts)] : [];
+  state.overseas.compendium.endings = Array.isArray(state.overseas.compendium.endings) ? [...new Set(state.overseas.compendium.endings)] : [];
+  state.overseas.clearedEvents = Array.isArray(state.overseas.clearedEvents) ? state.overseas.clearedEvents : [];
+  state.overseas.lastRefreshYear = Number(state.overseas.lastRefreshYear || 0);
+  state.overseas.lastPollutionYear = Number(state.overseas.lastPollutionYear || 0);
+  state.overseas.lastMutationYear = Number(state.overseas.lastMutationYear || 0);
+  state.overseas.lastFactionYear = Number(state.overseas.lastFactionYear || 0);
+  state.overseas.lastAwakeningYear = Number(state.overseas.lastAwakeningYear || 0);
+  state.overseasRun = state.overseasRun || null;
+  state.overseasTrenchRun = state.overseasTrenchRun || null;
+  state.overseasOuterRun = state.overseasOuterRun || null;
   state.worldCrisis = state.worldCrisis || null;
   state.worldChain = state.worldChain || null;
   state.sectCrisis = state.sectCrisis || null;
@@ -2763,7 +3429,7 @@ function openMethodPanel(d) {
         `).join("") : `<div class="target-detail">尚未参悟功法，可从奇遇、拍卖和流浪商人处获得功法残卷。</div>`}
       </div>
     `,
-    actions: [{ label: "完成", handler: () => { closeModal(); render(); } }],
+    actions: [{ label: "返回弟子详情", handler: () => openDiscipleDetailModal(d.id) }],
   });
   els.modalBody.querySelectorAll("button[data-method]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -2783,7 +3449,7 @@ function openMethodPanel(d) {
         }
         state.sect.insight -= 30;
         const knownMethod = d.methods.find((method) => method.id === id);
-        if (knownMethod) knownMethod.proficiency = clamp((knownMethod.proficiency || 0) + 8 + Math.floor((state.sect.site.aura || 1) / 18), 0, 100);
+        if (knownMethod) knownMethod.proficiency = clamp((knownMethod.proficiency || 0) + 8 + Math.floor((state.sect.aura || 1) / 18), 0, 100);
       }
       openMethodPanel(d);
     });
@@ -3950,6 +4616,11 @@ function getPublicPlayerState() {
     activity: state.waitingForPlayers ? "等待全员进入下一年" : (state.currentAction || "操作中"),
     activityAt: state.currentActionAt || Date.now(),
     forbiddenFloor: state.forbiddenRun?.floor || 0,
+    overseasUnlocked: overseasUnlocked(),
+    overseasPort: Number(state.overseas?.portLevel || 0),
+    overseasSupplies: Number(state.overseas?.supplies || 0),
+    overseasCargo: Number(state.overseas?.cargo || 0),
+    overseasPower: state.founded ? Math.round((sect.disciples || []).slice().sort((a, b) => overseasDisciplePower(b) - overseasDisciplePower(a)).slice(0, 3).reduce((sum, d) => sum + overseasDisciplePower(d), 0)) : 0,
     allies: Object.keys(state.roomAlliances || {}).filter((key) => key.includes(state.clientId)),
   };
 }
@@ -3968,6 +4639,12 @@ function handleNetMessage(msg) {
     maybeOfferRoomSaveOnJoin();
   }
   if (msg.type === "room_state") {
+    const wasHost = state.roomHost;
+    state.roomHost = Boolean(msg.hostId && msg.hostId === state.clientId);
+    if (!wasHost && state.roomHost) {
+      updateRoomStatus(`已进入房间 ${state.roomCode}（房主）`, "online");
+      log("原房主离线，本宗已接管房间推进权。", "warn");
+    }
     net.lastPlayers = msg.players || [];
     state.remotePlayers = (msg.players || []).filter((p) => p.id !== state.clientId).map((p) => ({ ...p, type: "remotePlayer" }));
     state.readyPlayers = (msg.players || []).filter((p) => isPlayerReadyForYear(p)).map((p) => p.id);
@@ -4141,6 +4818,87 @@ function handleRoomFeatureMessage(msg) {
       log("联机边境巨兽已遁走。", "warn");
       render();
     }
+    return;
+  }
+  if (action === "overseas_boss_spawn") {
+    mergeOverseasWorldBoss(payload.boss);
+    log(payload.boss?.defeated
+      ? `海外共享海怪战果已同步：${payload.boss?.name || "无名深海巨物"}已经伏诛。`
+      : `海外共享海怪出现：${payload.boss?.name || "无名深海巨物"}。`, payload.boss?.defeated ? "good" : "warn");
+    render();
+    return;
+  }
+  if (action === "overseas_boss_damage") {
+    applyRemoteOverseasBossDamage(payload);
+    return;
+  }
+  if (action === "overseas_boss_defeated") {
+    applyRemoteOverseasBossDamage(payload);
+    return;
+  }
+  if (action === "overseas_boss_expire") {
+    if (state.overseasShared?.worldBoss?.id === payload.bossId) {
+      state.overseasShared.worldBoss = null;
+      log("共享世界海怪沉入无光海，贡献排行已封存。", "warn");
+      render();
+    }
+    return;
+  }
+  if (action === "overseas_lobby_open") {
+    handleRoomOverseasLobbyOpen(payload.lobby);
+    return;
+  }
+  if (action === "overseas_lobby_ready") {
+    handleRoomOverseasLobbyReady(payload);
+    return;
+  }
+  if (action === "overseas_lobby_start") {
+    applyRoomOverseasLobbyResult(payload.result);
+    return;
+  }
+  if (action === "overseas_lobby_cancel") {
+    if (state.roomOverseasLobby?.id === payload.lobbyId) {
+      state.roomOverseasLobby = null;
+      closeModal();
+      log("海外联合行动已取消。", "warn");
+      render();
+    }
+    return;
+  }
+  if (action === "overseas_council_open") {
+    handleRoomOverseasCouncilOpen(payload.council);
+    return;
+  }
+  if (action === "overseas_council_vote") {
+    handleRoomOverseasCouncilVote(payload, msg.sourceId);
+    return;
+  }
+  if (action === "overseas_council_result") {
+    applyRoomOverseasCouncilResult(payload.result);
+    return;
+  }
+  if (action === "overseas_council_cancel") {
+    state.roomOverseasCouncil = null;
+    closeModal();
+    render();
+    return;
+  }
+  if (action === "overseas_trade_open") {
+    handleRoomOverseasTradeOpen(payload.tradeRoute);
+    return;
+  }
+  if (action === "overseas_trade_contribute") {
+    handleRoomOverseasTradeContribution(payload, msg.sourceId);
+    return;
+  }
+  if (action === "overseas_trade_result") {
+    applyRoomOverseasTradeResult(payload.result);
+    return;
+  }
+  if (action === "overseas_trade_cancel") {
+    state.roomOverseasTradeRoute = null;
+    closeModal();
+    render();
     return;
   }
   if (action === "alliance_request" && payload.targetId === state.clientId) {
@@ -4385,6 +5143,7 @@ function createSharedWorldSnapshot() {
     secretRealms: state.secretRealms,
     market: state.market,
     frontier: state.frontier,
+    overseasShared: state.overseasShared,
     worldCrisis: state.worldCrisis,
     councilEdict: state.councilEdict,
     lastAuctionYear: state.lastAuctionYear,
@@ -4409,6 +5168,7 @@ function applySharedWorldSnapshot(snapshot) {
   if (Array.isArray(snapshot.secretRealms)) state.secretRealms = snapshot.secretRealms;
   if (snapshot.market) state.market = snapshot.market;
   if (snapshot.frontier) state.frontier = snapshot.frontier;
+  if (snapshot.overseasShared) state.overseasShared = snapshot.overseasShared;
   if (Number(snapshot.year) > state.year) state.year = Number(snapshot.year);
   state.worldCrisis = snapshot.worldCrisis || state.worldCrisis;
   state.councilEdict = snapshot.councilEdict || state.councilEdict;
@@ -4941,7 +5701,7 @@ function openAdvancementPanel(d) {
     actions: [
       { label: pills.length ? `服用${qualityNames[pills[0]?.quality || 0]}渡厄丹后渡劫` : "无渡厄丹渡劫", disabled: !ready, handler: () => attemptTribulation(d, { materialId, pillSlot: pills[0] || null }) },
       { label: "直接渡劫", disabled: !ready, handler: () => attemptTribulation(d, { materialId }) },
-      { label: "暂缓", handler: closeModal },
+      { label: "返回弟子详情", handler: () => openDiscipleDetailModal(d.id) },
     ],
   });
 }
@@ -5009,6 +5769,7 @@ function showTribulationModal(d, success, failRate) {
       </div>
       <p>${success ? "雷云散去，金光落入丹田，境界稳固。" : "雷火反噬，经脉受损，需调养后再试。"}本次失败率约 ${failRate}% 。</p>
     `,
+    actions: [{ label: "返回弟子详情", handler: () => openDiscipleDetailModal(d.id) }],
   });
 }
 
@@ -5250,7 +6011,7 @@ function openDiscipleCultivationPanel(d) {
       { label: d.legacyGiven ? "已传承" : "代际传承", handler: () => openLegacyInheritancePanel(d), disabled: d.legacyGiven || state.sect.disciples.length < 2 || state.actionPoints < 1 },
       { label: "本命法宝", handler: () => openNatalArtifactPanel(d), disabled: state.actionPoints < 1 },
       { label: "突破试炼", handler: () => openBreakthroughTrialPanel(d), disabled: state.actionPoints < 1 },
-      { label: "关闭", handler: closeModal },
+      { label: "返回弟子详情", handler: () => openDiscipleDetailModal(d.id) },
     ],
   });
 }
@@ -5807,7 +6568,7 @@ function openBondMenu(d) {
         </article>`).join("")}
       </div>
     `,
-    actions: [{ label: "关闭", handler: closeModal }],
+    actions: [{ label: "返回弟子详情", handler: () => openDiscipleDetailModal(d.id) }],
   });
   for (const btn of els.modalBody.querySelectorAll(".bond-pick")) {
     btn.addEventListener("click", () => {
@@ -5815,8 +6576,8 @@ function openBondMenu(d) {
       if (!other) return;
       formBond(d, other);
       log(`${d.name}与${other.name}结成羁绊。`, "good");
-      closeModal();
       render();
+      openDiscipleDetailModal(d.id);
     });
   }
 }
@@ -7312,6 +8073,7 @@ function resolveYearAdvance() {
   maybeGrantLeagueRankingRewards();
   updateMarketPrices();
   refreshFrontierYear();
+  refreshOverseasYear();
 
   for (const d of state.sect.disciples) {
     const fatiguePenalty = Math.min(12, (d.pillFatigue || 0) * 2);
@@ -7444,6 +8206,7 @@ function continuePendingYearEvent(kind, fallback = null) {
 function runYearStartEvents(endingBoonKey = "") {
   const queue = [
     { check: () => shouldOpenDiscipleMajorDecision(), run: (next) => openDiscipleMajorDecision(next) },
+    { check: () => Boolean(state.overseas?.pendingCorruption), run: (next) => openOverseasCorruptionDecision(next) },
     { check: () => state.year >= state.nextWorldAdventureYear, run: (next) => { if (!maybeStartWorldAdventure(next)) next(); } },
     { check: () => state.year % 10 === 0 && state.lastTournamentYear !== state.year, run: (next) => openTournamentPicker(true, next) },
     { check: () => shouldOpenCouncilMeeting(endingBoonKey), run: (next) => openCouncilMeeting(next) },
@@ -10020,23 +10783,116 @@ function finishFrontierDungeon(dungeon, team, won, our, enemy, tactic = "steady"
 }
 
 function occupyFrontierPoint(node) {
-  if (!frontierUnlocked()) return;
-  if (!spendAction(1, "边境扩张")) return;
-  const point = {
-    id: node.id || `frontier-point-${uid()}`,
-    type: "frontierPoint",
-    name: node.name || pick(["落霞边寨", "断河营", "伏妖关", "霜火堡", "青旗哨"]),
-    x: node.x,
-    y: node.y,
-    owner: "player",
-    value: Number(node.value || rand(90, 180)),
-    level: 1,
-  };
-  state.frontier.outposts.push(point);
-  state.frontier.claimedPointIds = [...new Set([...(state.frontier.claimedPointIds || []), point.id])];
-  state.frontier.supply = clamp(Number(state.frontier.supply || 0) + 2, 0, 20);
-  state.sect.prestige += 24;
-  log(`本宗占领${point.name}并立下一级边寨，边境补给 +2。`, "good");
+  if (!frontierUnlocked() || !node || node.owner === "player") return;
+  const roster = state.sect.disciples.slice().sort((a, b) => frontierDisciplePower(b) - frontierDisciplePower(a));
+  const claimed = Number(state.frontier?.claimedPointIds?.length || 0);
+  const enemyPower = Math.round(Number(node.value || 100) * 11 + state.year * 72 + Number(state.frontier.beastPressure || 0) * 5 + claimed * 260 + (node.id === "frontier-site-deep" ? 650 : 0));
+  showModal({
+    kicker: "边境扩张战",
+    title: `争夺${node.name}｜守势 ${enemyPower}`,
+    body: `
+      <p>边境据点不再直接占领。选择最多 3 名弟子突破妖群与旧关守势，越深入边境，已有据点越多，扩张压力越高。</p>
+      <div class="method-list">
+        <label class="method-card"><strong>稳步推进</strong><span>队伍战力 +5%，失败伤势降低。</span><input type="radio" name="frontier-expand-tactic" value="steady" checked></label>
+        <label class="method-card"><strong>强攻夺关</strong><span>队伍战力 +16%，失败时伤势和粮草损失增加。</span><input type="radio" name="frontier-expand-tactic" value="assault"></label>
+        <label class="method-card"><strong>阵地合围</strong><span>阵道弟子收益更高，消耗 1 点边境补给。</span><input type="radio" name="frontier-expand-tactic" value="formation" ${(state.frontier.supply || 0) < 1 ? "disabled" : ""}></label>
+      </div>
+      <div class="adventure-roster">
+        ${roster.map((d, index) => `<label class="adventure-candidate ${d.core ? "is-core" : ""}">
+          <input class="frontier-expand-team" type="checkbox" value="${tradeEscape(d.id)}" ${index < 2 ? "checked" : ""} />
+          <div><strong>${d.core ? "核心·" : ""}${tradeEscape(d.name)}</strong><span>${realms[d.realm]} · 边境战力 ${Math.round(frontierDisciplePower(d))} · 体${d.hp} · 阵Lv.${d.arrayLevel || 0}</span></div>
+        </label>`).join("")}
+      </div>
+    `,
+    actions: [
+      { label: "发起扩张战", handler: () => startFrontierExpansion(node, enemyPower) },
+      { label: "暂缓扩张", handler: closeModal },
+    ],
+  });
+  for (const box of els.modalBody.querySelectorAll(".frontier-expand-team")) {
+    box.addEventListener("change", () => {
+      const checked = [...els.modalBody.querySelectorAll(".frontier-expand-team:checked")];
+      if (checked.length > 3) {
+        box.checked = false;
+        flashFeedback("边境扩张最多派遣 3 名弟子。", "warn");
+      }
+    });
+  }
+}
+
+function startFrontierExpansion(node, enemyPower) {
+  const ids = [...els.modalBody.querySelectorAll(".frontier-expand-team:checked")].map((box) => box.value).slice(0, 3);
+  const team = ids.map((id) => state.sect.disciples.find((d) => d.id === id)).filter(Boolean);
+  const tactic = els.modalBody.querySelector('input[name="frontier-expand-tactic"]:checked')?.value || "steady";
+  if (!team.length) {
+    flashFeedback("至少选择 1 名弟子。", "warn");
+    return;
+  }
+  if (tactic === "formation" && (state.frontier.supply || 0) < 1) {
+    flashFeedback("阵地合围需要 1 点边境补给。", "warn");
+    return;
+  }
+  if (!spendAction(1, "边境扩张战")) return;
+  if (tactic === "formation") state.frontier.supply -= 1;
+  const basePower = team.reduce((sum, d) => sum + frontierDisciplePower(d), 0);
+  const arrayPower = tactic === "formation" ? team.reduce((sum, d) => sum + Number(d.arrayLevel || 0) * 150, 0) + formationPower() * 0.08 : 0;
+  const tacticScale = tactic === "assault" ? 1.16 : tactic === "steady" ? 1.05 : 1.02;
+  const ourPower = Math.round((basePower + arrayPower + rand(0, 180)) * tacticScale);
+  const monster = frontierMonsterFromPower(`${node.name.slice(0, 4)}守关兽`, enemyPower, `${node.id}:${state.year}:${tactic}`, 1.45);
+  const battle = simulateTeamVsMonsterBattle(team, monster, { enemyPower, maxRounds: 15 });
+  showRealtimeTeamBattleModal({
+    kicker: "边境扩张战",
+    title: `${node.name}争夺战`,
+    battle,
+    teamLabel: "开拓队",
+    enemyLabel: "妖群与旧关守势",
+    scores: { our: ourPower, enemy: enemyPower },
+    onComplete: () => finishFrontierExpansion(node, team, tactic, battle, ourPower, enemyPower),
+  });
+}
+
+function finishFrontierExpansion(node, team, tactic, battle, ourPower, enemyPower) {
+  const won = Boolean(battle.won);
+  let resultText = "";
+  let rewardText = "";
+  if (won) {
+    const point = {
+      id: node.id || `frontier-point-${uid()}`,
+      type: "frontierPoint",
+      name: node.name || pick(["落霞边寨", "断河营", "伏妖关", "霜火堡", "青旗哨"]),
+      x: node.x,
+      y: node.y,
+      owner: "player",
+      value: Number(node.value || rand(90, 180)),
+      level: 1,
+    };
+    state.frontier.outposts.push(point);
+    state.frontier.claimedPointIds = [...new Set([...(state.frontier.claimedPointIds || []), point.id])];
+    state.frontier.supply = clamp(Number(state.frontier.supply || 0) + 2, 0, 20);
+    state.frontier.renown = Number(state.frontier.renown || 0) + 18;
+    state.frontier.beastPressure = Math.max(0, Number(state.frontier.beastPressure || 0) - 6);
+    state.sect.prestige += 24;
+    team.forEach((d) => { d.exp += 12 + d.realm * 3; d.status = "边境开拓凯旋"; });
+    resultText = `开拓队击溃守关妖群，在${point.name}立下本宗阵旗。`;
+    rewardText = "边境补给 +2｜边境声望 +18｜宗门声望 +24｜兽潮压力 -6";
+    log(`本宗攻下${point.name}并立下一级边寨，边境补给 +2。`, "good");
+  } else {
+    const injury = tactic === "steady" ? rand(5, 11) : tactic === "assault" ? rand(12, 24) : rand(8, 17);
+    const grainLoss = Math.min(state.sect.grain, tactic === "assault" ? rand(150, 260) : rand(80, 170));
+    team.forEach((d) => { d.hp = Math.max(18, d.hp - injury); d.status = "边境开拓负伤"; adjustMind(d, 5, "扩张失利"); });
+    state.sect.grain -= grainLoss;
+    state.frontier.beastPressure = clamp(Number(state.frontier.beastPressure || 0) + 5, 0, 100);
+    resultText = `${node.name}守势超过预估，开拓队被迫撤回。该据点仍可在后续年份继续争夺。`;
+    rewardText = `全队体魄 -${injury}｜粮草 -${grainLoss}｜兽潮压力 +5`;
+    log(`争夺${node.name}失败，开拓队负伤并损失粮草 ${grainLoss}。`, "warn");
+  }
+  flashFeedback(won ? "边境据点已攻占" : "边境扩张失利", won ? "good" : "warn");
+  showModal({
+    kicker: "边境扩张结算",
+    title: won ? `${node.name}已纳入版图` : `${node.name}扩张失败`,
+    body: `<p>${tradeEscape(resultText)}</p><div class="battle-breakdown"><div><span>开拓队</span><strong>${Math.round(ourPower)}</strong></div><div><span>守关压力</span><strong>${Math.round(enemyPower)}</strong></div><div><span>战术</span><strong>${tactic === "assault" ? "强攻" : tactic === "formation" ? "合围" : "稳步"}</strong></div></div><div class="reward-list"><span>${tradeEscape(rewardText)}</span></div>`,
+    actions: [{ label: "返回边境地图", handler: closeModal }],
+  });
   syncSharedWorld();
   render();
 }
@@ -10145,7 +11001,26 @@ function resolveFrontierIncident(incident, choice) {
   state.frontier.renown = Number(state.frontier.renown || 0) + 4;
   state.frontier.incidents = state.frontier.incidents.filter((item) => item.id !== incident.id);
   log(`${incident.name}：${result}`, "good");
-  closeModal();
+  flashFeedback(`${incident.name}处理完成`, "good");
+  showModal({
+    kicker: "边境事件结算",
+    title: `${incident.name}已处理`,
+    body: `
+      <div class="battle-stage frontier-incident-stage">
+        <div class="fighter left">本宗</div>
+        <div class="slash"></div>
+        <div class="fighter right">事</div>
+      </div>
+      <p>${tradeEscape(result)}</p>
+      <div class="battle-breakdown">
+        <div><span>边境声望</span><strong>${Math.round(state.frontier.renown || 0)}</strong></div>
+        <div><span>边境补给</span><strong>${Math.round(state.frontier.supply || 0)}</strong></div>
+        <div><span>兽潮压力</span><strong>${Math.round(state.frontier.beastPressure || 0)}</strong></div>
+      </div>
+      <p>该事件已从地图移除，奖励已即时加入宗门或生成新的边境目标。</p>
+    `,
+    actions: [{ label: "确认结果", handler: closeModal }],
+  });
   render();
 }
 
@@ -12740,6 +13615,81 @@ function drawNode(node, view = node) {
     drawMapArtIcon("forbidden", "#5f456f", "禁", 52);
   } else if (node.type === "forbiddenFloor") {
     drawMapArtIcon("forbidden", node.current ? "#9f3d35" : node.cleared ? "#286c58" : "#6d6257", node.floor === 20 ? "王" : String(node.floor), 48);
+  } else if (node.type === "overseasIsland") {
+    const pulse = 1 + Math.sin(Date.now() / 360) * 0.06;
+    ctx.fillStyle = "rgba(36, 92, 105, 0.16)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 30 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    drawMapArtIcon("spring", node.relation >= 52 ? "#286c58" : "#2f6690", node.glyph || "岛", 52);
+  } else if (node.type === "overseasFaction") {
+    const pulse = 1 + Math.sin(Date.now() / 320) * 0.08;
+    ctx.fillStyle = `${node.color || "#2f6690"}2e`;
+    ctx.beginPath();
+    ctx.arc(0, 0, 31 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    drawMapArtIcon(node.id === "blackTide" ? "forbidden" : "alliance", node.color || "#2f6690", node.glyph || "势", 54);
+  } else if (node.type === "overseasTrench") {
+    const pulse = 1 + Math.sin(Date.now() / 180) * 0.16;
+    ctx.fillStyle = node.locked ? "rgba(75, 75, 70, 0.2)" : "rgba(67, 36, 74, 0.3)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 42 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    drawMapArtIcon("forbidden", node.locked ? "#6d6257" : "#4b2857", node.locked ? "锁" : "沟", 68);
+  } else if (node.type === "overseasPort") {
+    drawMapArtIcon("site", "#2f6690", "港", 54);
+  } else if (node.type === "overseasRoute") {
+    const pulse = 1 + Math.sin(Date.now() / 300) * 0.08;
+    ctx.fillStyle = "rgba(47, 102, 144, 0.18)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 28 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    drawMapArtIcon("spring", node.risk > 60 ? "#7f4eaa" : "#2f6690", node.glyph || "航", 48);
+  } else if (node.type === "overseasEncounter") {
+    const pulse = 1 + Math.sin(Date.now() / 210) * 0.16;
+    ctx.fillStyle = "rgba(83, 52, 108, 0.24)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 30 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    drawMapArtIcon("forbidden", node.danger > 68 ? "#7f2f45" : "#5f456f", node.glyph || "异", 56);
+  } else if (node.type === "overseasMonster") {
+    const pulse = 1 + Math.sin(Date.now() / 170) * 0.18;
+    ctx.fillStyle = "rgba(38, 76, 92, 0.26)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 42 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    drawMapArtIcon("boss", "#2f6690", node.glyph || "怪", 66);
+  } else if (node.type === "overseasWorldBoss") {
+    const pulse = 1 + Math.sin(Date.now() / 145) * 0.2;
+    ctx.fillStyle = "rgba(35, 55, 82, 0.32)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 50 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    drawMapArtIcon("boss", "#263e58", node.glyph || "鲸", 76);
+    ctx.strokeStyle = "rgba(226, 242, 245, 0.86)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, 34, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (node.type === "overseasOuterRealm") {
+    const pulse = 1 + Math.sin(Date.now() / 190) * 0.14;
+    ctx.fillStyle = node.locked ? "rgba(73, 74, 78, 0.24)" : "rgba(94, 72, 126, 0.3)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 44 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    drawMapArtIcon("forbidden", node.locked ? "#6d6257" : "#6b4d87", node.locked ? "锁" : "外", 70);
+  } else if (node.type === "overseasFinalBoss") {
+    const pulse = 1 + Math.sin(Date.now() / 125) * 0.22;
+    ctx.fillStyle = node.defeated ? "rgba(170, 118, 42, 0.2)" : "rgba(29, 38, 62, 0.38)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 54 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    drawMapArtIcon(node.defeated ? "alliance" : "boss", node.defeated ? "#aa762a" : "#1f304a", node.defeated ? "蜕" : "鲲", 82);
+    ctx.strokeStyle = node.defeated ? "rgba(242, 210, 128, 0.84)" : "rgba(215, 232, 242, 0.88)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, 38, 0, Math.PI * 2);
+    ctx.stroke();
   } else if (node.type === "overseasLocked") {
     drawMapArtIcon("site", "#2f6690", "锁", 54);
   }
@@ -12899,7 +13849,7 @@ function drawMapModeOverlay() {
   ctx.font = "12px Microsoft YaHei";
   const sub = state.currentMap === "frontier" ? "妖兽副本 / 环境词缀 / 边寨补给 / 区域事件"
     : state.currentMap === "forbidden" ? "20 层爬塔 / 三岔路线 / 通关带出遗物"
-      : state.currentMap === "overseas" ? "暂未开放"
+      : state.currentMap === "overseas" ? "外域仙洲 / 覆海玄鲲 / 海外国运终局"
         : "宗门战争 / 资源点 / 机缘";
   ctx.fillText(sub, 40, 68);
   ctx.restore();
@@ -13052,6 +14002,2769 @@ function applyRemoteBossDamage(payload = {}) {
   render();
 }
 
+function createOverseasWorldBoss(year = state.year) {
+  const seed = `${state.roomCode || "solo"}:${year}:overseas-world-boss`;
+  const names = ["覆海玄鲸", "九渊镜海皇", "寂潮吞舟母", "星骸千目鳐"];
+  const playerPower = Math.max(sectPower(), ...(state.remotePlayers || []).map((player) => Number(player.power || 0)), 0);
+  const roomSize = Math.max(1, foundedRoomPlayers().filter((player) => player.overseasUnlocked !== false).length);
+  const power = Math.max(4200, Math.round(playerPower * 1.12 + year * 310 + stableRange(`${seed}:power`, 500, 1500)));
+  const totalHp = Math.max(32000, Math.round(power * (8.8 + roomSize * 1.4) + year * 1200));
+  return {
+    id: `overseas-world-boss-${year}-${stableHash(seed)}`,
+    type: "overseasWorldBoss",
+    name: names[stableHash(seed) % names.length],
+    glyph: "鲸",
+    x: stableRange(`${seed}:x`, 560, 910),
+    y: stableRange(`${seed}:y`, 118, 515),
+    year,
+    expiresYear: year + 2,
+    power,
+    totalHp,
+    hp: totalHp,
+    defeated: false,
+  };
+}
+
+function expireOverseasWorldBossIfNeeded() {
+  const boss = state.overseasShared?.worldBoss;
+  if (!boss) return;
+  if (boss.defeated || boss.expiresYear <= state.year) {
+    if (!boss.defeated && boss.hp > 0) log(`${boss.name}潜入外海深层，本轮共享讨伐结束。`, "warn");
+    if (!boss.defeated && state.multiplayer && state.roomConnected && state.roomHost) sendRoomFeature("overseas_boss_expire", { bossId: boss.id });
+    state.overseasShared.worldBoss = null;
+  }
+}
+
+function maybeSpawnOverseasWorldBoss(force = false) {
+  ensureSectDefaults();
+  if (!overseasUnlocked() || Number(state.overseas.portLevel || 0) < 1) return null;
+  if (state.overseasShared.worldBoss && !state.overseasShared.worldBoss.defeated) return state.overseasShared.worldBoss;
+  if (state.multiplayer && state.roomConnected && !state.roomHost) return null;
+  const due = force || state.year % 5 === 0 || (state.overseas.clearedEvents.length >= 4 && Math.random() < 0.12);
+  if (!due) return null;
+  const boss = createOverseasWorldBoss();
+  state.overseasShared.worldBoss = boss;
+  state.overseasShared.bossDamageLog = [];
+  state.overseasShared.bossContributions = {};
+  state.overseasShared.lastBossYear = state.year;
+  log(`世界海怪「${boss.name}」浮出外海，所有联机宗门共享 ${boss.totalHp} 血量与贡献排行。`, "warn");
+  if (state.multiplayer && state.roomConnected) {
+    sendRoomFeature("overseas_boss_spawn", { boss });
+    syncSharedWorld(true);
+  }
+  return boss;
+}
+
+function mergeOverseasWorldBoss(boss) {
+  if (!boss) return;
+  ensureSectDefaults();
+  const current = state.overseasShared.worldBoss;
+  if (!current || current.id === boss.id || Number(boss.year || 0) >= Number(current.year || 0)) {
+    state.overseasShared.worldBoss = { ...current, ...boss };
+  }
+}
+
+function recordOverseasBossContribution(playerId, playerName, damage = 0, supply = 0) {
+  const key = playerId || playerName || "unknown";
+  const current = state.overseasShared.bossContributions[key] || { id: key, name: playerName || "联机宗门", damage: 0, supply: 0 };
+  current.name = playerName || current.name;
+  current.damage += Math.max(0, Math.round(Number(damage || 0)));
+  current.supply += Math.max(0, Math.round(Number(supply || 0)));
+  state.overseasShared.bossContributions[key] = current;
+}
+
+function applyRemoteOverseasBossDamage(payload = {}) {
+  ensureSectDefaults();
+  const boss = state.overseasShared.worldBoss;
+  if (!boss || boss.id !== payload.bossId) return;
+  boss.hp = Math.max(0, Number(payload.hp ?? (boss.hp - Number(payload.damage || 0))));
+  boss.defeated = Boolean(payload.defeated || boss.hp <= 0);
+  if (!payload.skipContribution && !payload.authoritativeOnly) recordOverseasBossContribution(payload.playerId, payload.playerName, payload.damage, payload.supply);
+  if (!payload.authoritativeOnly) {
+    state.overseasShared.bossDamageLog.unshift({ name: payload.playerName || "联机宗门", damage: Math.round(Number(payload.damage || 0)), year: state.year });
+    state.overseasShared.bossDamageLog = state.overseasShared.bossDamageLog.slice(0, 12);
+    log(`${payload.playerName || "联机宗门"}挑战${boss.name}，造成 ${Math.round(Number(payload.damage || 0))} 伤害，剩余 ${Math.round(boss.hp)}。`, boss.defeated ? "good" : "warn");
+  }
+  if (boss.defeated) grantOverseasBossRankingReward(boss);
+  render();
+}
+
+function overseasUnlocked() {
+  if (!state.founded || !state.sect) return false;
+  const goldenCore = state.sect.disciples.filter((d) => d.realm >= 2).length;
+  return state.year >= overseasUnlockRequirement.year
+    || goldenCore >= overseasUnlockRequirement.goldenCore
+    || Number(state.sect.buildings?.market || 0) >= overseasUnlockRequirement.market;
+}
+
+function overseasLockText() {
+  const goldenCore = state.sect?.disciples?.filter((d) => d.realm >= 2).length || 0;
+  return `海外仙洲为后期经营地图。满足任一条件即可试航：太初 ${overseasUnlockRequirement.year} 年、金丹弟子 ${goldenCore}/${overseasUnlockRequirement.goldenCore}、山门市集 Lv.${state.sect?.buildings?.market || 0}/${overseasUnlockRequirement.market}。联机模式下个人港口独立，联合远航、海怪血量、岛屿议会与商路任务共享。`;
+}
+
+function overseasRouteSupplyCost(route) {
+  return route?.id === "abyss" ? 3 : route?.id === "star" ? 2 : 1;
+}
+
+function overseasBeaconLevel(routeId) {
+  ensureSectDefaults();
+  return clamp(Number(state.overseas?.routeUpgrades?.[routeId] || 0), 0, 3);
+}
+
+function createOverseasIsland(tpl) {
+  const seed = `overseas-island:${tpl.id}:${state.year}`;
+  return {
+    ...tpl,
+    id: `overseas-island-${tpl.id}`,
+    type: "overseasIsland",
+    relation: clamp(16 + stableRange(`${seed}:relation`, -4, 9), 0, 100),
+    request: pick(["远洋货物", "海图残片", "净化污染", "讨伐海怪"]),
+    cooldown: 0,
+  };
+}
+
+function ensureOverseasIslands() {
+  ensureSectDefaults();
+  if (!state.overseas || Number(state.overseas.portLevel || 0) <= 0) return;
+  const existing = new Map((state.overseas.islands || []).map((island) => [island.id, island]));
+  state.overseas.islands = overseasIslandTemplates.map((tpl) => {
+    const id = `overseas-island-${tpl.id}`;
+    const current = existing.get(id);
+    if (current) {
+      current.type = "overseasIsland";
+      current.x = tpl.x;
+      current.y = tpl.y;
+      current.glyph = tpl.glyph;
+      current.specialty = tpl.specialty;
+      current.text = tpl.text;
+      current.relation = clamp(Number(current.relation || 0), 0, 100);
+      current.cooldown = Math.max(0, Number(current.cooldown || 0) - 1);
+      return current;
+    }
+    return createOverseasIsland(tpl);
+  });
+}
+
+function overseasIslandRewardName(key) {
+  const names = { alchemyMats: "丹材", forgingMats: "器材", arrayMats: "阵材", insight: "参悟" };
+  return names[key] || key;
+}
+
+function overseasIslandRelationLabel(value) {
+  if (value >= 76) return "血盟";
+  if (value >= 52) return "友好";
+  if (value >= 28) return "观望";
+  return "陌生";
+}
+
+function overseasFactionState(id) {
+  ensureSectDefaults();
+  return state.overseas.factions[id] || { relation: 0, influence: 0 };
+}
+
+function overseasFactionName(id) {
+  return overseasFactionTemplates.find((item) => item.id === id)?.name || "无路线";
+}
+
+function overseasDominantFaction() {
+  const ranked = overseasFactionTemplates
+    .map((item) => ({ ...item, ...overseasFactionState(item.id) }))
+    .sort((a, b) => Number(b.influence || 0) - Number(a.influence || 0) || Number(b.relation || 0) - Number(a.relation || 0));
+  return Number(ranked[0]?.influence || 0) > 0 ? ranked[0] : null;
+}
+
+function adjustOverseasFaction(id, relation = 0, influence = 0) {
+  const faction = overseasFactionState(id);
+  faction.relation = clamp(Number(faction.relation || 0) + relation, -100, 100);
+  faction.influence = Math.max(0, Number(faction.influence || 0) + influence);
+  state.overseas.factions[id] = faction;
+  return faction;
+}
+
+function applyOverseasFactionAnnualEffects() {
+  if (state.overseas.lastFactionYear === state.year) return;
+  state.overseas.lastFactionYear = state.year;
+  const dominant = overseasDominantFaction();
+  if (!dominant || Number(dominant.influence || 0) < 6) return;
+  const tier = clamp(1 + Math.floor(Number(dominant.influence || 0) / 18), 1, 4);
+  if (dominant.id === "bellTemple") {
+    const cut = 2 + tier;
+    state.overseas.pollution = clamp(state.overseas.pollution - cut, 0, 100);
+    if (state.year % 3 === 0) state.overseas.soulOil += 1;
+    log(`沉钟寺路线年度生效：污染 -${cut}${state.year % 3 === 0 ? "，镇魂灯油 +1" : ""}。`, "good");
+  } else if (dominant.id === "blackTide") {
+    state.overseas.whispers += 1 + Math.floor(tier / 2);
+    state.sect.insight += 22 * tier;
+    state.overseas.pollution = clamp(state.overseas.pollution + tier, 0, 100);
+    log(`黑潮路线年度生效：获得禁忌参悟 ${22 * tier}，低语与污染继续累积。`, "warn");
+  } else {
+    state.overseas.supplies = clamp(state.overseas.supplies + tier, 0, 6 + state.overseas.portLevel * 3);
+    if (state.year % 3 === 0) state.overseas.cargo += 1;
+    state.sect.alchemyMats += Math.max(1, Math.floor(tier / 2));
+    log(`鲛人海国路线年度生效：补给 +${tier}，海药与贸易回报增加。`, "good");
+  }
+}
+
+function overseasMutationCount(d) {
+  return (d?.traits || []).filter((trait) => trait.mutationId).length;
+}
+
+function applyOverseasMutation(d, preferredId = "") {
+  if (!d) return null;
+  d.traits = Array.isArray(d.traits) ? d.traits : [];
+  const available = overseasMutationTraits.filter((mutation) => !d.traits.some((trait) => trait.mutationId === mutation.id));
+  const mutation = available.find((item) => item.id === preferredId) || pick(available.length ? available : overseasMutationTraits);
+  if (!mutation) return null;
+  if (!d.traits.some((trait) => trait.mutationId === mutation.id)) {
+    d.traits.push({
+      name: mutation.name,
+      note: mutation.note,
+      mutationId: mutation.id,
+      explore: Number(mutation.explore || 0),
+      battle: Number(mutation.battle || 0),
+      barrier: Number(mutation.barrier || 0),
+      seal: Number(mutation.seal || 0),
+      whisper: Number(mutation.whisper || 0),
+      cargoHunger: Number(mutation.cargoHunger || 0),
+      mindRisk: Number(mutation.mindRisk || 0),
+    });
+    applyDiscipleTemplateStats(d, mutation, 1);
+  }
+  d.status = `异化：${mutation.name}`;
+  adjustMind(d, 6 + overseasMutationCount(d) * 2, "深海异化");
+  state.overseas.mutationHistory.unshift({ year: state.year, discipleId: d.id, name: d.name, mutation: mutation.name });
+  state.overseas.mutationHistory = state.overseas.mutationHistory.slice(0, 20);
+  return mutation;
+}
+
+function processOverseasMutationsYear() {
+  if (state.overseas.lastMutationYear === state.year) return;
+  state.overseas.lastMutationYear = state.year;
+  for (const d of state.sect.disciples) {
+    if (d.overseasSealedUntil && d.overseasSealedUntil <= state.year && String(d.status || "").startsWith("封印至")) d.status = "封印解除";
+    const mutationTraits = (d.traits || []).filter((trait) => trait.mutationId);
+    if (!mutationTraits.length) continue;
+    const whisperGain = mutationTraits.reduce((sum, trait) => sum + Number(trait.whisper || 0), 0);
+    if (whisperGain && Math.random() < 0.52) {
+      state.overseas.whispers += whisperGain;
+      adjustMind(d, 2 + whisperGain, "旧仙耳语");
+      log(`${d.name}从异化词条中听见新的古神知识，低语 +${whisperGain}。`, "warn");
+    }
+    const hunger = mutationTraits.reduce((sum, trait) => sum + Number(trait.cargoHunger || 0), 0);
+    if (hunger && Math.random() < 0.3) {
+      if (state.overseas.cargo > 0) state.overseas.cargo = Math.max(0, state.overseas.cargo - hunger);
+      else state.overseas.supplies = Math.max(0, state.overseas.supplies - hunger);
+      d.status = "无名饥渴发作";
+      log(`${d.name}的无名饥渴发作，吞噬了远洋货物或补给。`, "warn");
+    }
+  }
+}
+
+function processOverseasAwakeningYear() {
+  if (state.overseas.lastAwakeningYear === state.year) return;
+  state.overseas.lastAwakeningYear = state.year;
+  const pollution = Number(state.overseas.pollution || 0);
+  const whispers = Number(state.overseas.whispers || 0);
+  const blackInfluence = Number(overseasFactionState("blackTide").influence || 0);
+  const bellInfluence = Number(overseasFactionState("bellTemple").influence || 0);
+  const gain = Math.max(0, Math.floor(pollution / 38) + Math.floor(whispers / 11) + Math.floor(blackInfluence / 25) - Math.floor(bellInfluence / 32));
+  if (gain <= 0) return;
+  state.overseas.awakening = clamp(state.overseas.awakening + gain, 0, 100);
+  for (const threshold of [25, 50, 75, 100]) {
+    if (state.overseas.awakening < threshold || state.overseas.awakeningMilestones.includes(threshold)) continue;
+    state.overseas.awakeningMilestones.push(threshold);
+    const encounter = createOverseasEncounter(300 + threshold);
+    encounter.name = `旧仙苏醒·${encounter.name}`;
+    encounter.danger = clamp(encounter.danger + Math.floor(threshold / 5), 35, 100);
+    encounter.value += threshold * 5;
+    encounter.whispers = Number(encounter.whispers || 0) + Math.floor(threshold / 25);
+    state.overseas.encounters.unshift(encounter);
+    log(`旧仙苏醒达到 ${threshold}/100，海外出现高危事件「${encounter.name}」。`, "warn");
+  }
+}
+
+function rollOverseasCorruptionYear() {
+  if (!overseasUnlocked() || state.overseas.pendingCorruption) return;
+  const pollution = Number(state.overseas.pollution || 0);
+  const whispers = Number(state.overseas.whispers || 0);
+  if (pollution < 22 && whispers < 4) return;
+  const chance = clamp(0.05 + pollution / 190 + whispers / 120, 0.08, 0.72);
+  if (Math.random() > chance) return;
+  const candidates = state.sect.disciples.filter((d) => !d.overseasSealedUntil || d.overseasSealedUntil <= state.year);
+  const disciple = pick(candidates.length ? candidates : state.sect.disciples);
+  if (!disciple) return;
+  const severity = pollution >= 78 || whispers >= 18 ? 3 : pollution >= 48 || whispers >= 9 ? 2 : 1;
+  state.overseas.pendingCorruption = { id: `corruption-${state.year}-${disciple.id}`, year: state.year, discipleId: disciple.id, severity };
+  log(`${disciple.name}在海外归来后持续听见潮下低语，异化抉择将在本年开始时处理。`, "warn");
+}
+
+function openOverseasCorruptionDecision(afterClose = null) {
+  const pending = state.overseas?.pendingCorruption;
+  const d = state.sect?.disciples?.find((item) => item.id === pending?.discipleId);
+  if (!pending || !d) {
+    state.overseas.pendingCorruption = null;
+    afterClose?.();
+    return;
+  }
+  const severityNames = ["", "轻度梦蚀", "中度异化", "重度失控"];
+  const oil = Number(state.overseas.soulOil || 0);
+  showModal({
+    kicker: "古神低语",
+    title: `${d.name}：${severityNames[pending.severity]}`,
+    body: `
+      <p>${d.name}开始在梦中用陌生语言诵经，皮肤下偶尔浮现潮纹。污染越高，异化力量越强，失控代价也越大。</p>
+      <div class="overseas-dashboard">
+        <div><span>深海污染</span><strong>${Math.round(state.overseas.pollution)}/100</strong></div>
+        <div><span>古神低语</span><strong>${Math.round(state.overseas.whispers)}</strong></div>
+        <div><span>镇魂灯油</span><strong>${oil}</strong></div>
+        <div><span>已有异化</span><strong>${overseasMutationCount(d)}</strong></div>
+      </div>
+      <p>净化最安全；封印会让弟子两年内无法参加海外远征；接纳会得到强力异化词条；放逐会永久失去该弟子。</p>
+    `,
+    actions: [
+      { label: oil > 0 ? "消耗灯油净化" : "以灵石与参悟强行净化", disabled: oil <= 0 && (state.sect.stones < 360 || state.sect.insight < 80), handler: () => resolveOverseasCorruption("cleanse", d, afterClose) },
+      { label: "封印两年", handler: () => resolveOverseasCorruption("seal", d, afterClose) },
+      { label: "接纳异化力量", handler: () => resolveOverseasCorruption("embrace", d, afterClose) },
+      { label: "放逐失控弟子", disabled: state.sect.disciples.length <= 1, handler: () => resolveOverseasCorruption("banish", d, afterClose) },
+    ],
+    dismissible: false,
+  });
+}
+
+function resolveOverseasCorruption(choice, d, afterClose = null) {
+  const pending = state.overseas.pendingCorruption;
+  if (!pending || !d) return;
+  let result = "";
+  if (choice === "cleanse") {
+    if (state.overseas.soulOil > 0) state.overseas.soulOil -= 1;
+    else {
+      state.sect.stones -= 360;
+      state.sect.insight -= 80;
+    }
+    const success = d.temper + d.aptitude * 0.35 + traitBonusOnDisciple(d, "seal") * 2 + rand(0, 65) >= 70 + pending.severity * 24;
+    if (success) {
+      state.overseas.pollution = clamp(state.overseas.pollution - 7 - pending.severity * 3, 0, 100);
+      adjustMind(d, -10 - pending.severity * 3, "净魂");
+      adjustOverseasFaction("bellTemple", 6, 4);
+      d.status = "净魂休养";
+      result = "净化成功，潮纹褪去，沉钟寺路线推进。";
+    } else {
+      adjustMind(d, 10, "净魂失败");
+      const mutation = applyOverseasMutation(d);
+      result = `净化失败，${d.name}获得异化「${mutation?.name || "未知潮痕"}」。`;
+    }
+  } else if (choice === "seal") {
+    d.overseasSealedUntil = state.year + 2;
+    d.status = `封印至太初 ${d.overseasSealedUntil} 年`;
+    state.overseas.pollution = clamp(state.overseas.pollution - 5, 0, 100);
+    adjustOverseasFaction("bellTemple", 3, 2);
+    result = `${d.name}被安置于镇魂静室，两年内不能参加海外行动。`;
+  } else if (choice === "embrace") {
+    const mutation = applyOverseasMutation(d);
+    state.overseas.pollution = clamp(state.overseas.pollution + 8 + pending.severity * 2, 0, 100);
+    state.overseas.whispers += 2 + pending.severity;
+    state.overseas.awakening = clamp(state.overseas.awakening + pending.severity * 2, 0, 100);
+    adjustOverseasFaction("blackTide", 7, 6);
+    result = `${d.name}接纳了「${mutation?.name || "未知异化"}」，力量增长，宗门污染与古神苏醒同步上升。`;
+  } else {
+    for (const slot of gearSlots) if (d.equipment?.[slot.key]) unequipItem(d, slot.key, false);
+    state.sect.bonds = (state.sect.bonds || []).filter((bond) => bond.a !== d.id && bond.b !== d.id);
+    state.sect.disciples = state.sect.disciples.filter((item) => item.id !== d.id);
+    state.selectedDiscipleId = state.sect.disciples[0]?.id || null;
+    state.overseas.pollution = clamp(state.overseas.pollution - 10, 0, 100);
+    result = `${d.name}被逐出山门，后来有人在黑潮航线上见到一名相似的海上邪修。`;
+  }
+  state.overseas.pendingCorruption = null;
+  log(`古神低语：${result}`, choice === "embrace" || choice === "banish" ? "warn" : "good");
+  closeModal();
+  render();
+  afterClose?.();
+}
+
+function overseasDragonWhaleDiscount() {
+  const island = (state.overseas?.islands || []).find((item) => item.id === "overseas-island-dragonWhale");
+  return island ? Math.floor(Number(island.relation || 0) / 18) * 25 : 0;
+}
+
+function processOverseasPollutionYear() {
+  const sea = state.overseas;
+  if (!sea || Number(sea.portLevel || 0) <= 0 || sea.lastPollutionYear === state.year) return;
+  sea.lastPollutionYear = state.year;
+  const pollution = Number(sea.pollution || 0);
+  if (pollution < 42) return;
+  const chance = clamp((pollution - 34) / 90, 0.08, 0.72);
+  if (Math.random() > chance) return;
+  sea.pollutionEvents = sea.pollutionEvents || [];
+  const record = { year: state.year, pollution: Math.round(pollution), text: "" };
+  if (pollution >= 82 && Math.random() < 0.45) {
+    const monster = createOverseasMonster(rand(20, 99));
+    monster.name = `污染潮·${monster.name}`;
+    monster.value = Math.round(monster.value * 1.18);
+    monster.hp = Math.round(monster.hp * 1.16);
+    monster.totalHp = Math.round(monster.totalHp * 1.16);
+    sea.monsters.unshift(monster);
+    record.text = `深海污染失控，${monster.name}逼近航线。`;
+    log(record.text, "warn");
+  } else if (Math.random() < 0.55) {
+    const lostSupply = Math.min(Number(sea.supplies || 0), rand(1, 2));
+    const lostCargo = Math.min(Number(sea.cargo || 0), rand(0, 1));
+    sea.supplies = Math.max(0, Number(sea.supplies || 0) - lostSupply);
+    sea.cargo = Math.max(0, Number(sea.cargo || 0) - lostCargo);
+    const stoneLoss = Math.min(Number(state.sect.stones || 0), 60 + pollution * 2);
+    state.sect.stones -= stoneLoss;
+    record.text = `污染潮侵蚀海港，补给 -${lostSupply}，货物 -${lostCargo}，灵石 -${Math.round(stoneLoss)}。`;
+    log(record.text, "warn");
+  } else {
+    const encounter = createOverseasEncounter(rand(20, 99));
+    encounter.name = `污染回响·${encounter.name}`;
+    encounter.danger = clamp(encounter.danger + 10, 0, 100);
+    sea.encounters.unshift(encounter);
+    record.text = `污染回响在海外成形，新的克苏鲁事件「${encounter.name}」出现。`;
+    log(record.text, "warn");
+  }
+  sea.pollutionEvents.unshift(record);
+  sea.pollutionEvents = sea.pollutionEvents.slice(0, 6);
+}
+
+function refreshOverseasYear(force = false) {
+  ensureSectDefaults();
+  if (!state.overseas) state.overseas = createOverseasState();
+  if (!force && state.overseas.lastRefreshYear === state.year) return;
+  if (!overseasUnlocked()) return;
+  const port = Number(state.overseas.portLevel || 0);
+  const fleet = Number(state.overseas.fleetLevel || 0);
+  if (port > 0) {
+    state.overseas.supplies = clamp(Number(state.overseas.supplies || 0) + 1 + port, 0, 6 + port * 3);
+    const income = Math.round(65 + port * 55 + fleet * 25 + Number(state.overseas.renown || 0) * 0.2);
+    state.sect.stones += income;
+    if (income) log(`海外港口结算，远洋税契带回 ${income} 灵石，补给 +${1 + port}。`, "good");
+  }
+  state.overseas.pollution = clamp(Number(state.overseas.pollution || 0) - 2 + (port >= 2 ? 1 : 0), 0, 100);
+  applyOverseasFactionAnnualEffects();
+  ensureOverseasIslands();
+  state.overseas.routes = overseasRouteTemplates.map((route) => {
+    const beacon = overseasBeaconLevel(route.id);
+    return {
+      ...route,
+      type: "overseasRoute",
+      beacon,
+      risk: clamp(route.risk + Math.floor(state.overseas.pollution / 8) - beacon * 8 + rand(-4, 8), 8, 92),
+      value: Math.round(route.value * (1 + Math.min(0.45, state.year / 70)) + beacon * 35 + rand(-20, 38)),
+      ttl: 2,
+    };
+  });
+  const eventCount = clamp(1 + Math.floor(port / 2) + (state.year % 3 === 0 ? 1 : 0), 1, 4);
+  state.overseas.encounters = Array.from({ length: eventCount }, (_, i) => createOverseasEncounter(i));
+  const monsterCount = port > 0 && (state.year % 2 === 0 || Math.random() < 0.45) ? 1 + (fleet >= 2 && Math.random() < 0.35 ? 1 : 0) : 0;
+  state.overseas.monsters = Array.from({ length: monsterCount }, (_, i) => createOverseasMonster(i));
+  processOverseasPollutionYear();
+  processOverseasMutationsYear();
+  processOverseasAwakeningYear();
+  rollOverseasCorruptionYear();
+  expireOverseasWorldBossIfNeeded();
+  maybeSpawnOverseasWorldBoss();
+  state.overseas.lastRefreshYear = state.year;
+}
+
+function createOverseasEncounter(index = 0) {
+  const tpl = pick(overseasEventTemplates);
+  const seed = `${state.year}:overseas:${tpl.id}:${index}:${state.overseas?.pollution || 0}`;
+  return {
+    ...tpl,
+    templateId: tpl.id,
+    id: `overseas-event-${state.year}-${index}-${tpl.id}-${stableHash(seed)}`,
+    type: "overseasEncounter",
+    x: stableRange(`${seed}:x`, 120, 930),
+    y: stableRange(`${seed}:y`, 105, 572),
+    danger: clamp(tpl.danger + Math.floor((state.overseas?.pollution || 0) / 5) + stableRange(`${seed}:danger`, -8, 12), 22, 96),
+    value: Math.round(220 + tpl.danger * 5 + state.year * 18 + stableRange(`${seed}:value`, -60, 120)),
+    ttl: rand(1, 2),
+  };
+}
+
+function createOverseasMonster(index = 0) {
+  const tpl = pick(overseasSeaMonsterTemplates);
+  const seed = `${state.year}:monster:${tpl.id}:${index}`;
+  const power = Math.round(tpl.power * (1 + Math.min(0.65, state.year / 50)) + (state.overseas?.pollution || 0) * 16 + stableRange(`${seed}:power`, -180, 360));
+  return {
+    ...tpl,
+    id: `overseas-monster-${state.year}-${index}-${tpl.id}`,
+    type: "overseasMonster",
+    x: stableRange(`${seed}:x`, 160, 900),
+    y: stableRange(`${seed}:y`, 130, 540),
+    value: power,
+    hp: Math.round(power * 5.4),
+    totalHp: Math.round(power * 5.4),
+    ttl: 2,
+  };
+}
+
+function overseasFactionNodes() {
+  if (Number(state.overseas?.portLevel || 0) < 1) return [];
+  return overseasFactionTemplates.map((template) => ({
+    ...template,
+    type: "overseasFaction",
+    relation: Number(overseasFactionState(template.id).relation || 0),
+    influence: Number(overseasFactionState(template.id).influence || 0),
+  }));
+}
+
+function overseasTrenchUnlocked() {
+  if (!overseasUnlocked() || Number(state.overseas?.portLevel || 0) < 2) return false;
+  return Number(state.overseas.trenchClues || 0) >= 2
+    || Number(state.overseas.whispers || 0) >= 8
+    || (state.overseas.clearedEvents || []).length >= 4;
+}
+
+function overseasTrenchNode() {
+  return {
+    id: "overseas-trench",
+    type: "overseasTrench",
+    name: "葬仙海沟",
+    glyph: "沟",
+    x: 906,
+    y: 548,
+    danger: 82 + Math.floor(Number(state.overseas?.pollution || 0) / 4),
+    locked: !overseasTrenchUnlocked(),
+    text: "埋葬旧仙与历代远航船队的深海裂谷。这里会连续推进多层抉择与动画战斗。",
+  };
+}
+
+function overseasOuterRealmRequirements() {
+  const maxRealm = state.sect?.disciples?.length ? Math.max(...state.sect.disciples.map((d) => d.realm)) : 0;
+  const checks = [
+    { label: "海外港口 Lv.3", met: Number(state.overseas?.portLevel || 0) >= 3 },
+    { label: "葬仙海沟完成 1 次", met: Number(state.overseas?.trenchClears || 0) >= 1 },
+    { label: "海图残片 4 张", met: Number(state.overseas?.charts || 0) >= 4 },
+    { label: "元婴弟子至少 1 名", met: maxRealm >= 3 },
+    { label: "海外声望 120", met: Number(state.overseas?.renown || 0) >= 120 },
+  ];
+  return { checks, unlocked: checks.every((item) => item.met) };
+}
+
+function overseasOuterRealmNode() {
+  const req = overseasOuterRealmRequirements();
+  return {
+    id: "overseas-outer-realm",
+    type: "overseasOuterRealm",
+    name: state.overseas.outerRealmCleared ? "外域仙洲航门" : "外域仙洲",
+    glyph: "外",
+    x: 948,
+    y: 104,
+    danger: 94,
+    locked: !req.unlocked,
+    text: "镇渊航线之外的倒悬仙洲。连续远征可收集三条天外线索，并开启覆海玄鲲终战。",
+  };
+}
+
+function overseasXuanKunNode() {
+  if (!state.overseas.outerRealmCleared) return null;
+  return {
+    id: "overseas-final-xuankun",
+    type: "overseasFinalBoss",
+    name: state.overseas.xuanKunDefeated ? "覆海玄鲲遗蜕" : "覆海玄鲲",
+    glyph: "鲲",
+    x: 824,
+    y: 82,
+    power: Math.round(Math.max(7800, sectPower() * 1.08 + state.year * 280)),
+    defeated: state.overseas.xuanKunDefeated,
+    text: "第五阶段终局首领。战斗分为翻海、吞星、归墟三相，连续胜出后才算真正镇杀。",
+  };
+}
+
+function overseasNodes() {
+  ensureSectDefaults();
+  if (!overseasUnlocked()) {
+    return [{ id: "overseas-lock", type: "overseasLocked", name: "海外关牒", x: W * 0.5, y: H * 0.5, text: overseasLockText() }];
+  }
+  refreshOverseasYear();
+  const xuanKun = overseasXuanKunNode();
+  return [
+    { id: "overseas-port", type: "overseasPort", name: state.overseas.portLevel ? "本宗海港" : "东海试航口", x: 118, y: 548, value: 120 },
+    ...(state.overseas.routes || []),
+    ...(state.overseas.islands || []),
+    ...overseasFactionNodes(),
+    overseasTrenchNode(),
+    overseasOuterRealmNode(),
+    ...(xuanKun ? [xuanKun] : []),
+    ...(state.overseasShared.worldBoss && !state.overseasShared.worldBoss.defeated ? [state.overseasShared.worldBoss] : []),
+    ...(state.overseas.encounters || []),
+    ...(state.overseas.monsters || []),
+  ];
+}
+
+function overseasDisciplePower(d) {
+  if (!d) return 0;
+  return discipleBattleScore(d)
+    + Number(d.luck || 0) * 6
+    + Number(d.temper || 0) * 5
+    + Number(d.speed || 0) * 3
+    + traitBonusOnDisciple(d, "explore") * 10
+    + traitBonusOnDisciple(d, "battle") * 6
+    + daoLevelFor("wander") * 55
+    + daoLevelFor("array") * 32;
+}
+
+function discoverOverseasEvent(entry) {
+  if (!entry) return;
+  ensureSectDefaults();
+  const template = overseasEventTemplates.find((item) => item.id === entry.templateId || item.name === entry.name);
+  const id = template?.id || entry.templateId || entry.id;
+  if (id && !state.overseas.compendium.events.includes(id)) state.overseas.compendium.events.push(id);
+  const art = entry.image || template?.image;
+  if (art && !state.overseas.compendium.arts.includes(art)) state.overseas.compendium.arts.push(art);
+}
+
+function discoverOverseasMonster(entry) {
+  if (!entry) return;
+  const id = entry.templateId || entry.id || entry.name;
+  if (id && !state.overseas.compendium.monsters.includes(id)) state.overseas.compendium.monsters.push(id);
+}
+
+function openOverseasCompendium() {
+  ensureSectDefaults();
+  const knownEvents = new Set(state.overseas.compendium.events || []);
+  const knownMonsters = new Set(state.overseas.compendium.monsters || []);
+  const eventCards = overseasEventTemplates.map((event) => {
+    const known = knownEvents.has(event.id);
+    return `<article class="compendium-card ${known ? "is-known" : "is-locked"}">
+      ${known && event.image ? `<img src="${assetUrl(event.image)}" data-fallback-srcs="${assetFallbackList(event.image)}" alt="${tradeEscape(event.name)}">` : ""}
+      <strong>${known ? tradeEscape(event.name) : "未记录的深海异常"}</strong>
+      <span>${known ? tradeEscape(event.intro) : "在海外航线或势力委托中遭遇后解锁。"}</span>
+    </article>`;
+  }).join("");
+  const monsterTemplates = [...overseasSeaMonsterTemplates, { id: "finalXuankun", name: "覆海玄鲲", text: "外域仙洲终局首领，拥有翻海、吞星、归墟三相。" }];
+  const monsterCards = monsterTemplates.map((monster) => {
+    const known = monster.id === "finalXuankun" ? state.overseas.xuanKunAttempts > 0 : [...knownMonsters].some((id) => String(id).includes(monster.id));
+    return `<article class="system-card ${known ? "is-winner" : ""}"><strong>${known ? tradeEscape(monster.name) : "未知海怪"}</strong><span>${known ? tradeEscape(monster.text) : "讨伐或目击后记录。"}</span></article>`;
+  }).join("");
+  const clueCards = outerRealmClueCatalog.map((clue) => {
+    const known = state.overseas.outerRealmClues.includes(clue.id);
+    return `<article class="compendium-card ${known ? "is-known" : "is-locked"}">${known ? `<img src="${assetUrl(clue.art)}" data-fallback-srcs="${assetFallbackList(clue.art)}" alt="${tradeEscape(clue.name)}">` : ""}<strong>${known ? clue.name : "外域线索未取得"}</strong><span>${known ? clue.text : "完成外域仙洲远征后解锁。"}</span></article>`;
+  }).join("");
+  showModal({
+    kicker: "海外图鉴",
+    title: `海国异闻录｜事件 ${knownEvents.size}/${overseasEventTemplates.length}`,
+    body: `
+      <div class="overseas-dashboard">
+        <div><span>事件记录</span><strong>${knownEvents.size}/${overseasEventTemplates.length}</strong></div>
+        <div><span>海怪记录</span><strong>${knownMonsters.size}</strong></div>
+        <div><span>原画收藏</span><strong>${state.overseas.compendium.arts.length}</strong></div>
+        <div><span>外域线索</span><strong>${state.overseas.outerRealmClues.length}/3</strong></div>
+      </div>
+      <h3>外域仙洲线索</h3><div class="compendium-grid">${clueCards}</div>
+      <h3>克苏鲁事件与原画</h3><div class="compendium-grid">${eventCards}</div>
+      <h3>海怪记录</h3><div class="system-grid">${monsterCards}</div>
+    `,
+    actions: [{ label: "合上图鉴", handler: closeModal }],
+  });
+}
+
+function openOverseasOuterRealm(node = overseasOuterRealmNode()) {
+  const req = overseasOuterRealmRequirements();
+  if (!req.unlocked) {
+    showModal({
+      kicker: "第五阶段·外域仙洲",
+      title: "镇渊航线尚未贯通",
+      body: `<p>外域仙洲是后期连续远征，需完成以下全部条件：</p><div class="system-grid">${req.checks.map((item) => `<article class="system-card ${item.met ? "is-winner" : ""}"><strong>${item.met ? "已完成" : "未完成"}</strong><span>${item.label}</span></article>`).join("")}</div>`,
+      actions: [{ label: "返回海外地图", handler: closeModal }],
+    });
+    return;
+  }
+  if (state.overseas.outerRealmLastYear === state.year && !state.overseasOuterRun) {
+    flashFeedback("本年已经进行过外域远征，请等待下一年。", "warn");
+    return;
+  }
+  if (state.overseasOuterRun) {
+    renderOuterRealmStep();
+    return;
+  }
+  const roster = state.sect.disciples.filter((d) => !d.overseasSealedUntil || d.overseasSealedUntil <= state.year).slice().sort((a, b) => overseasDisciplePower(b) - overseasDisciplePower(a));
+  showModal({
+    kicker: "第五阶段·外域仙洲",
+    title: `外域远征｜线索 ${state.overseas.outerRealmClues.length}/3`,
+    body: `
+      <p>${node.text}</p><p>一次远征包含 ${outerRealmChapters.length} 段抉择与两场动画战斗，每年限一次。集齐三条不同线索后开放覆海玄鲲终战。</p>
+      <div class="adventure-roster">${roster.map((d, index) => `<label class="adventure-candidate ${d.core ? "is-core" : ""}"><input class="outer-realm-team" type="checkbox" value="${tradeEscape(d.id)}" ${index < 3 ? "checked" : ""}><div><strong>${d.core ? "核心·" : ""}${tradeEscape(d.name)}</strong><span>${realms[d.realm]} · 远洋 ${Math.round(overseasDisciplePower(d))} · 心${d.temper} 运${d.luck}</span></div></label>`).join("")}</div>
+      <p>消耗：1 行动点、远洋补给 3。当前补给 ${state.overseas.supplies}。</p>
+    `,
+    actions: [
+      { label: "启程外域", handler: startOuterRealmExpedition, disabled: state.actionPoints < 1 || state.overseas.supplies < 3 },
+      { label: "查看海外图鉴", handler: openOverseasCompendium },
+      { label: "暂不启程", handler: closeModal },
+    ],
+  });
+  for (const box of els.modalBody.querySelectorAll(".outer-realm-team")) {
+    box.addEventListener("change", () => {
+      const checked = [...els.modalBody.querySelectorAll(".outer-realm-team:checked")];
+      if (checked.length > 4) { box.checked = false; flashFeedback("外域远征最多派遣 4 名弟子。", "warn"); }
+    });
+  }
+}
+
+function startOuterRealmExpedition() {
+  const ids = [...els.modalBody.querySelectorAll(".outer-realm-team:checked")].map((box) => box.value).slice(0, 4);
+  const team = ids.map((id) => state.sect.disciples.find((d) => d.id === id)).filter(Boolean);
+  if (!team.length) { flashFeedback("至少选择 1 名弟子。", "warn"); return; }
+  if (state.overseas.supplies < 3 || !spendAction(1, "外域仙洲远征")) return;
+  state.overseas.supplies -= 3;
+  state.overseas.outerRealmLastYear = state.year;
+  state.overseas.outerRealmExpeditions += 1;
+  state.overseasOuterRun = { id: uid(), teamIds: team.map((d) => d.id), step: 0, score: 0, danger: 0, tags: { seal: 0, whisper: 0, star: 0 }, journal: [] };
+  renderOuterRealmStep();
+}
+
+function outerRealmRunTeam() {
+  return (state.overseasOuterRun?.teamIds || []).map((id) => state.sect.disciples.find((d) => d.id === id)).filter(Boolean);
+}
+
+function renderOuterRealmStep() {
+  const run = state.overseasOuterRun;
+  if (!run) return;
+  const chapter = outerRealmChapters[run.step];
+  if (!chapter) { finishOuterRealmExpedition(); return; }
+  const team = outerRealmRunTeam();
+  showModal({
+    kicker: `外域仙洲远征 ${run.step + 1}/${outerRealmChapters.length}`,
+    title: chapter.title,
+    body: `
+      <p>${chapter.text}</p>
+      <div class="overseas-dashboard"><div><span>远征积累</span><strong>${run.score}</strong></div><div><span>危险</span><strong>${run.danger}</strong></div><div><span>队伍</span><strong>${team.length} 人</strong></div><div><span>线索</span><strong>${state.overseas.outerRealmClues.length}/3</strong></div></div>
+      <div class="overseas-team-strip"><strong>${team.map((d) => tradeEscape(d.name)).join("、")}</strong><span>${run.journal.slice(-2).map((row) => tradeEscape(row)).join(" · ") || "船队刚刚越过镇渊航标。"}</span></div>
+    `,
+    actions: chapter.choices.map((choice) => ({ label: choice.label, handler: () => chooseOuterRealmPath(choice, chapter) })).concat({ label: "中止并返航", handler: () => finishOuterRealmExpedition(true) }),
+    dismissible: false,
+  });
+}
+
+function chooseOuterRealmPath(choice, chapter) {
+  const run = state.overseasOuterRun;
+  if (!run || !choice) return;
+  const team = outerRealmRunTeam();
+  const statScore = team.reduce((sum, d) => sum + (choice.stat === "array" ? Number(d.arrayLevel || 0) * 26 + d.temper * 0.35 : Number(d[choice.stat] || 0)), 0) / Math.max(1, team.length);
+  const roll = statScore + team.reduce((sum, d) => sum + d.luck, 0) / Math.max(1, team.length) * 0.35 + rand(18, 82);
+  const threshold = 68 + run.step * 7 + run.danger * 0.7;
+  const success = roll >= threshold;
+  run.tags[choice.tag] = Number(run.tags[choice.tag] || 0) + 1;
+  run.score += success ? 12 + Number(choice.clue || 0) : 4;
+  run.danger = clamp(run.danger + Number(choice.danger || 0) - Number(choice.safe || 0) + (success ? -2 : 7), 0, 80);
+  if (choice.insight) state.sect.insight += Math.round(choice.insight * (success ? 1 : 0.4));
+  if (choice.prestige) state.sect.prestige += Math.round(choice.prestige * (success ? 1 : 0.4));
+  if (choice.whispers) state.overseas.whispers += choice.whispers;
+  if (choice.pollution) state.overseas.pollution = clamp(state.overseas.pollution + choice.pollution, 0, 100);
+  if (choice.cargo) state.overseas.cargo = Math.max(0, state.overseas.cargo + choice.cargo);
+  run.journal.push(`${chapter.title}：${choice.text}${success ? "" : " 但执行出现偏差，危险上升。"}`);
+  if (chapter.battle) {
+    runOuterRealmBattle(chapter);
+    return;
+  }
+  run.step += 1;
+  renderOuterRealmStep();
+}
+
+function runOuterRealmBattle(chapter) {
+  const run = state.overseasOuterRun;
+  const team = outerRealmRunTeam();
+  const teamPower = team.reduce((sum, d) => sum + overseasDisciplePower(d), 0);
+  const enemyPower = Math.round(teamPower * (0.76 + run.step * 0.08) + run.danger * 18 + state.year * 20);
+  const monster = overseasMonsterFromPower(chapter.battle === "mirrorCity" ? "众生倒影城主" : "无面食影鸟群", enemyPower, `${run.id}:${run.step}`, 1.7);
+  const battle = simulateTeamVsMonsterBattle(team, monster, { enemyPower, maxRounds: 15 });
+  showRealtimeTeamBattleModal({ kicker: "外域仙洲遭遇战", title: chapter.title, battle, teamLabel: "外域远征队", enemyLabel: monster.name, scores: { our: teamPower, enemy: enemyPower }, onComplete: () => {
+    if (battle.won) { run.score += 15; run.danger = Math.max(0, run.danger - 4); team.forEach((d) => { d.exp += 10; }); }
+    else { run.danger = clamp(run.danger + 14, 0, 80); team.forEach((d) => { d.hp = Math.max(18, d.hp - rand(7, 16)); adjustMind(d, 4, "外域鏖战"); }); }
+    run.journal.push(`${chapter.title}战斗${battle.won ? "获胜" : "失利"}，远征危险变为 ${run.danger}。`);
+    run.step += 1;
+    renderOuterRealmStep();
+  } });
+}
+
+function finishOuterRealmExpedition(aborted = false) {
+  const run = state.overseasOuterRun;
+  if (!run) return;
+  const team = outerRealmRunTeam();
+  const success = !aborted && run.score >= 38 && run.danger < 65;
+  let clue = null;
+  if (success) {
+    const preferred = Object.entries(run.tags).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const mapping = { seal: "sunkenCourt", whisper: "seaEyeTruth", star: "starCorpseMap" };
+    const missing = outerRealmClueCatalog.filter((item) => !state.overseas.outerRealmClues.includes(item.id));
+    clue = missing.find((item) => item.id === mapping[preferred]) || missing[0] || pick(outerRealmClueCatalog);
+    if (!state.overseas.outerRealmClues.includes(clue.id)) state.overseas.outerRealmClues.push(clue.id);
+    if (!state.overseas.compendium.arts.includes(clue.art)) state.overseas.compendium.arts.push(clue.art);
+    state.overseas.outerRealmCleared = state.overseas.outerRealmClues.length >= outerRealmClueCatalog.length;
+    state.sect.stones += 680 + run.score * 8;
+    state.sect.insight += 140 + run.score * 2;
+    state.overseas.renown += 35;
+    state.overseas.charts += 1;
+    team.forEach((d) => { d.exp += 20; d.status = "外域归航"; });
+    log(`外域远征成功，取得「${clue.name}」，天外线索 ${state.overseas.outerRealmClues.length}/3。`, "good");
+  } else {
+    state.overseas.pollution = clamp(state.overseas.pollution + (aborted ? 2 : 7), 0, 100);
+    team.forEach((d) => { d.hp = Math.max(18, d.hp - (aborted ? 4 : rand(10, 20))); d.status = "外域败归"; });
+    log(`外域远征${aborted ? "中止" : "失败"}，船队未能带回完整线索。`, "warn");
+  }
+  state.overseasOuterRun = null;
+  showModal({
+    kicker: "外域仙洲归航",
+    title: success ? `取得${clue.name}` : aborted ? "主动中止远征" : "外域远征失利",
+    body: `${clue ? `<img class="event-art" src="${assetUrl(clue.art)}" data-fallback-srcs="${assetFallbackList(clue.art)}" alt="${tradeEscape(clue.name)}">` : ""}<p>${success ? clue.text : "船队保住了核心成员，但外域坐标在返航时自行抹去。"}</p><div class="battle-breakdown"><div><span>远征积累</span><strong>${run.score}</strong></div><div><span>最终危险</span><strong>${run.danger}</strong></div><div><span>天外线索</span><strong>${state.overseas.outerRealmClues.length}/3</strong></div></div><div class="adventure-history">${run.journal.slice(-5).map((row) => `<p>${tradeEscape(row)}</p>`).join("")}</div>`,
+    actions: [{ label: state.overseas.outerRealmCleared ? "查看覆海玄鲲" : "返回海外地图", handler: () => { closeModal(); render(); } }],
+  });
+  render();
+}
+
+function openOverseasFinalBoss(node = overseasXuanKunNode()) {
+  ensureSectDefaults();
+  if (!node || !state.overseas.outerRealmCleared) {
+    flashFeedback("尚未集齐三条外域线索。", "warn");
+    return;
+  }
+  if (state.overseas.xuanKunDefeated) {
+    openOverseasEndingBoard();
+    return;
+  }
+  if (state.overseas.xuanKunLastYear === state.year) {
+    showModal({
+      kicker: "第五阶段·覆海玄鲲",
+      title: "玄鲲已遁入归墟",
+      body: `<p>本年已经发起过终战。它的三相会在下一年重新聚合，届时可再次挑战。</p><div class="battle-breakdown"><div><span>挑战次数</span><strong>${state.overseas.xuanKunAttempts}</strong></div><div><span>海外声望</span><strong>${state.overseas.renown}</strong></div><div><span>深海污染</span><strong>${state.overseas.pollution}</strong></div></div>`,
+      actions: [{ label: "返回海外地图", handler: closeModal }],
+    });
+    return;
+  }
+  const roster = state.sect.disciples.slice().sort((a, b) => overseasDisciplePower(b) - overseasDisciplePower(a));
+  showModal({
+    kicker: "第五阶段·覆海玄鲲",
+    title: "三相终战",
+    body: `
+      <p>${node.text}</p>
+      <div class="adventure-roster">${roster.map((d, index) => `<label class="adventure-candidate ${d.core ? "is-core" : ""}"><input class="xuankun-team" type="checkbox" value="${tradeEscape(d.id)}" ${index < 5 ? "checked" : ""}><div><strong>${d.core ? "核心·" : ""}${tradeEscape(d.name)}</strong><span>${realms[d.realm]} · 远洋战力 ${Math.round(overseasDisciplePower(d))} · 体魄 ${d.hp}</span></div></label>`).join("")}</div>
+      <p>最多五人，连续挑战翻海、吞星、归墟三相。中途败退即结束本年挑战。消耗 1 行动点与 4 远洋补给。</p>
+    `,
+    actions: [
+      { label: "列阵镇杀", handler: () => startXuanKunBattle(node), disabled: state.actionPoints < 1 || state.overseas.supplies < 4 },
+      { label: "暂缓终战", handler: closeModal },
+    ],
+  });
+  for (const box of els.modalBody.querySelectorAll(".xuankun-team")) {
+    box.addEventListener("change", () => {
+      const checked = [...els.modalBody.querySelectorAll(".xuankun-team:checked")];
+      if (checked.length > 5) {
+        box.checked = false;
+        flashFeedback("覆海终战最多派遣 5 名弟子。", "warn");
+      }
+    });
+  }
+}
+
+function startXuanKunBattle(node) {
+  const ids = [...els.modalBody.querySelectorAll(".xuankun-team:checked")].map((box) => box.value).slice(0, 5);
+  const team = ids.map((id) => state.sect.disciples.find((d) => d.id === id)).filter(Boolean);
+  if (!team.length) {
+    flashFeedback("至少选择一名弟子出战。", "warn");
+    return;
+  }
+  if (state.overseas.supplies < 4 || !spendAction(1, "覆海玄鲲终战")) return;
+  state.overseas.supplies -= 4;
+  state.overseas.xuanKunAttempts += 1;
+  state.overseas.xuanKunLastYear = state.year;
+  discoverOverseasMonster({ id: "finalXuankun", templateId: "finalXuankun" });
+  const run = { teamIds: team.map((d) => d.id), phase: 0, victories: 0, damage: 0, journal: [] };
+  runXuanKunPhase(run, node);
+}
+
+function runXuanKunPhase(run, node) {
+  const phases = [
+    { name: "翻海相", text: "玄鲲翻身，整片海床被掀至天幕。", scale: 0.8, hp: 1.45 },
+    { name: "吞星相", text: "巨口吞下星光，所有法术都被拖向无光深处。", scale: 0.97, hp: 1.72 },
+    { name: "归墟相", text: "它舍弃血肉化为海眼，试图连同远征队一起归零。", scale: 1.16, hp: 2.05 },
+  ];
+  const phase = phases[run.phase];
+  if (!phase) {
+    finishXuanKunBattle(run, node, true);
+    return;
+  }
+  const team = run.teamIds.map((id) => state.sect.disciples.find((d) => d.id === id)).filter(Boolean);
+  const teamPower = team.reduce((sum, d) => sum + overseasDisciplePower(d), 0);
+  const routeAid = Math.min(0.12, Number(overseasDominantFaction()?.influence || 0) / 600);
+  const enemyPower = Math.round(Math.max(2400 + state.year * 95, teamPower * (phase.scale - routeAid) + state.overseas.pollution * 13));
+  const monster = overseasMonsterFromPower(`覆海玄鲲·${phase.name}`, enemyPower, `xuankun:${state.year}:${run.phase}`, phase.hp);
+  const battle = simulateTeamVsMonsterBattle(team, monster, { enemyPower, maxRounds: 17, noPowerJudge: run.phase === 2 });
+  showRealtimeTeamBattleModal({
+    kicker: `覆海玄鲲 ${run.phase + 1}/3`,
+    title: phase.name,
+    battle,
+    teamLabel: "镇海远征队",
+    enemyLabel: `玄鲲${phase.name}`,
+    scores: { our: teamPower, enemy: enemyPower },
+    onComplete: () => {
+      run.damage += battle.totalDamage;
+      run.journal.push(`${phase.name}${battle.won ? "镇压成功" : "镇压失败"}，累计造成 ${Math.round(battle.totalDamage)} 伤害。`);
+      if (!battle.won) {
+        finishXuanKunBattle(run, node, false);
+        return;
+      }
+      run.victories += 1;
+      team.forEach((d) => { d.exp += 12 + run.phase * 4; d.status = `镇压${phase.name}`; });
+      run.phase += 1;
+      if (run.phase >= phases.length) finishXuanKunBattle(run, node, true);
+      else runXuanKunPhase(run, node);
+    },
+  });
+}
+
+function finishXuanKunBattle(run, node, won) {
+  const team = run.teamIds.map((id) => state.sect.disciples.find((d) => d.id === id)).filter(Boolean);
+  if (won) {
+    state.overseas.xuanKunDefeated = true;
+    state.overseas.renown += 120;
+    state.overseas.cargo += 6;
+    state.overseas.charts += 3;
+    state.overseas.pollution = Math.max(0, state.overseas.pollution - 18);
+    state.sect.stones += 1600;
+    state.sect.prestige += 320;
+    state.sect.insight += 500;
+    team.forEach((d) => { d.exp += 35; d.status = "覆海终战凯旋"; });
+    log("覆海玄鲲三相俱灭，海外三条终局路线已经开放。", "good");
+  } else {
+    state.overseas.pollution = clamp(state.overseas.pollution + 10, 0, 100);
+    state.overseas.whispers += 2;
+    team.forEach((d) => { d.hp = Math.max(12, d.hp - rand(12, 24)); adjustMind(d, 8, "玄鲲归墟低语"); d.status = "覆海败退"; });
+    log("覆海玄鲲尚未镇杀，远征队负伤退回海港。", "warn");
+  }
+  showModal({
+    kicker: "第五阶段·终战结算",
+    title: won ? "覆海玄鲲伏诛" : "三相镇压失败",
+    body: `
+      <div class="voyage-result-stage ${won ? "is-win" : "is-loss"}"><strong>${won ? "海天重分，外域航门洞开" : "归墟闭合，玄鲲遁去"}</strong><span>${won ? "三种宗门终局已进入最后抉择。" : "整备补给、修复伤势后，下一年可再次挑战。"}</span></div>
+      <div class="battle-breakdown"><div><span>击破阶段</span><strong>${run.victories}/3</strong></div><div><span>累计伤害</span><strong>${Math.round(run.damage)}</strong></div><div><span>挑战次数</span><strong>${state.overseas.xuanKunAttempts}</strong></div></div>
+      ${won ? `<div class="reward-list"><span>灵石 +1600</span><span>声望 +320</span><span>参悟 +500</span><span>远洋货物 +6</span><span>海图 +3</span><span>污染 -18</span></div>` : `<div class="reward-list"><span>队伍负伤</span><span>污染 +10</span><span>古神低语 +2</span></div>`}
+      <div class="adventure-history">${run.journal.map((row) => `<p>${tradeEscape(row)}</p>`).join("")}</div>
+    `,
+    actions: won ? [{ label: "进入海外终局", handler: openOverseasEndingBoard }] : [{ label: "返回港口", handler: openOverseasPort }],
+    dismissible: false,
+  });
+  render();
+}
+
+function overseasEndingProgress(id) {
+  const maxRealm = state.sect.disciples.length ? Math.max(...state.sect.disciples.map((d) => d.realm)) : 0;
+  const mutationCount = state.sect.disciples.filter((d) => (d.traits || []).some((trait) => trait.mutationId)).length;
+  const faction = (key) => Number(overseasFactionState(key).influence || 0);
+  const common = [{ label: "镇杀覆海玄鲲", value: state.overseas.xuanKunDefeated ? 1 : 0, goal: 1 }];
+  const checks = id === "seaGuardian" ? common.concat([
+    { label: "钟庙路线影响", value: faction("bellTemple"), goal: 45 },
+    { label: "海外声望", value: state.overseas.renown, goal: 260 },
+    { label: "镇魂灯油", value: state.overseas.soulOil, goal: 3 },
+    { label: "深海污染不高于 20", value: Math.max(0, 100 - state.overseas.pollution), goal: 80, display: `${state.overseas.pollution}/20` },
+  ]) : id === "blackTideLord" ? common.concat([
+    { label: "黑潮路线影响", value: faction("blackTide"), goal: 45 },
+    { label: "异化弟子", value: mutationCount, goal: 3 },
+    { label: "古神低语", value: state.overseas.whispers, goal: 18 },
+    { label: "深海污染", value: state.overseas.pollution, goal: 45 },
+  ]) : common.concat([
+    { label: "外域线索", value: state.overseas.outerRealmClues.length, goal: 3 },
+    { label: "最高境界达到炼虚", value: maxRealm, goal: 5, display: realms[maxRealm] },
+    { label: "海图残片", value: state.overseas.charts, goal: 8 },
+    { label: "宗门参悟", value: state.sect.insight, goal: 1200 },
+  ]);
+  return { checks, ready: checks.every((item) => Number(item.value) >= Number(item.goal)) };
+}
+
+function openOverseasEndingBoard() {
+  ensureSectDefaults();
+  const cards = overseasEndingCatalog.map((ending) => {
+    const progress = overseasEndingProgress(ending.id);
+    return `<article class="ending-card ${progress.ready ? "is-ready" : ""}"><strong>${ending.name}</strong><p>${ending.text}</p>${progress.checks.map((item) => { const pct = clamp((Number(item.value) / Math.max(1, Number(item.goal))) * 100, 0, 100); return `<div class="ending-progress"><span>${item.label}</span><b>${item.display || `${Math.round(item.value)}/${item.goal}`}</b><i><em style="width:${pct}%"></em></i></div>`; }).join("")}<button class="ending-claim" data-ending="${ending.id}" ${progress.ready || state.overseas.ending === ending.id ? "" : "disabled"}>${state.overseas.ending === ending.id ? "已达成" : "铸成结局"}</button></article>`;
+  }).join("");
+  showModal({
+    kicker: "第五阶段·海外终局",
+    title: state.overseas.ending ? `已达成：${overseasEndingCatalog.find((item) => item.id === state.overseas.ending)?.name || "海外终局"}` : "三条道路，一宗之命",
+    body: `<p>镇杀玄鲲只是开端。结局要求严苛且只能选择一次；达成后仍可继续经营当前存档。</p><div class="ending-grid">${cards}</div>`,
+    actions: [{ label: "返回港口", handler: openOverseasPort }],
+  });
+  for (const button of els.modalBody.querySelectorAll(".ending-claim")) {
+    button.addEventListener("click", () => claimOverseasEnding(button.dataset.ending));
+  }
+}
+
+function claimOverseasEnding(id) {
+  const ending = overseasEndingCatalog.find((item) => item.id === id);
+  const progress = overseasEndingProgress(id);
+  if (!ending || !progress.ready || state.overseas.ending) {
+    flashFeedback(state.overseas.ending ? "此存档已经铸成海外终局。" : "结局条件尚未全部满足。", "warn");
+    return;
+  }
+  state.overseas.ending = id;
+  state.overseas.endingYear = state.year;
+  if (!state.overseas.compendium.endings.includes(id)) state.overseas.compendium.endings.push(id);
+  state.sect.prestige += 500;
+  state.sect.legacy = Number(state.sect.legacy || 0) + 30;
+  log(`海外终局「${ending.name}」达成，宗门传承被写入海国史册。`, "good");
+  showModal({
+    kicker: "海外终局达成",
+    title: ending.name,
+    body: `<div class="ending-finale"><strong>${ending.name}</strong><p>${ending.text}</p><span>太初 ${state.year} 年 · ${tradeEscape(state.sect.name)}</span></div><div class="reward-list"><span>宗门声望 +500</span><span>传承底蕴 +30</span><span>结局图鉴已解锁</span></div>`,
+    actions: [{ label: "继续经营宗门", handler: () => { closeModal(); render(); } }],
+    dismissible: false,
+  });
+  render();
+}
+
+function openOverseasPort() {
+  ensureSectDefaults();
+  const port = Number(state.overseas.portLevel || 0);
+  const fleet = Number(state.overseas.fleetLevel || 0);
+  const maxSupply = 6 + port * 3;
+  showModal({
+    kicker: "海外港口",
+    title: port ? `本宗海港 Lv.${port}` : "东海试航口",
+    body: `
+      <div class="overseas-dashboard">
+        <div><span>港口</span><strong>Lv.${port}</strong></div>
+        <div><span>舰队</span><strong>Lv.${fleet}</strong></div>
+        <div><span>补给</span><strong>${state.overseas.supplies}/${maxSupply}</strong></div>
+        <div><span>远洋货物</span><strong>${state.overseas.cargo}</strong></div>
+        <div><span>海图残片</span><strong>${state.overseas.charts}</strong></div>
+        <div><span>深海污染</span><strong>${state.overseas.pollution}/100</strong></div>
+        <div><span>镇魂灯油</span><strong>${state.overseas.soulOil}</strong></div>
+        <div><span>古神低语</span><strong>${state.overseas.whispers}</strong></div>
+        <div><span>旧仙苏醒</span><strong>${state.overseas.awakening}/100</strong></div>
+        <div><span>主导路线</span><strong>${overseasDominantFaction()?.name || "未定"}</strong></div>
+      </div>
+      <p>第三阶段加入污染成长、古神低语、弟子异化和葬仙海沟；第四阶段解锁联合远航与共享海怪；第五阶段开放外域仙洲、覆海玄鲲三相终战和三条高难终局。个人港口资产不会被房间同步覆盖。</p>
+    `,
+    actions: [
+      { label: port ? `升级港口（${420 * (port + 1)}灵石）` : "建设海图司（420灵石）", handler: upgradeOverseasPort, disabled: state.actionPoints < 1 || state.sect.stones < 420 * (port + 1) || port >= 3 },
+      { label: fleet ? `升级舰队（${360 * (fleet + 1)}灵石/${120 * (fleet + 1)}粮）` : "整备试航舰队（360灵石/120粮）", handler: upgradeOverseasFleet, disabled: state.actionPoints < 1 || state.sect.stones < 360 * (fleet + 1) || state.sect.grain < 120 * (fleet + 1) || fleet >= 3 },
+      { label: "调拨远洋补给", handler: prepareOverseasSupplies, disabled: state.sect.grain < 90 || state.overseas.supplies >= maxSupply },
+      { label: "炼制镇魂灯油", handler: craftOverseasSoulOil, disabled: state.actionPoints < 1 || state.sect.stones < 140 || state.sect.forgingMats < 1 || state.sect.arrayMats < 1 },
+      { label: `出售远洋货物 x${state.overseas.cargo}`, handler: sellOverseasCargo, disabled: state.overseas.cargo <= 0 },
+      { label: "海外图鉴", handler: openOverseasCompendium },
+      { label: state.overseas.xuanKunDefeated ? "海外终局" : `第五阶段进度 ${state.overseas.outerRealmClues.length}/3`, handler: state.overseas.xuanKunDefeated ? openOverseasEndingBoard : () => openOverseasOuterRealm(overseasOuterRealmNode()) },
+      ...(state.multiplayer && state.roomConnected ? [
+        { label: "召开海外岛屿议会", handler: openOverseasCouncilBoard },
+        { label: "发起跨宗联合商路", handler: openOverseasTradeRouteBoard },
+      ] : []),
+      { label: "关闭", handler: closeModal },
+    ],
+  });
+}
+
+function upgradeOverseasPort() {
+  const current = Number(state.overseas.portLevel || 0);
+  const cost = 420 * (current + 1);
+  if (current >= 3 || !spendAction(1, "建设海外港口")) return;
+  if (state.sect.stones < cost) {
+    state.actionPoints += 1;
+    flashFeedback(`需要 ${cost} 灵石。`, "warn");
+    render();
+    return;
+  }
+  state.sect.stones -= cost;
+  state.overseas.portLevel = current + 1;
+  state.overseas.renown += 18 + current * 8;
+  log(`海外港口升至 Lv.${state.overseas.portLevel}，每年补给和远洋税契提高。`, "good");
+  closeModal();
+  refreshOverseasYear(true);
+  render();
+}
+
+function upgradeOverseasFleet() {
+  const current = Number(state.overseas.fleetLevel || 0);
+  const stoneCost = 360 * (current + 1);
+  const grainCost = 120 * (current + 1);
+  if (current >= 3 || !spendAction(1, "整备远洋舰队")) return;
+  if (state.sect.stones < stoneCost || state.sect.grain < grainCost) {
+    state.actionPoints += 1;
+    flashFeedback(`需要 ${stoneCost} 灵石和 ${grainCost} 粮草。`, "warn");
+    render();
+    return;
+  }
+  state.sect.stones -= stoneCost;
+  state.sect.grain -= grainCost;
+  state.overseas.fleetLevel = current + 1;
+  state.overseas.supplies = clamp(state.overseas.supplies + 2, 0, 6 + state.overseas.portLevel * 3);
+  log(`远洋舰队升至 Lv.${state.overseas.fleetLevel}，航线战斗与事件容错提高。`, "good");
+  closeModal();
+  render();
+}
+
+function prepareOverseasSupplies() {
+  const maxSupply = 6 + Number(state.overseas.portLevel || 0) * 3;
+  if (state.sect.grain < 90 || state.overseas.supplies >= maxSupply) return;
+  state.sect.grain -= 90;
+  state.overseas.supplies = clamp(state.overseas.supplies + 2, 0, maxSupply);
+  log("山门调拨粮草与符水，远洋补给 +2。", "good");
+  closeModal();
+  render();
+}
+
+function sellOverseasCargo() {
+  const cargo = Number(state.overseas.cargo || 0);
+  if (cargo <= 0) return;
+  const price = Math.round(cargo * (180 + state.overseas.portLevel * 42 + Math.min(120, state.overseas.renown / 3)));
+  state.overseas.cargo = 0;
+  state.sect.stones += price;
+  log(`远洋货物在海港售出，灵石 +${price}。`, "good");
+  closeModal();
+  render();
+}
+
+function openOverseasIsland(island) {
+  ensureSectDefaults();
+  const relation = clamp(Number(island.relation || 0), 0, 100);
+  const specialtyName = overseasIslandRewardName(island.specialty);
+  showModal({
+    kicker: "海外岛屿势力",
+    title: `${island.name}｜关系 ${relation}（${overseasIslandRelationLabel(relation)}）`,
+    body: `
+      <p>${tradeEscape(island.text)}</p>
+      <div class="overseas-dashboard">
+        <div><span>擅长产出</span><strong>${specialtyName}</strong></div>
+        <div><span>关系</span><strong>${relation}/100</strong></div>
+        <div><span>岛屿请求</span><strong>${tradeEscape(island.request || "远洋货物")}</strong></div>
+        <div><span>污染压力</span><strong>${Math.round(state.overseas.pollution || 0)}/100</strong></div>
+      </div>
+      <p>岛屿势力是海外经营的长期核心：用货物换材料，用海图换关系，或处理污染潮换取更稳定的航线。关系越高，委托与交易收益越好。</p>
+    `,
+    actions: [
+      { label: `远洋交易（货物1换${specialtyName}）`, handler: () => tradeWithOverseasIsland(island), disabled: state.overseas.cargo < 1 },
+      { label: "递交海图残片", handler: () => offerChartToOverseasIsland(island), disabled: state.overseas.charts < 1 },
+      { label: "净化污染潮", handler: () => cleanseOverseasIsland(island), disabled: state.actionPoints < 1 || (state.sect.arrayMats < 1 && state.sect.insight < 45) },
+      { label: "接受岛屿委托", handler: () => commissionOverseasIsland(island), disabled: state.actionPoints < 1 || relation < 18 || state.overseas.supplies < 1 },
+      { label: "离开", handler: closeModal },
+    ],
+  });
+}
+
+function tradeWithOverseasIsland(island) {
+  if (state.overseas.cargo < 1) return;
+  state.overseas.cargo -= 1;
+  const relation = clamp(Number(island.relation || 0), 0, 100);
+  const amount = relation >= 70 ? 3 : relation >= 40 ? 2 : 1;
+  const reward = island.specialty === "insight" ? { insight: 70 + relation } : { [island.specialty]: amount };
+  const labels = applyRewardToSect(reward, `${island.name}交易`);
+  island.relation = clamp(relation + 4, 0, 100);
+  if (island.id === "overseas-island-blackSail") state.overseas.pollution = clamp(state.overseas.pollution + 3, 0, 100);
+  log(`${island.name}完成远洋交易：${labels.join("、")}，关系 +4。`, "good");
+  closeModal();
+  render();
+}
+
+function offerChartToOverseasIsland(island) {
+  if (state.overseas.charts < 1) return;
+  state.overseas.charts -= 1;
+  island.relation = clamp(Number(island.relation || 0) + 10, 0, 100);
+  state.overseas.renown += 12;
+  if (island.id === "overseas-island-looseImmortal") applyRewardToSect({ insight: 35 }, "散仙礁庭回礼");
+  log(`${island.name}收下海图残片，关系 +10，海外声望 +12。`, "good");
+  closeModal();
+  render();
+}
+
+function cleanseOverseasIsland(island) {
+  if (!spendAction(1, "净化海外污染")) return;
+  if (state.sect.arrayMats >= 1) state.sect.arrayMats -= 1;
+  else state.sect.insight = Math.max(0, state.sect.insight - 45);
+  const cut = 10 + Math.floor(Number(island.relation || 0) / 12);
+  state.overseas.pollution = clamp(Number(state.overseas.pollution || 0) - cut, 0, 100);
+  island.relation = clamp(Number(island.relation || 0) + 7, 0, 100);
+  applyRewardToSect({ prestige: 8 + Math.floor(cut / 2) }, "净化海外污染");
+  log(`${island.name}污染潮被压下，深海污染 -${cut}，关系 +7。`, "good");
+  closeModal();
+  render();
+}
+
+function commissionOverseasIsland(island) {
+  if (!spendAction(1, "接受海外岛屿委托")) return;
+  if (state.overseas.supplies < 1) {
+    state.actionPoints += 1;
+    flashFeedback("远洋补给不足。", "warn");
+    render();
+    return;
+  }
+  state.overseas.supplies -= 1;
+  const encounter = createOverseasEncounter(rand(40, 130));
+  encounter.x = clamp(island.x + rand(-42, 42), 80, W - 80);
+  encounter.y = clamp(island.y + rand(-42, 42), 70, H - 70);
+  encounter.name = `${island.name}委托·${encounter.name}`;
+  encounter.value += 90 + Number(island.relation || 0);
+  encounter.danger = clamp(encounter.danger + 6, 20, 100);
+  state.overseas.encounters.unshift(encounter);
+  island.relation = clamp(Number(island.relation || 0) + 3, 0, 100);
+  log(`${island.name}发布委托，「${encounter.name}」已出现在海外地图。`, "warn");
+  closeModal();
+  render();
+}
+
+function openOverseasFaction(node) {
+  const faction = overseasFactionState(node.id);
+  const dominant = overseasDominantFaction();
+  const actionLabel = node.id === "bellTemple" ? "协助镇魂封印" : node.id === "blackTide" ? "交换古神知识" : "签订鲛人海约";
+  showModal({
+    kicker: "海外三方路线",
+    title: `${node.name}｜关系 ${Math.round(faction.relation)}`,
+    body: `
+      <p>${tradeEscape(node.text)}</p>
+      <div class="overseas-dashboard">
+        <div><span>势力关系</span><strong>${Math.round(faction.relation)}</strong></div>
+        <div><span>路线影响</span><strong>${Math.round(faction.influence)}</strong></div>
+        <div><span>当前主路线</span><strong>${dominant?.name || "尚未选择"}</strong></div>
+        <div><span>古神低语</span><strong>${Math.round(state.overseas.whispers)}</strong></div>
+      </div>
+      <p>三方路线不会立刻锁死，但长期偏向会改变事件奖励、污染控制和葬仙海沟结局。黑潮路线力量更强，代价也最危险。</p>
+    `,
+    actions: [
+      { label: actionLabel, handler: () => resolveOverseasFactionAction(node.id), disabled: state.actionPoints < 1 },
+      ...(node.id === "blackTide" ? [{ label: "消耗 5 低语换取禁法", handler: studyBlackTideForbiddenLore, disabled: state.actionPoints < 1 || state.overseas.whispers < 5 }] : []),
+      ...(node.id === "bellTemple" ? [{ label: "消耗灯油压制低语", handler: suppressOverseasWhispers, disabled: state.actionPoints < 1 || state.overseas.soulOil < 1 || state.overseas.whispers < 1 }] : []),
+      { label: "接受势力委托", handler: () => startOverseasFactionCommission(node), disabled: state.actionPoints < 1 || state.overseas.supplies < 1 || faction.relation < 0 },
+      { label: "离开", handler: closeModal },
+    ],
+  });
+}
+
+function resolveOverseasFactionAction(factionId) {
+  if (!spendAction(1, `${overseasFactionName(factionId)}路线行动`)) return;
+  let result = "";
+  if (factionId === "bellTemple") {
+    if (state.sect.arrayMats < 1 || state.sect.stones < 160) {
+      state.actionPoints += 1;
+      flashFeedback("需要 160 灵石和 1 阵材。", "warn");
+      render();
+      return;
+    }
+    state.sect.stones -= 160;
+    state.sect.arrayMats -= 1;
+    state.overseas.soulOil += 2;
+    state.overseas.pollution = clamp(state.overseas.pollution - 9, 0, 100);
+    state.overseas.whispers = Math.max(0, state.overseas.whispers - 1);
+    adjustOverseasFaction("bellTemple", 8, 6);
+    adjustOverseasFaction("blackTide", -2, 0);
+    result = "协助古寺加固镇海钟，镇魂灯油 +2，污染 -9。";
+  } else if (factionId === "blackTide") {
+    if (state.sect.stones < 240) {
+      state.actionPoints += 1;
+      flashFeedback("需要 240 灵石作为禁忌交易筹码。", "warn");
+      render();
+      return;
+    }
+    state.sect.stones -= 240;
+    state.sect.insight += 120 + Math.round(state.overseas.whispers * 3);
+    state.overseas.whispers += 3;
+    state.overseas.pollution = clamp(state.overseas.pollution + 7, 0, 100);
+    state.overseas.awakening = clamp(state.overseas.awakening + 4, 0, 100);
+    adjustOverseasFaction("blackTide", 9, 7);
+    adjustOverseasFaction("bellTemple", -3, 0);
+    result = "换得旧仙经页，参悟大增，但低语、污染与苏醒进度同步上升。";
+  } else {
+    if (state.overseas.cargo < 1 && state.overseas.charts < 1) {
+      state.actionPoints += 1;
+      flashFeedback("至少需要 1 份远洋货物或 1 张海图残片。", "warn");
+      render();
+      return;
+    }
+    if (state.overseas.cargo > 0) state.overseas.cargo -= 1;
+    else state.overseas.charts -= 1;
+    state.sect.alchemyMats += 2;
+    state.overseas.supplies = clamp(state.overseas.supplies + 2, 0, 6 + state.overseas.portLevel * 3);
+    state.overseas.pollution = clamp(state.overseas.pollution - 3, 0, 100);
+    adjustOverseasFaction("merfolk", 9, 7);
+    result = "鲛人海约成立，丹材 +2、补给 +2、污染 -3。";
+  }
+  log(`${overseasFactionName(factionId)}：${result}`, factionId === "blackTide" ? "warn" : "good");
+  closeModal();
+  render();
+}
+
+function studyBlackTideForbiddenLore() {
+  if (state.overseas.whispers < 5 || !spendAction(1, "参悟黑潮禁法")) return;
+  state.overseas.whispers -= 5;
+  state.overseas.pollution = clamp(state.overseas.pollution + 6, 0, 100);
+  state.overseas.awakening = clamp(state.overseas.awakening + 5, 0, 100);
+  state.sect.insight += 180;
+  const forbiddenMethod = pick(["yinMethod", "plagueMethod", "moonMethod"]);
+  if (itemCatalog[forbiddenMethod]) addItem(forbiddenMethod, 1, 2 + (Math.random() < 0.25 ? 1 : 0));
+  const target = pick(state.sect.disciples);
+  if (target && Math.random() < 0.3) applyOverseasMutation(target);
+  adjustOverseasFaction("blackTide", 6, 7);
+  log("宗门消耗古神低语换得黑潮禁法与参悟，但污染和旧仙苏醒进度上升。", "warn");
+  closeModal();
+  render();
+}
+
+function suppressOverseasWhispers() {
+  if (state.overseas.soulOil < 1 || state.overseas.whispers < 1 || !spendAction(1, "沉钟镇魂")) return;
+  state.overseas.soulOil -= 1;
+  const removed = Math.min(state.overseas.whispers, 4 + Math.floor(Math.max(0, overseasFactionState("bellTemple").relation) / 30));
+  state.overseas.whispers -= removed;
+  state.overseas.pollution = clamp(state.overseas.pollution - 5, 0, 100);
+  state.overseas.awakening = clamp(state.overseas.awakening - 3, 0, 100);
+  adjustOverseasFaction("bellTemple", 5, 4);
+  log(`沉钟寺协助镇魂，古神低语 -${removed}，污染 -5。`, "good");
+  closeModal();
+  render();
+}
+
+function startOverseasFactionCommission(node) {
+  if (!spendAction(1, `${node.name}势力委托`)) return;
+  if (state.overseas.supplies < 1) {
+    state.actionPoints += 1;
+    flashFeedback("远洋补给不足。", "warn");
+    render();
+    return;
+  }
+  state.overseas.supplies -= 1;
+  const matching = overseasEventTemplates.filter((event) => event.faction === node.id);
+  const template = pick(matching.length ? matching : overseasEventTemplates);
+  const encounter = createOverseasEncounter(rand(160, 260));
+  Object.assign(encounter, template, {
+    id: `faction-${node.id}-${state.year}-${uid()}`,
+    type: "overseasEncounter",
+    x: clamp(node.x + rand(-55, 55), 75, W - 75),
+    y: clamp(node.y + rand(-55, 55), 70, H - 70),
+    danger: clamp(Number(template.danger || encounter.danger) + 6, 20, 100),
+  });
+  state.overseas.encounters.unshift(encounter);
+  adjustOverseasFaction(node.id, 2, 1);
+  log(`${node.name}发布长线委托「${encounter.name}」，事件已出现在海外地图。`, "warn");
+  closeModal();
+  render();
+}
+
+function craftOverseasSoulOil() {
+  if (!spendAction(1, "炼制镇魂灯油")) return;
+  if (state.sect.forgingMats < 1 || state.sect.arrayMats < 1 || state.sect.stones < 140) {
+    state.actionPoints += 1;
+    flashFeedback("需要 140 灵石、1 器材和 1 阵材。", "warn");
+    render();
+    return;
+  }
+  state.sect.stones -= 140;
+  state.sect.forgingMats -= 1;
+  state.sect.arrayMats -= 1;
+  state.overseas.soulOil += 2 + (overseasFactionState("bellTemple").relation >= 50 ? 1 : 0);
+  log("宗门炼成镇魂灯油，可在海沟与异化事件中抵抗古神低语。", "good");
+  closeModal();
+  render();
+}
+
+function openOverseasTrench() {
+  const unlocked = overseasTrenchUnlocked();
+  const cooldown = Math.max(0, Number(state.overseas.trenchCooldownUntil || 0) - state.year);
+  if (!unlocked) {
+    showModal({
+      kicker: "葬仙海沟",
+      title: "海沟坐标尚未完整",
+      body: `<p>需要港口 Lv.2，并满足任一条件：海沟线索 2、古神低语 8、或完成 4 次克苏鲁事件。当前线索 ${state.overseas.trenchClues}/2，低语 ${state.overseas.whispers}/8，事件 ${(state.overseas.clearedEvents || []).length}/4。</p>`,
+    });
+    return;
+  }
+  const roster = state.sect.disciples
+    .filter((d) => !d.overseasSealedUntil || d.overseasSealedUntil <= state.year)
+    .slice()
+    .sort((a, b) => overseasDisciplePower(b) - overseasDisciplePower(a));
+  showModal({
+    kicker: "克苏鲁主线",
+    title: `葬仙海沟｜危险 ${82 + Math.floor(state.overseas.pollution / 4)}`,
+    body: `
+      <p>海沟远征连续推进 ${overseasTrenchSteps.length} 层抉择，包含多场动画战斗。路线选择会决定沉钟寺、黑潮信众或鲛人海国的主线结果。</p>
+      <div class="overseas-dashboard">
+        <div><span>镇魂灯油</span><strong>${state.overseas.soulOil}</strong></div>
+        <div><span>补给消耗</span><strong>3</strong></div>
+        <div><span>已通关</span><strong>${state.overseas.trenchClears}</strong></div>
+        <div><span>冷却</span><strong>${cooldown ? `${cooldown} 年` : "可进入"}</strong></div>
+      </div>
+      <div class="adventure-roster">
+        ${roster.map((d, i) => `<label class="adventure-candidate ${d.core ? "is-core" : ""}">
+          <input class="overseas-team" type="checkbox" value="${d.id}" ${i < 3 ? "checked" : ""} />
+          <div><strong>${d.core ? "核心·" : ""}${tradeEscape(d.name)}</strong><span>${realms[d.realm]} · 远洋 ${Math.round(overseasDisciplePower(d))} · 异化 ${overseasMutationCount(d)}</span></div>
+        </label>`).join("")}
+      </div>
+    `,
+    actions: [
+      { label: cooldown ? `海沟封闭 ${cooldown} 年` : "开始海沟远征", handler: startOverseasTrench, disabled: cooldown > 0 || state.actionPoints < 1 || state.overseas.supplies < 3 },
+      { label: "暂不进入", handler: closeModal },
+    ],
+  });
+  bindOverseasTeamLimit(3);
+}
+
+function startOverseasTrench() {
+  const team = selectedOverseasTeamFromModal(3);
+  if (!team.length) {
+    flashFeedback("至少选择 1 名弟子。", "warn");
+    return;
+  }
+  if (state.overseas.supplies < 3 || !spendAction(1, "葬仙海沟远征")) return;
+  state.overseas.supplies -= 3;
+  const event = {
+    id: `burial-trench-${state.year}-${uid()}`,
+    name: "葬仙海沟远征",
+    image: "assets/concepts/overseas-cthulhu/event-sunken-living-palace.png",
+    danger: 82 + Math.floor(state.overseas.pollution / 4),
+    intro: "船队穿过无光海层，进入埋葬旧仙、古寺和历代旗舰的葬仙海沟。",
+    finale: "旧仙心脏的跳动逐渐远去，船队带着三方路线的代价与收获升回海面。",
+    rewards: { stones: 1200, insight: 240, arrayMats: 3, forgingMats: 3, charts: 2 },
+  };
+  state.overseasRun = {
+    id: uid(),
+    kind: "trench",
+    encounterId: event.id,
+    event,
+    teamIds: team.map((d) => d.id),
+    step: 0,
+    clue: 0,
+    danger: event.danger,
+    pollution: 0,
+    cargo: 0,
+    supplies: 0,
+    whispers: 0,
+    mutations: 0,
+    paths: { bellTemple: 0, blackTide: 0, merfolk: 0 },
+    journal: [event.intro],
+    rewards: [],
+  };
+  state.overseasTrenchRun = state.overseasRun;
+  renderOverseasStep();
+}
+
+function openOverseasRoute(route) {
+  const supplyCost = overseasRouteSupplyCost(route);
+  const beacon = overseasBeaconLevel(route.id);
+  const beaconCost = Math.max(160, 260 + beacon * 220 - overseasDragonWhaleDiscount());
+  showModal({
+    kicker: "海外航线",
+    title: `${route.name}｜风险 ${route.risk}｜航标 Lv.${beacon}`,
+    body: `
+      <p>${tradeEscape(route.text)}</p>
+      <div class="overseas-dashboard">
+        <div><span>航线价值</span><strong>${route.value}</strong></div>
+        <div><span>补给消耗</span><strong>${supplyCost}</strong></div>
+        <div><span>舰队等级</span><strong>Lv.${state.overseas.fleetLevel || 0}</strong></div>
+        <div><span>航标等级</span><strong>Lv.${beacon}/3</strong></div>
+        <div><span>污染压力</span><strong>${state.overseas.pollution}/100</strong></div>
+      </div>
+      <p>试航会消耗行动点与补给，并在成功后产出货物、灵石或触发克苏鲁连续事件。航标会长期降低此航线风险，和龙鲸背岛交好可降低建设成本。</p>
+    `,
+    actions: [
+      { label: "选择弟子试航", handler: () => pickOverseasTeamForRoute(route), disabled: state.actionPoints < 1 || (state.overseas.supplies || 0) < supplyCost },
+      { label: beacon >= 3 ? "航标已满级" : `建设航标（${beaconCost}灵石/阵材${beacon + 1}）`, handler: () => upgradeOverseasBeacon(route), disabled: beacon >= 3 || state.actionPoints < 1 || state.sect.stones < beaconCost || state.sect.arrayMats < beacon + 1 },
+      { label: "暂不出航", handler: closeModal },
+    ],
+  });
+}
+
+function upgradeOverseasBeacon(route) {
+  const level = overseasBeaconLevel(route.id);
+  if (level >= 3 || !spendAction(1, "建设海外航标")) return;
+  const stoneCost = Math.max(160, 260 + level * 220 - overseasDragonWhaleDiscount());
+  const matCost = level + 1;
+  if (state.sect.stones < stoneCost || state.sect.arrayMats < matCost) {
+    state.actionPoints += 1;
+    flashFeedback(`需要 ${stoneCost} 灵石和 ${matCost} 阵材。`, "warn");
+    render();
+    return;
+  }
+  state.sect.stones -= stoneCost;
+  state.sect.arrayMats -= matCost;
+  state.overseas.routeUpgrades[route.id] = level + 1;
+  state.overseas.renown += 10 + level * 5;
+  state.overseas.pollution = clamp(state.overseas.pollution - 2 - level, 0, 100);
+  log(`${route.name}航标升至 Lv.${level + 1}，该航线后续风险降低，深海污染略降。`, "good");
+  closeModal();
+  refreshOverseasYear(true);
+  render();
+}
+
+function pickOverseasTeamForRoute(route) {
+  const roster = state.sect.disciples.filter((d) => !d.overseasSealedUntil || d.overseasSealedUntil <= state.year).slice().sort((a, b) => (b.core ? 1 : 0) - (a.core ? 1 : 0) || overseasDisciplePower(b) - overseasDisciplePower(a));
+  showModal({
+    kicker: "远洋队伍",
+    title: `${route.name}：选择最多 3 名弟子`,
+    body: `
+      <p>远洋事件更看重心性、气运、身法和阵道。队伍越稳，克苏鲁污染越可控。</p>
+      <div class="adventure-roster">
+        ${roster.map((d, i) => `<label class="adventure-candidate ${d.core ? "is-core" : ""}">
+          <input class="overseas-team" type="checkbox" value="${d.id}" ${i < 2 ? "checked" : ""} />
+          <div><strong>${d.core ? "核心·" : ""}${d.name}</strong><span>${realms[d.realm]} · 远洋 ${Math.round(overseasDisciplePower(d))} · 心${d.temper} 运${d.luck} 速${d.speed}</span></div>
+        </label>`).join("")}
+      </div>
+    `,
+    actions: [
+      { label: "开始试航", handler: () => startOverseasRoute(route) },
+      ...(state.multiplayer && state.roomConnected ? [{ label: "创建联合远航", handler: () => createRoomOverseasLobby("voyage", route), disabled: state.actionPoints < 1 || state.overseas.supplies < overseasRouteSupplyCost(route) }] : []),
+      { label: "返回航线", handler: () => openOverseasRoute(route) },
+    ],
+  });
+  bindOverseasTeamLimit();
+}
+
+function selectedOverseasTeamFromModal(limit = 3) {
+  return [...els.modalBody.querySelectorAll(".overseas-team:checked")]
+    .slice(0, limit)
+    .map((box) => state.sect.disciples.find((d) => d.id === box.value))
+    .filter((d) => d && (!d.overseasSealedUntil || d.overseasSealedUntil <= state.year));
+}
+
+function bindOverseasTeamLimit(limit = 3) {
+  for (const box of els.modalBody.querySelectorAll(".overseas-team")) {
+    box.addEventListener("change", () => {
+      const checked = [...els.modalBody.querySelectorAll(".overseas-team:checked")];
+      if (checked.length > limit) {
+        box.checked = false;
+        flashFeedback(`远洋队伍最多派遣 ${limit} 名弟子。`, "warn");
+      }
+    });
+  }
+}
+
+function startOverseasRoute(route) {
+  const team = selectedOverseasTeamFromModal();
+  const supplyCost = overseasRouteSupplyCost(route);
+  const beacon = overseasBeaconLevel(route.id);
+  if (!team.length) {
+    flashFeedback("至少选择 1 名弟子。", "warn");
+    return;
+  }
+  if ((state.overseas.supplies || 0) < supplyCost) {
+    flashFeedback("远洋补给不足。", "warn");
+    return;
+  }
+  if (!spendAction(1, "海外试航")) return;
+  state.overseas.supplies -= supplyCost;
+  state.overseas.voyageCount = Number(state.overseas.voyageCount || 0) + 1;
+  const score = team.reduce((sum, d) => sum + overseasDisciplePower(d), 0) + state.overseas.fleetLevel * 180 + state.overseas.charts * 60 + beacon * 160 + rand(0, 220);
+  const danger = route.risk * 28 + Math.floor(state.overseas.pollution * 12);
+  const success = score > danger || Math.random() < 0.32;
+  let encounter = null;
+  let resultTitle = "";
+  let resultText = "";
+  let rewardLabels = [];
+  if (success) {
+    const cargo = route.id === "pearl" ? 1 : route.id === "abyss" ? 3 : 2;
+    state.overseas.cargo += cargo;
+    state.overseas.renown += 8 + Math.floor(route.risk / 10);
+    rewardLabels = applyRewardToSect(route.reward, "海外试航");
+    rewardLabels.push(`远洋货物 +${cargo}`, `海外声望 +${8 + Math.floor(route.risk / 10)}`);
+    team.forEach((d) => { d.exp += 10 + Math.floor(route.risk / 12); d.status = "远洋试航"; });
+    log(`${team.map((d) => d.name).join("、")}完成${route.name}试航，远洋货物 +${cargo}。`, "good");
+    const eventChance = clamp(0.26 + route.risk / 160 + state.overseas.pollution / 220, 0.2, 0.78);
+    if (Math.random() < eventChance) {
+      encounter = createOverseasEncounter(rand(0, 99));
+      encounter.x = route.x + rand(-36, 36);
+      encounter.y = route.y + rand(-36, 36);
+      state.overseas.encounters.unshift(encounter);
+      log(`${route.name}深处浮现「${encounter.name}」，可在海外地图继续探索。`, "warn");
+    }
+    resultTitle = `${route.name}试航成功`;
+    resultText = encounter
+      ? `船队安全穿过航线，并在返程海图上标记出新的异常海域「${encounter.name}」。`
+      : "船队按航标安全返航，货舱、见闻与远洋税契均已入库。";
+  } else {
+    const hurt = rand(4, 12);
+    team.forEach((d) => { d.hp = Math.max(18, d.hp - hurt); adjustMind(d, 4, "远洋迷航"); });
+    state.overseas.pollution = clamp(state.overseas.pollution + 5, 0, 100);
+    log(`${route.name}试航遭遇异潮，队伍负伤撤回，深海污染 +5。`, "warn");
+    rewardLabels = [`全队体魄 -${hurt}`, "全队心魔 +4", "深海污染 +5"];
+    resultTitle = `${route.name}试航受挫`;
+    resultText = "异潮扭曲了航标方向，船队在补给耗尽前勉强折返。航线仍可再次尝试。";
+  }
+  flashFeedback(success ? "试航成功，收益已入库" : "试航失败，船队负伤返航", success ? "good" : "warn");
+  showModal({
+    kicker: "海外试航结算",
+    title: resultTitle,
+    body: `
+      <div class="battle-stage overseas-voyage-stage ${success ? "is-win" : "is-loss"}">
+        <div class="fighter left">${tradeEscape(team[0]?.name?.slice(0, 2) || "本宗")}</div>
+        <div class="slash"></div>
+        <div class="fighter right">${success ? "归港" : "异潮"}</div>
+      </div>
+      <div class="battle-breakdown">
+        <div><span>船队判定</span><strong>${Math.round(score)}</strong></div>
+        <div><span>航线压力</span><strong>${Math.round(danger)}</strong></div>
+        <div><span>剩余补给</span><strong>${state.overseas.supplies}</strong></div>
+      </div>
+      <p>${tradeEscape(resultText)}</p>
+      <div class="reward-list">${rewardLabels.map((item) => `<span>${tradeEscape(item)}</span>`).join("")}</div>
+    `,
+    actions: [
+      ...(encounter ? [{ label: `查看${encounter.name}`, handler: () => { state.selected = encounter; closeModal(); render(); } }] : []),
+      { label: "再次规划航线", handler: () => openOverseasRoute(route) },
+      { label: "返回海外地图", handler: closeModal },
+    ],
+  });
+  render();
+}
+
+function openOverseasEncounter(encounter) {
+  discoverOverseasEvent(encounter);
+  const roster = state.sect.disciples.filter((d) => !d.overseasSealedUntil || d.overseasSealedUntil <= state.year).slice().sort((a, b) => (b.core ? 1 : 0) - (a.core ? 1 : 0) || overseasDisciplePower(b) - overseasDisciplePower(a));
+  showModal({
+    kicker: "克苏鲁远洋事件",
+    title: `${encounter.name}｜危险 ${encounter.danger}`,
+    body: `
+      ${encounter.image ? `<img class="event-art" src="${assetUrl(encounter.image)}" data-fallback-srcs="${assetFallbackList(encounter.image)}" alt="${tradeEscape(encounter.name)}">` : ""}
+      <p>${tradeEscape(encounter.intro)}</p>
+      <p>这是多步远洋事件，会连续推进 ${overseasEventSteps.length} 个阶段。选择会影响线索、污染、补给、货物和最终奖励，中途可能触发动画战斗或重伤。</p>
+      <div class="adventure-roster">
+        ${roster.map((d, i) => `<label class="adventure-candidate ${d.core ? "is-core" : ""}">
+          <input class="overseas-team" type="checkbox" value="${d.id}" ${i < 2 ? "checked" : ""} />
+          <div><strong>${d.core ? "核心·" : ""}${d.name}</strong><span>${realms[d.realm]} · 远洋 ${Math.round(overseasDisciplePower(d))} · 心${d.temper} 运${d.luck}</span></div>
+        </label>`).join("")}
+      </div>
+    `,
+    actions: [
+      { label: "进入事件", handler: () => startOverseasEncounter(encounter) },
+      { label: "暂不接近", handler: closeModal },
+    ],
+  });
+  bindOverseasTeamLimit();
+}
+
+function startOverseasEncounter(encounter) {
+  const team = selectedOverseasTeamFromModal();
+  if (!team.length) {
+    flashFeedback("至少选择 1 名弟子。", "warn");
+    return;
+  }
+  if ((state.overseas.supplies || 0) <= 0) {
+    flashFeedback("远洋补给不足，无法进入克苏鲁事件。", "warn");
+    return;
+  }
+  if (!spendAction(1, "海外奇诡事件")) return;
+  state.overseas.supplies -= 1;
+  encounter.resolving = true;
+  state.overseasRun = {
+    id: uid(),
+    kind: "event",
+    encounterId: encounter.id,
+    templateId: encounter.id,
+    event: { ...encounter },
+    teamIds: team.map((d) => d.id),
+    step: 0,
+    clue: 0,
+    danger: Number(encounter.danger || 40),
+    pollution: 0,
+    cargo: 0,
+    supplies: 0,
+    whispers: 0,
+    mutations: 0,
+    paths: { bellTemple: 0, blackTide: 0, merfolk: 0 },
+    journal: [],
+    rewards: [],
+  };
+  renderOverseasStep();
+}
+
+function overseasRunTeam(run = state.overseasRun) {
+  return (run?.teamIds || []).map((id) => state.sect.disciples.find((d) => d.id === id)).filter(Boolean);
+}
+
+function statForOverseasChoice(d, stat) {
+  if (!d) return 0;
+  if (stat === "array") return Number(d.arrayLevel || 0) * 38 + Number(d.def || 0) + Number(d.temper || 0);
+  return Number(d[stat] || 0);
+}
+
+function overseasRunSteps(run = state.overseasRun) {
+  return run?.kind === "trench" ? overseasTrenchSteps : overseasEventSteps;
+}
+
+function overseasRunPathLabel(paths = {}) {
+  const [id, score] = Object.entries(paths).sort((a, b) => b[1] - a[1])[0] || ["", 0];
+  return Number(score || 0) > 0 ? overseasFactionName(id) : "未定";
+}
+
+function renderOverseasStep() {
+  const run = state.overseasRun;
+  if (!run) return;
+  const steps = overseasRunSteps(run);
+  const step = steps[run.step] || steps[steps.length - 1];
+  const team = overseasRunTeam(run);
+  const progress = `${run.step + 1}/${steps.length}`;
+  const teamRows = team.map((d) => `<span>${tradeEscape(d.name)}｜${realms[d.realm]}｜远洋 ${Math.round(overseasDisciplePower(d))}</span>`).join("");
+  const history = run.journal.slice(-4).map((row) => `<p>${tradeEscape(row)}</p>`).join("");
+  showModal({
+    kicker: run.event.name,
+    title: `${step.title}｜进度 ${progress}`,
+    body: `
+      ${run.event.image && run.step === 0 ? `<img class="event-art" src="${assetUrl(run.event.image)}" data-fallback-srcs="${assetFallbackList(run.event.image)}" alt="${tradeEscape(run.event.name)}">` : ""}
+      <p>${tradeEscape(step.text)}</p>
+      <div class="overseas-dashboard">
+        <div><span>线索</span><strong>${run.clue}</strong></div>
+        <div><span>事件危险</span><strong>${run.danger}</strong></div>
+        <div><span>临时污染</span><strong>${run.pollution}</strong></div>
+        <div><span>临时货物</span><strong>${run.cargo}</strong></div>
+        <div><span>古神低语</span><strong>${run.whispers || 0}</strong></div>
+        <div><span>路线倾向</span><strong>${overseasRunPathLabel(run.paths)}</strong></div>
+      </div>
+      <div class="overseas-team-strip">${teamRows}</div>
+      ${history ? `<div class="adventure-history">${history}</div>` : ""}
+      <div class="method-list">
+        ${step.options.map((option, index) => `<article class="method-card overseas-option-card">
+          <strong>${tradeEscape(option.label)}</strong>
+          <span>${tradeEscape(option.text)}</span>
+          <button class="overseas-choice" data-index="${index}" ${Number(option.soulOil || 0) < 0 && state.overseas.soulOil < Math.abs(Number(option.soulOil || 0)) ? "disabled" : ""}>选择</button>
+        </article>`).join("")}
+      </div>
+    `,
+    actions: [{ label: "中止返航", handler: () => finishOverseasRun(false, "中止返航") }],
+    dismissible: false,
+  });
+  els.modalProgress.hidden = false;
+  els.modalProgress.textContent = progress;
+  for (const btn of els.modalBody.querySelectorAll(".overseas-choice")) {
+    btn.addEventListener("click", () => applyOverseasChoice(step.options[Number(btn.dataset.index)]));
+  }
+}
+
+function overseasChoicePath(option = {}) {
+  if (option.path) return option.path;
+  if (Number(option.pollution || 0) < 0 || Number(option.safe || 0) >= 12 || option.stat === "array") return "bellTemple";
+  if (Number(option.whispers || 0) > 0 || Number(option.pollution || 0) >= 5 || option.battle === "core") return "blackTide";
+  if (Number(option.cargo || 0) !== 0 || Number(option.supplies || 0) !== 0 || option.stat === "charm" || option.stat === "luck") return "merfolk";
+  return "bellTemple";
+}
+
+function applyOverseasChoice(option) {
+  const run = state.overseasRun;
+  if (!run || !option) return;
+  const team = overseasRunTeam(run);
+  const best = team.reduce((winner, d) => statForOverseasChoice(d, option.stat) > statForOverseasChoice(winner, option.stat) ? d : winner, team[0]);
+  const statScore = statForOverseasChoice(best, option.stat) + overseasDisciplePower(best) * 0.12 + run.clue * 22 + state.overseas.charts * 25 + rand(0, 90);
+  const pressure = run.danger + Math.max(0, run.pollution) * 3 + (option.danger || 0) * 4;
+  const success = statScore >= pressure || Math.random() < 0.24;
+  if (Number(option.soulOil || 0) < 0) {
+    const cost = Math.abs(Number(option.soulOil || 0));
+    if (state.overseas.soulOil < cost) {
+      flashFeedback("镇魂灯油不足。", "warn");
+      return;
+    }
+    state.overseas.soulOil -= cost;
+  } else if (option.soulOil) {
+    state.overseas.soulOil += Number(option.soulOil || 0);
+  }
+  run.journal.push(`${option.label}：${success ? option.text : "诡潮反噬，选择只取得一半效果。"}${best ? ` 主持者：${best.name}。` : ""}`);
+  run.clue += Math.max(0, Number(option.clue || 0)) + (success ? 1 : 0);
+  run.danger = clamp(run.danger + Number(option.danger || 0) - Number(option.safe || 0) * (success ? 1 : 0.45), 8, 130);
+  run.pollution = clamp(run.pollution + Number(option.pollution || 0) + (success ? 0 : 4), -20, 80);
+  run.cargo = Math.max(0, Number(run.cargo || 0) + Number(option.cargo || 0));
+  run.supplies += Number(option.supplies || 0);
+  run.whispers = Math.max(0, Number(run.whispers || 0) + Math.max(0, Number(option.whispers || 0)) * (success ? 1 : 0.5));
+  const choicePath = overseasChoicePath(option);
+  if (run.paths?.[choicePath] !== undefined) run.paths[choicePath] += success ? 2 : 1;
+  for (const key of ["insight", "alchemyMats", "forgingMats", "arrayMats", "prestige"]) {
+    if (option[key]) run.rewards.push({ [key]: option[key] });
+  }
+  if (option.stones) run.rewards.push({ stones: option.stones });
+  if (option.mutation && team.length && (success || Math.random() < 0.5)) {
+    const target = pick(team);
+    const mutation = applyOverseasMutation(target);
+    run.mutations += mutation ? 1 : 0;
+    if (mutation) run.journal.push(`${target.name}在此选择中获得异化「${mutation.name}」。`);
+  }
+  if (!success) {
+    const target = pick(team);
+    if (target) {
+      target.hp = Math.max(14, target.hp - rand(2, 7));
+      adjustMind(target, 3, "远洋低语");
+    }
+  }
+  if (option.battle) {
+    startOverseasStepBattle(option, success);
+    return;
+  }
+  advanceOverseasStep(option.label);
+}
+
+function overseasMonsterFromPower(name, power, seed = "overseas", hpScale = 1.1) {
+  const monster = frontierMonsterFromPower(name, power, seed, hpScale);
+  monster.name = name;
+  monster.elementDamage = { water: 18 + monster.realm * 5, yin: 12 + monster.realm * 4 };
+  monster.atk = Math.round(monster.atk * 1.08);
+  monster.def = Math.round(monster.def * 0.94);
+  monster.speed = Math.round(monster.speed * 1.04);
+  return monster;
+}
+
+function startOverseasStepBattle(option, priorSuccess = false) {
+  const run = state.overseasRun;
+  const team = overseasRunTeam(run);
+  const names = {
+    mistSpawn: "雾中腮影",
+    ferryman: "无影摆渡人",
+    deepGuard: "海下守门者",
+    altar: "黑祭台守卫",
+    wreckGuard: "亡船司舵群",
+    cultGuard: "黑潮骨刃祭司",
+    spawnSwarm: "星尸孢群母体",
+    trenchKeeper: "葬仙守钟者",
+    core: `${run.event.name}核心守卫`,
+  };
+  const trenchScale = run.kind === "trench" ? 1.22 + run.step * 0.045 : 1;
+  const bossScale = option.battle === "core" || option.battle === "trenchKeeper" ? 1.28 : 1;
+  const base = Math.round((run.danger * 32 + state.year * 90 + (priorSuccess ? -120 : 120)) * trenchScale * bossScale);
+  const monster = overseasMonsterFromPower(names[option.battle] || "深海异影", base, `${run.id}:${option.battle}:${run.step}`, bossScale > 1 ? 1.55 : 1.16);
+  const battle = simulateTeamVsMonsterBattle(team, monster, { enemyPower: base, maxRounds: 14 });
+  showRealtimeTeamBattleModal({
+    kicker: "海外事件战斗",
+    title: `${run.event.name}：${option.label}`,
+    battle,
+    teamLabel: "远洋队伍",
+    enemyLabel: "深海异影",
+    scores: { our: team.reduce((sum, d) => sum + overseasDisciplePower(d), 0), enemy: base },
+    onComplete: () => {
+      if (battle.won) {
+        run.clue += 2;
+        run.rewards.push({ insight: 28 });
+        run.journal.push(`战斗胜利：${monster.name}被击退，线索 +2。`);
+      } else {
+        run.danger = clamp(run.danger + 10, 0, 140);
+        run.pollution = clamp(run.pollution + 6, -20, 90);
+        team.forEach((d) => { d.hp = Math.max(16, d.hp - rand(3, 9)); adjustMind(d, 4, "海外战斗失利"); });
+        run.journal.push(`战斗受挫：${monster.name}逼退队伍，危险与污染上升。`);
+      }
+      advanceOverseasStep(option.label);
+    },
+  });
+}
+
+function advanceOverseasStep(note = "") {
+  const run = state.overseasRun;
+  if (!run) return;
+  const steps = overseasRunSteps(run);
+  const team = overseasRunTeam(run);
+  if (run.kind === "trench" && (run.danger >= 134 || (team.length && team.every((d) => d.hp <= 18)))) {
+    finishOverseasRun(false, run.danger >= 134 ? "海沟危险失控，船队被迫上浮" : "远征队全员重伤，旗舰强制返航");
+    return;
+  }
+  run.step += 1;
+  if (run.step >= steps.length) {
+    finishOverseasRun(true, note || "完成远洋事件");
+    return;
+  }
+  render();
+  renderOverseasStep();
+}
+
+function applyOverseasRunReward(reward = {}) {
+  const labels = [];
+  for (const [key, value] of Object.entries(reward)) {
+    if (!value) continue;
+    if (key === "cargo") {
+      state.overseas.cargo += Number(value || 0);
+      labels.push(`远洋货物 +${value}`);
+    } else if (key === "charts") {
+      state.overseas.charts += Number(value || 0);
+      labels.push(`海图残片 +${value}`);
+    } else if (key === "renown") {
+      state.overseas.renown += Number(value || 0);
+      labels.push(`海外声望 +${value}`);
+    } else {
+      const got = applyRewardToSect({ [key]: value }, "海外奖励");
+      labels.push(...got);
+    }
+  }
+  return labels;
+}
+
+function resolveOverseasRunFactionOutcome(run, cleared) {
+  if (!cleared) return "未形成路线";
+  run.paths = run.paths || { bellTemple: 0, blackTide: 0, merfolk: 0 };
+  if (run.event?.faction && run.paths[run.event.faction] !== undefined) run.paths[run.event.faction] += 2;
+  const [routeId, routeScore] = Object.entries(run.paths).sort((a, b) => b[1] - a[1])[0] || ["bellTemple", 0];
+  adjustOverseasFaction(routeId, 4 + Math.floor(routeScore / 3), 3 + Math.floor(routeScore / 2));
+  if (routeId === "bellTemple") {
+    state.overseas.pollution = clamp(state.overseas.pollution - 4, 0, 100);
+    state.overseas.soulOil += run.kind === "trench" ? 2 : 1;
+  } else if (routeId === "blackTide") {
+    state.overseas.whispers += 2 + (run.kind === "trench" ? 2 : 0);
+    state.overseas.pollution = clamp(state.overseas.pollution + 4, 0, 100);
+  } else {
+    state.overseas.cargo += 1;
+    state.overseas.supplies = clamp(state.overseas.supplies + 1, 0, 6 + state.overseas.portLevel * 3);
+  }
+  return `${overseasFactionName(routeId)} +${3 + Math.floor(routeScore / 2)} 路线影响`;
+}
+
+function maybeApplyOverseasEventMutation(run, team) {
+  if (!team.length) return "";
+  const chance = clamp(Number(run.event?.mutationChance || 0) + Math.max(0, run.pollution) / 300 + state.overseas.pollution / 500, 0, 0.62);
+  if (Math.random() >= chance) return "";
+  const target = pick(team);
+  const mutation = applyOverseasMutation(target);
+  return mutation ? `${target.name}获得异化「${mutation.name}」` : "";
+}
+
+function finishOverseasRun(cleared, reason = "") {
+  const run = state.overseasRun;
+  if (!run) {
+    closeModal();
+    render();
+    return;
+  }
+  const team = overseasRunTeam(run);
+  const labels = [];
+  if (cleared) {
+    discoverOverseasEvent(run.event);
+    const clueScale = 1 + Math.min(0.55, run.clue / 18);
+    const finalRewards = { ...run.event.rewards };
+    for (const key of Object.keys(finalRewards)) finalRewards[key] = Math.max(1, Math.round(finalRewards[key] * clueScale));
+    for (const reward of run.rewards) labels.push(...applyOverseasRunReward(reward));
+    labels.push(...applyOverseasRunReward(finalRewards));
+    if (run.cargo > 0) labels.push(...applyOverseasRunReward({ cargo: run.cargo }));
+    state.overseas.whispers += Math.round(Number(run.whispers || 0) + Number(run.event.whispers || 0));
+    state.overseas.awakening = clamp(state.overseas.awakening + Math.floor(Math.max(0, run.pollution) / 6) + Math.floor(Number(run.whispers || 0) / 2), 0, 100);
+    state.overseas.trenchClues += Number(run.event.trenchClue || 0);
+    state.overseas.renown += 18 + Math.floor(run.event.danger / 8);
+    state.overseas.pollution = clamp(state.overseas.pollution + run.pollution + Math.max(0, run.danger - 78) / 8, 0, 100);
+    if (run.kind === "trench") {
+      state.overseas.trenchClears += 1;
+      state.overseas.trenchClues += 2;
+      state.overseas.trenchCooldownUntil = state.year + 3;
+      labels.push(...applyOverseasRunReward({ stones: 520 + state.overseas.trenchClears * 160, renown: 55, charts: 1 }));
+    } else {
+      state.overseas.clearedEvents.push(run.event.id);
+      state.overseas.encounters = state.overseas.encounters.filter((item) => item.id !== run.encounterId && item.id !== run.event.id);
+    }
+    const routeResult = resolveOverseasRunFactionOutcome(run, true);
+    labels.push(routeResult);
+    const mutationResult = maybeApplyOverseasEventMutation(run, team);
+    if (mutationResult) labels.push(mutationResult);
+    team.forEach((d) => {
+      d.exp += 16 + Math.floor(run.clue * 1.2);
+      d.status = "海外归航";
+      refreshDiscipleTitles(d);
+    });
+    log(`${team.map((d) => d.name).join("、")}完成「${run.event.name}」，获得：${labels.join("、") || "海外声望"}。`, "good");
+  } else {
+    const hurt = reason === "中止返航" ? rand(3, 8) : rand(8, 18);
+    team.forEach((d) => { d.hp = Math.max(16, d.hp - hurt); adjustMind(d, 5, "海外返航"); });
+    state.overseas.pollution = clamp(state.overseas.pollution + Math.max(1, run.pollution) + 2, 0, 100);
+    if (run.kind === "trench") state.overseas.trenchCooldownUntil = state.year + 2;
+    log(`远洋队伍从「${run.event.name}」撤回：${reason}。队伍体魄受损，深海污染上升。`, "warn");
+  }
+  state.overseasRun = null;
+  state.overseasTrenchRun = null;
+  els.modalProgress.hidden = true;
+  showModal({
+    kicker: "海外归航",
+    title: cleared ? `${run.event.name} 已完成` : "远洋事件中止",
+    body: `
+      <p>${cleared ? tradeEscape(run.event.finale || "事件核心已经平息。") : tradeEscape(reason)}</p>
+      <div class="overseas-dashboard">
+        <div><span>线索</span><strong>${run.clue}</strong></div>
+        <div><span>最终危险</span><strong>${Math.round(run.danger)}</strong></div>
+        <div><span>总污染</span><strong>${Math.round(state.overseas.pollution)}/100</strong></div>
+        <div><span>货物</span><strong>${state.overseas.cargo}</strong></div>
+        <div><span>古神低语</span><strong>${Math.round(state.overseas.whispers)}</strong></div>
+        <div><span>苏醒进度</span><strong>${Math.round(state.overseas.awakening)}/100</strong></div>
+      </div>
+      ${labels.length ? `<div class="reward-list">${labels.map((item) => `<span>${tradeEscape(item)}</span>`).join("")}</div>` : ""}
+      <div class="adventure-history">${run.journal.slice(-6).map((row) => `<p>${tradeEscape(row)}</p>`).join("")}</div>
+    `,
+    actions: [{ label: "返回海外地图", handler: () => { closeModal(); render(); } }],
+  });
+  render();
+}
+
+function overseasBossContributionRows() {
+  return Object.values(state.overseasShared?.bossContributions || {})
+    .sort((a, b) => Number(b.damage || 0) - Number(a.damage || 0) || Number(b.supply || 0) - Number(a.supply || 0));
+}
+
+function overseasRoomPlayers() {
+  return foundedRoomPlayers().filter((player) => player.id === state.clientId || player.overseasUnlocked !== false);
+}
+
+function roomOverseasParticipant(team, supplyCost, kind) {
+  return {
+    id: state.clientId,
+    playerId: state.clientId,
+    name: state.sect.name,
+    ready: true,
+    kind,
+    supply: supplyCost,
+    discipleIds: team.map((d) => d.id),
+    disciples: team.map(combatDiscipleSnapshot).filter(Boolean),
+    power: Math.round(team.reduce((sum, d) => sum + overseasDisciplePower(d), 0)),
+  };
+}
+
+function normalizeRoomOverseasLobby(lobby) {
+  if (!lobby) return null;
+  return {
+    ...lobby,
+    kind: lobby.kind === "boss" ? "boss" : "voyage",
+    expectedIds: Array.isArray(lobby.expectedIds) ? lobby.expectedIds : [],
+    expectedNames: lobby.expectedNames || {},
+    participants: lobby.participants || {},
+  };
+}
+
+function createRoomOverseasLobby(kind, target) {
+  if (!state.multiplayer || !state.roomConnected) {
+    flashFeedback("联合远航需要进入联机房间。", "warn");
+    return;
+  }
+  const players = overseasRoomPlayers();
+  if (players.some((player) => player.ready)) {
+    flashFeedback("已有玩家提交本年回合，请在下一年全员行动开始后发起联合行动。", "warn");
+    return;
+  }
+  const team = selectedOverseasTeamFromModal(3);
+  const supplyCost = kind === "boss" ? 2 : overseasRouteSupplyCost(target);
+  if (!team.length) {
+    flashFeedback("至少选择 1 名弟子。", "warn");
+    return;
+  }
+  if (state.overseas.supplies < supplyCost) {
+    flashFeedback(`需要 ${supplyCost} 点远洋补给。`, "warn");
+    return;
+  }
+  if (!spendAction(1, kind === "boss" ? "联合海怪讨伐" : "联合远航")) return;
+  state.overseas.supplies -= supplyCost;
+  if (kind !== "boss") state.overseas.voyageCount = Number(state.overseas.voyageCount || 0) + 1;
+  const expectedIds = players.map((player) => player.id).filter(Boolean);
+  const expectedNames = Object.fromEntries(players.map((player) => [player.id, player.name || "联机宗门"]));
+  const participant = roomOverseasParticipant(team, supplyCost, kind);
+  const lobby = normalizeRoomOverseasLobby({
+    id: `${state.roomCode || "room"}-overseas-${kind}-${target?.id || "route"}-${Date.now()}`,
+    year: state.year,
+    hostId: state.clientId,
+    hostName: state.sect.name,
+    kind,
+    target: { ...(target || {}) },
+    supplyCost,
+    expectedIds,
+    expectedNames,
+    participants: { [state.clientId]: participant },
+    started: false,
+  });
+  state.roomOverseasLobby = lobby;
+  sendRoomFeature("overseas_lobby_open", { lobby });
+  closeModal();
+  showRoomOverseasLobbyModal(lobby);
+  log(`已创建${kind === "boss" ? "联合讨伐" : "联合远航"}，等待 ${expectedIds.length} 个宗门整备。`, "good");
+  syncPublicState();
+  render();
+}
+
+function handleRoomOverseasLobbyOpen(lobby) {
+  const data = normalizeRoomOverseasLobby(lobby);
+  if (!data || Number(data.year) !== Number(state.year) || !state.founded || !overseasUnlocked()) return;
+  if (data.kind === "boss") mergeOverseasWorldBoss(data.target);
+  state.roomOverseasLobby = data;
+  if (data.hostId === state.clientId || data.participants?.[state.clientId]) showRoomOverseasLobbyModal(data);
+  else showRoomOverseasLobbyInvite(data);
+}
+
+function showRoomOverseasLobbyInvite(lobby) {
+  const data = normalizeRoomOverseasLobby(lobby);
+  if (!data || data.participants?.[state.clientId]) return;
+  const supplyCost = Number(data.supplyCost || (data.kind === "boss" ? 2 : 1));
+  const roster = state.sect.disciples
+    .filter((d) => !d.overseasSealedUntil || d.overseasSealedUntil <= state.year)
+    .slice()
+    .sort((a, b) => overseasDisciplePower(b) - overseasDisciplePower(a));
+  showModal({
+    kicker: data.kind === "boss" ? "联合海怪讨伐" : "联合远航邀请",
+    title: `${tradeEscape(data.hostName || "房主")}召集：${tradeEscape(data.target?.name || "无名航线")}`,
+    body: `
+      <p>选择最多 3 名弟子。准备时各宗独立消耗 1 点行动和 ${supplyCost} 点远洋补给；全部准备后统一播放战斗并按贡献结算。</p>
+      <div class="overseas-dashboard">
+        <div><span>本宗补给</span><strong>${state.overseas.supplies}</strong></div>
+        <div><span>行动点</span><strong>${state.actionPoints}</strong></div>
+        <div><span>目标强度</span><strong>${Math.round(data.target?.power || data.target?.risk * 75 || 0)}</strong></div>
+      </div>
+      <div class="adventure-roster">
+        ${roster.map((d, i) => `<label class="adventure-candidate ${d.core ? "is-core" : ""}">
+          <input class="overseas-team" type="checkbox" value="${tradeEscape(d.id)}" ${i < 2 ? "checked" : ""} />
+          <div><strong>${d.core ? "核心·" : ""}${tradeEscape(d.name)}</strong><span>${realms[d.realm]} · 远洋 ${Math.round(overseasDisciplePower(d))} · 体${d.hp}</span></div>
+        </label>`).join("")}
+      </div>
+    `,
+    actions: [
+      { label: "整备加入", disabled: state.actionPoints < 1 || state.overseas.supplies < supplyCost, handler: () => readyRoomOverseasLobby(data) },
+      { label: "暂不参加", handler: closeModal },
+    ],
+  });
+  bindOverseasTeamLimit(3);
+}
+
+function readyRoomOverseasLobby(lobby) {
+  const data = normalizeRoomOverseasLobby(lobby);
+  const team = selectedOverseasTeamFromModal(3);
+  const supplyCost = Number(data?.supplyCost || 1);
+  if (!data || !team.length) {
+    flashFeedback("至少选择 1 名弟子。", "warn");
+    return;
+  }
+  if (state.overseas.supplies < supplyCost || !spendAction(1, data.kind === "boss" ? "联合海怪讨伐" : "联合远航")) return;
+  state.overseas.supplies -= supplyCost;
+  if (data.kind !== "boss") state.overseas.voyageCount = Number(state.overseas.voyageCount || 0) + 1;
+  const participant = roomOverseasParticipant(team, supplyCost, data.kind);
+  data.participants[state.clientId] = participant;
+  state.roomOverseasLobby = data;
+  sendRoomFeature("overseas_lobby_ready", { lobbyId: data.id, participant, lobby: data });
+  closeModal();
+  showRoomOverseasLobbyModal(data);
+  syncPublicState();
+  render();
+}
+
+function handleRoomOverseasLobbyReady(payload = {}) {
+  const participant = payload.participant;
+  const base = normalizeRoomOverseasLobby(state.roomOverseasLobby || payload.lobby);
+  if (!participant?.id || !base || base.id !== payload.lobbyId) return;
+  base.participants[participant.id] = { ...participant, ready: true };
+  state.roomOverseasLobby = base;
+  if (base.hostId === state.clientId) sendRoomFeature("overseas_lobby_open", { lobby: base });
+  if (base.hostId === state.clientId || base.participants[state.clientId]) showRoomOverseasLobbyModal(base);
+}
+
+function showRoomOverseasLobbyModal(lobby) {
+  const data = normalizeRoomOverseasLobby(lobby);
+  if (!data) return;
+  state.roomOverseasLobby = data;
+  const expected = data.expectedIds.length ? data.expectedIds : Object.keys(data.participants);
+  const rows = expected.map((id) => {
+    const participant = data.participants[id];
+    const name = participant?.name || data.expectedNames[id] || "联机宗门";
+    const team = participant?.disciples?.map((d) => d.name).join("、") || "等待整备";
+    return `<article class="system-card ${participant?.ready ? "is-winner" : ""}"><strong>${tradeEscape(name)}</strong><span>${tradeEscape(participant?.ready ? `${team}｜贡献战力 ${participant.power}` : "等待选择弟子")}</span></article>`;
+  }).join("");
+  const allReady = expected.length > 0 && expected.every((id) => data.participants[id]?.ready);
+  const isHost = data.hostId === state.clientId;
+  showModal({
+    kicker: data.kind === "boss" ? "联合讨伐房间" : "联合远航船团",
+    title: `${tradeEscape(data.target?.name || "海外目标")}｜${Object.keys(data.participants).length}/${expected.length} 已整备`,
+    body: `
+      <p>${data.kind === "boss" ? "全员将攻击同一个共享血条，伤害按各宗派出的弟子战力分摊到贡献榜。" : "联合船团会遭遇同一场劫潮战斗，成员越多，航线收益与安全修正越高。"}</p>
+      <div class="system-grid">${rows}</div>
+    `,
+    actions: [
+      { label: "刷新队伍", handler: () => showRoomOverseasLobbyModal(state.roomOverseasLobby) },
+      { label: "全员出航", disabled: !isHost || !allReady, handler: startRoomOverseasLobbyFromHost },
+      { label: "取消行动", disabled: !isHost, handler: () => {
+        sendRoomFeature("overseas_lobby_cancel", { lobbyId: data.id });
+        state.roomOverseasLobby = null;
+        closeModal();
+        render();
+      } },
+    ],
+  });
+}
+
+function startRoomOverseasLobbyFromHost() {
+  const lobby = normalizeRoomOverseasLobby(state.roomOverseasLobby);
+  if (!lobby || lobby.hostId !== state.clientId) return;
+  const participants = Object.values(lobby.participants || {});
+  const team = participants.flatMap((participant) => participant.disciples || []);
+  if (!team.length) return;
+  const isBoss = lobby.kind === "boss";
+  const target = isBoss ? (state.overseasShared.worldBoss || lobby.target) : lobby.target;
+  if (!target || (isBoss && target.defeated)) return;
+  const participantCount = Math.max(1, participants.length);
+  const enemyPower = isBoss
+    ? Number(target.power || 3200) * (1 + Math.max(0, participantCount - 2) * 0.05)
+    : Number(target.risk || 38) * 82 + state.year * 24 + participantCount * 150;
+  const monsterName = isBoss ? target.name : `${target.name}·劫潮海兽群`;
+  const monster = overseasMonsterFromPower(monsterName, enemyPower, `${lobby.id}:${target.id}`, isBoss ? 4.2 : 1.75);
+  const battle = simulateTeamVsMonsterBattle(team, monster, {
+    enemyPower,
+    maxRounds: isBoss ? 17 : 15,
+    noPowerJudge: isBoss,
+    ...(isBoss ? { monsterHp: target.hp, monsterHpMax: target.totalHp } : {}),
+  });
+  const totalPower = Math.max(1, participants.reduce((sum, participant) => sum + Number(participant.power || 0), 0));
+  const damage = isBoss ? Math.max(1, Math.min(target.hp, Math.round(battle.totalDamage || Math.max(0, target.totalHp - battle.monster.hp)))) : Math.round(battle.totalDamage || 0);
+  let assigned = 0;
+  const contributions = {};
+  participants.forEach((participant, index) => {
+    const share = index === participants.length - 1 ? Math.max(0, damage - assigned) : Math.round(damage * Number(participant.power || 0) / totalPower);
+    assigned += share;
+    contributions[participant.id] = { id: participant.id, name: participant.name, damage: share, supply: Number(participant.supply || 0), power: Number(participant.power || 0) };
+  });
+  const result = {
+    id: `${lobby.id}-result`,
+    lobby,
+    battle,
+    won: Boolean(battle.won),
+    damage,
+    contributions,
+    hpAfter: isBoss ? Math.max(0, target.hp - damage) : 0,
+    defeated: isBoss ? target.hp - damage <= 0 : Boolean(battle.won),
+    scores: { our: totalPower, enemy: enemyPower },
+  };
+  sendRoomFeature("overseas_lobby_start", { result });
+  if (isBoss) {
+    sendRoomFeature(result.defeated ? "overseas_boss_defeated" : "overseas_boss_damage", {
+      bossId: target.id,
+      playerId: `joint-${lobby.id}`,
+      playerName: "联合船团",
+      damage,
+      supply: participants.reduce((sum, participant) => sum + Number(participant.supply || 0), 0),
+      hp: result.hpAfter,
+      totalHp: target.totalHp,
+      defeated: result.defeated,
+      skipContribution: true,
+    });
+  }
+  applyRoomOverseasLobbyResult(result);
+}
+
+function applyRoomOverseasLobbyResult(result) {
+  if (!result?.id || !result.battle || state.appliedRoomOverseasResults?.[result.id]) return;
+  showRealtimeTeamBattleModal({
+    kicker: result.lobby?.kind === "boss" ? "联合世界海怪讨伐" : "联合远航遭遇战",
+    title: `${result.lobby?.target?.name || "海外目标"}｜全房间同场战斗`,
+    battle: result.battle,
+    teamLabel: "联机联合船团",
+    enemyLabel: result.lobby?.kind === "boss" ? "共享世界海怪" : "劫潮海兽群",
+    scores: result.scores || null,
+    onComplete: () => finalizeRoomOverseasLobbyResult(result),
+  });
+}
+
+function finalizeRoomOverseasLobbyResult(result) {
+  if (!result?.id || state.appliedRoomOverseasResults?.[result.id]) return;
+  ensureSectDefaults();
+  state.appliedRoomOverseasResults[result.id] = true;
+  const mine = result.lobby?.participants?.[state.clientId];
+  const isBoss = result.lobby?.kind === "boss";
+  if (isBoss) {
+    const boss = state.overseasShared.worldBoss;
+    if (boss && boss.id === result.lobby?.target?.id) {
+      boss.hp = Math.max(0, Number(result.hpAfter || 0));
+      boss.defeated = Boolean(result.defeated);
+      for (const contribution of Object.values(result.contributions || {})) {
+        recordOverseasBossContribution(contribution.id, contribution.name, contribution.damage, contribution.supply);
+      }
+      state.overseasShared.bossDamageLog.unshift({ name: "联合船团", damage: result.damage, year: state.year });
+      state.overseasShared.bossDamageLog = state.overseasShared.bossDamageLog.slice(0, 12);
+    }
+  }
+  if (mine) {
+    for (const id of mine.discipleIds || []) {
+      const disciple = state.sect.disciples.find((item) => item.id === id);
+      if (!disciple) continue;
+      disciple.exp += isBoss ? 24 + disciple.realm * 4 : 14 + disciple.realm * 3;
+      disciple.status = result.defeated || result.won ? "联合远洋凯旋" : "联合远洋负伤";
+      if (!(result.defeated || result.won)) disciple.hp = Math.max(18, disciple.hp - rand(6, 14));
+    }
+    if (isBoss) {
+      if (result.defeated) grantOverseasBossRankingReward(state.overseasShared.worldBoss || result.lobby.target);
+      else log(`联合船团造成 ${result.damage} 伤害，共享海怪剩余 ${Math.round(result.hpAfter)} 血量。`, "warn");
+    } else if (result.won) {
+      const count = Object.keys(result.lobby.participants || {}).length;
+      const cargo = 1 + Math.min(2, count - 1) + (result.lobby.target?.id === "abyss" ? 1 : 0);
+      const stones = 180 + Number(result.lobby.target?.value || 100) * 2 + count * 70;
+      state.overseas.cargo += cargo;
+      state.overseas.renown += 12 + count * 4;
+      state.sect.stones += stones;
+      state.overseas.pollution = Math.max(0, state.overseas.pollution - Math.min(5, count));
+      log(`联合远航突破${result.lobby.target?.name || "外海航线"}，本宗获得货物 +${cargo}、灵石 +${stones}。`, "good");
+    } else {
+      state.overseas.pollution = clamp(state.overseas.pollution + 3, 0, 100);
+      log("联合远航被劫潮逼退，本宗弟子负伤，深海污染 +3。", "warn");
+    }
+  }
+  state.roomOverseasLobby = null;
+  syncSharedWorld();
+  syncPublicState();
+  render();
+}
+
+const overseasCouncilChoices = {
+  seal: { name: "封海镇渊", text: "各宗共同压低深海污染，以阵材和灯油封锁高危海域。" },
+  trade: { name: "万岛互市", text: "开放岛港税契，所有宗门获得补给与货物周转。" },
+  exploit: { name: "开采旧仙遗骸", text: "短期获得大量灵石，但古神低语与污染同步上升。" },
+};
+
+function normalizeRoomOverseasCouncil(council) {
+  if (!council) return null;
+  return {
+    ...council,
+    expectedIds: Array.isArray(council.expectedIds) ? council.expectedIds : [],
+    expectedNames: council.expectedNames || {},
+    votes: council.votes || {},
+  };
+}
+
+function openOverseasCouncilBoard() {
+  if (!state.multiplayer || !state.roomConnected) {
+    flashFeedback("海外岛屿议会仅在联机房间开放。", "warn");
+    return;
+  }
+  const current = normalizeRoomOverseasCouncil(state.roomOverseasCouncil || state.overseasShared?.council);
+  if (current && Number(current.year) === Number(state.year) && !current.resolved) {
+    state.roomOverseasCouncil = current;
+    showRoomOverseasCouncil(current);
+    return;
+  }
+  const players = overseasRoomPlayers();
+  if (players.some((player) => player.ready)) {
+    flashFeedback("已有玩家提交本年回合，岛屿议会将在下一年再召开。", "warn");
+    return;
+  }
+  const council = normalizeRoomOverseasCouncil({
+    id: `${state.roomCode || "room"}-overseas-council-${state.year}-${Date.now()}`,
+    year: state.year,
+    hostId: state.clientId,
+    hostName: state.sect.name,
+    expectedIds: players.map((player) => player.id),
+    expectedNames: Object.fromEntries(players.map((player) => [player.id, player.name || "联机宗门"])),
+    votes: {},
+    resolved: false,
+  });
+  state.roomOverseasCouncil = council;
+  state.overseasShared.council = council;
+  sendRoomFeature("overseas_council_open", { council });
+  showRoomOverseasCouncil(council);
+  log("本宗召集海外岛屿议会，等待各宗投票。", "good");
+}
+
+function handleRoomOverseasCouncilOpen(council) {
+  const data = normalizeRoomOverseasCouncil(council);
+  if (!data || Number(data.year) !== Number(state.year) || !overseasUnlocked()) return;
+  state.roomOverseasCouncil = data;
+  state.overseasShared.council = data;
+  showRoomOverseasCouncil(data);
+}
+
+function overseasCouncilVoteRows(council) {
+  const counts = Object.fromEntries(Object.keys(overseasCouncilChoices).map((key) => [key, 0]));
+  for (const vote of Object.values(council.votes || {})) if (counts[vote] !== undefined) counts[vote] += 1;
+  return counts;
+}
+
+function showRoomOverseasCouncil(council) {
+  const data = normalizeRoomOverseasCouncil(council);
+  if (!data) return;
+  state.roomOverseasCouncil = data;
+  const counts = overseasCouncilVoteRows(data);
+  const voted = Boolean(data.votes[state.clientId]);
+  const playerRows = data.expectedIds.map((id) => {
+    const vote = data.votes[id];
+    return `<p><strong>${tradeEscape(data.expectedNames[id] || "联机宗门")}</strong>：${vote ? tradeEscape(overseasCouncilChoices[vote]?.name || vote) : "等待投票"}</p>`;
+  }).join("");
+  showModal({
+    kicker: "海外岛屿议会",
+    title: `第 ${state.year} 年万岛议案｜${Object.keys(data.votes).length}/${data.expectedIds.length} 已投票`,
+    body: `
+      <p>议案结果对房间内所有海外宗门共同生效。投票公开显示，平票时由当前古神苏醒值较低的方案优先。</p>
+      <div class="system-grid">
+        ${Object.entries(overseasCouncilChoices).map(([key, choice]) => `<article class="system-card ${data.votes[state.clientId] === key ? "is-winner" : ""}"><strong>${choice.name}｜${counts[key]} 票</strong><span>${choice.text}</span></article>`).join("")}
+      </div>
+      <div class="adventure-history">${playerRows}</div>
+    `,
+    actions: [
+      ...Object.entries(overseasCouncilChoices).map(([key, choice]) => ({ label: `投票：${choice.name}`, disabled: voted, handler: () => castRoomOverseasCouncilVote(key) })),
+      { label: "刷新票数", handler: () => showRoomOverseasCouncil(state.roomOverseasCouncil) },
+      { label: "关闭", handler: closeModal },
+    ],
+  });
+}
+
+function castRoomOverseasCouncilVote(vote) {
+  const council = normalizeRoomOverseasCouncil(state.roomOverseasCouncil);
+  if (!council || council.votes[state.clientId] || !overseasCouncilChoices[vote]) return;
+  council.votes[state.clientId] = vote;
+  state.roomOverseasCouncil = council;
+  state.overseasShared.council = council;
+  sendRoomFeature("overseas_council_vote", { councilId: council.id, vote });
+  showRoomOverseasCouncil(council);
+  maybeFinalizeRoomOverseasCouncil();
+}
+
+function handleRoomOverseasCouncilVote(payload, sourceId) {
+  const council = normalizeRoomOverseasCouncil(state.roomOverseasCouncil || state.overseasShared?.council);
+  if (!council || council.id !== payload.councilId || !overseasCouncilChoices[payload.vote]) return;
+  council.votes[sourceId] = payload.vote;
+  state.roomOverseasCouncil = council;
+  state.overseasShared.council = council;
+  showRoomOverseasCouncil(council);
+  maybeFinalizeRoomOverseasCouncil();
+}
+
+function maybeFinalizeRoomOverseasCouncil() {
+  const council = normalizeRoomOverseasCouncil(state.roomOverseasCouncil);
+  if (!council || council.hostId !== state.clientId || council.resolved) return;
+  if (!council.expectedIds.length || !council.expectedIds.every((id) => council.votes[id])) return;
+  const counts = overseasCouncilVoteRows(council);
+  const order = state.overseas.awakening >= 50 ? ["seal", "trade", "exploit"] : ["trade", "seal", "exploit"];
+  const winner = order.slice().sort((a, b) => counts[b] - counts[a] || order.indexOf(a) - order.indexOf(b))[0];
+  council.resolved = true;
+  const result = { id: `${council.id}-result`, year: state.year, winner, counts, votes: { ...council.votes }, expectedNames: { ...council.expectedNames } };
+  sendRoomFeature("overseas_council_result", { result });
+  applyRoomOverseasCouncilResult(result);
+}
+
+function applyRoomOverseasCouncilResult(result) {
+  if (!result?.id || state.appliedRoomOverseasResults[result.id]) return;
+  state.appliedRoomOverseasResults[result.id] = true;
+  const choice = overseasCouncilChoices[result.winner] || overseasCouncilChoices.trade;
+  let rewardText = "";
+  if (result.winner === "seal") {
+    state.overseas.pollution = Math.max(0, state.overseas.pollution - 8);
+    state.overseas.soulOil += 1;
+    rewardText = "深海污染 -8，镇魂灯油 +1";
+  } else if (result.winner === "exploit") {
+    state.sect.stones += 400;
+    state.overseas.whispers += 2;
+    state.overseas.pollution = clamp(state.overseas.pollution + 5, 0, 100);
+    rewardText = "灵石 +400，古神低语 +2，深海污染 +5";
+  } else {
+    state.overseas.cargo += 1;
+    state.overseas.supplies = clamp(state.overseas.supplies + 2, 0, 6 + state.overseas.portLevel * 3);
+    rewardText = "远洋货物 +1，远洋补给 +2";
+  }
+  const voteRows = Object.entries(result.votes || {}).map(([id, vote]) => `${result.expectedNames?.[id] || "联机宗门"}：${overseasCouncilChoices[vote]?.name || vote}`).join("；");
+  state.overseasShared.council = { ...result, name: choice.name, resolved: true };
+  state.roomOverseasCouncil = null;
+  log(`海外岛屿议会通过「${choice.name}」：${rewardText}。`, "good");
+  showModal({
+    kicker: "海外岛屿议会",
+    title: `议案通过：${choice.name}`,
+    body: `<p>${tradeEscape(choice.text)}</p><div class="reward-list"><span>${tradeEscape(rewardText)}</span></div><p>票数：封海 ${result.counts?.seal || 0}｜互市 ${result.counts?.trade || 0}｜开采 ${result.counts?.exploit || 0}</p><p>${tradeEscape(voteRows)}</p>`,
+    actions: [{ label: "确认共同决议", handler: closeModal }],
+  });
+  syncPublicState();
+  render();
+}
+
+function normalizeRoomOverseasTradeRoute(tradeRoute) {
+  if (!tradeRoute) return null;
+  return {
+    ...tradeRoute,
+    expectedIds: Array.isArray(tradeRoute.expectedIds) ? tradeRoute.expectedIds : [],
+    expectedNames: tradeRoute.expectedNames || {},
+    contributions: tradeRoute.contributions || {},
+  };
+}
+
+function openOverseasTradeRouteBoard() {
+  if (!state.multiplayer || !state.roomConnected) {
+    flashFeedback("联合商路仅在联机房间开放。", "warn");
+    return;
+  }
+  const current = normalizeRoomOverseasTradeRoute(state.roomOverseasTradeRoute || state.overseasShared?.tradeRoute);
+  if (current && Number(current.year) === Number(state.year) && !current.resolved) {
+    state.roomOverseasTradeRoute = current;
+    showRoomOverseasTradeRoute(current);
+    return;
+  }
+  const players = overseasRoomPlayers();
+  if (players.some((player) => player.ready)) {
+    flashFeedback("已有玩家提交本年回合，请在下一年全员行动开始后组织商路。", "warn");
+    return;
+  }
+  const tradeRoute = normalizeRoomOverseasTradeRoute({
+    id: `${state.roomCode || "room"}-overseas-trade-${state.year}-${Date.now()}`,
+    year: state.year,
+    hostId: state.clientId,
+    hostName: state.sect.name,
+    expectedIds: players.map((player) => player.id),
+    expectedNames: Object.fromEntries(players.map((player) => [player.id, player.name || "联机宗门"])),
+    contributions: {},
+    resolved: false,
+  });
+  state.roomOverseasTradeRoute = tradeRoute;
+  state.overseasShared.tradeRoute = tradeRoute;
+  sendRoomFeature("overseas_trade_open", { tradeRoute });
+  showRoomOverseasTradeRoute(tradeRoute);
+  log("本宗发起跨宗联合商路，等待各宗装船。", "good");
+}
+
+function handleRoomOverseasTradeOpen(tradeRoute) {
+  const data = normalizeRoomOverseasTradeRoute(tradeRoute);
+  if (!data || Number(data.year) !== Number(state.year) || !overseasUnlocked()) return;
+  state.roomOverseasTradeRoute = data;
+  state.overseasShared.tradeRoute = data;
+  showRoomOverseasTradeRoute(data);
+}
+
+function showRoomOverseasTradeRoute(tradeRoute) {
+  const data = normalizeRoomOverseasTradeRoute(tradeRoute);
+  if (!data) return;
+  state.roomOverseasTradeRoute = data;
+  const contributed = Boolean(data.contributions[state.clientId]);
+  const rows = data.expectedIds.map((id) => {
+    const contribution = data.contributions[id];
+    return `<article class="system-card ${contribution ? "is-winner" : ""}"><strong>${tradeEscape(data.expectedNames[id] || "联机宗门")}</strong><span>${contribution ? tradeEscape(contribution.label) : "等待装船"}</span></article>`;
+  }).join("");
+  showModal({
+    kicker: "跨玩家联合商路",
+    title: `万岛商船团｜${Object.keys(data.contributions).length}/${data.expectedIds.length} 已装船`,
+    body: `
+      <p>每宗投入 1 份远洋货物或 1 张海图残片。全员完成后商路立即结算；参与宗门越多，单宗灵石收益越高。</p>
+      <div class="overseas-dashboard">
+        <div><span>本宗货物</span><strong>${state.overseas.cargo}</strong></div>
+        <div><span>本宗海图</span><strong>${state.overseas.charts}</strong></div>
+        <div><span>预计基础收益</span><strong>${360 + data.expectedIds.length * 100}</strong></div>
+      </div>
+      <div class="system-grid">${rows}</div>
+    `,
+    actions: [
+      { label: "投入远洋货物 x1", disabled: contributed || state.overseas.cargo < 1, handler: () => contributeRoomOverseasTrade("cargo") },
+      { label: "投入海图残片 x1", disabled: contributed || state.overseas.charts < 1, handler: () => contributeRoomOverseasTrade("chart") },
+      { label: "刷新船团", handler: () => showRoomOverseasTradeRoute(state.roomOverseasTradeRoute) },
+      { label: "关闭", handler: closeModal },
+    ],
+  });
+}
+
+function contributeRoomOverseasTrade(kind) {
+  const tradeRoute = normalizeRoomOverseasTradeRoute(state.roomOverseasTradeRoute);
+  if (!tradeRoute || tradeRoute.contributions[state.clientId]) return;
+  if (kind === "cargo") {
+    if (state.overseas.cargo < 1) return;
+    state.overseas.cargo -= 1;
+  } else {
+    if (state.overseas.charts < 1) return;
+    state.overseas.charts -= 1;
+  }
+  const contribution = { id: state.clientId, name: state.sect.name, kind, label: kind === "cargo" ? "远洋货物 x1" : "海图残片 x1" };
+  tradeRoute.contributions[state.clientId] = contribution;
+  state.roomOverseasTradeRoute = tradeRoute;
+  state.overseasShared.tradeRoute = tradeRoute;
+  sendRoomFeature("overseas_trade_contribute", { tradeRouteId: tradeRoute.id, contribution });
+  showRoomOverseasTradeRoute(tradeRoute);
+  maybeFinalizeRoomOverseasTradeRoute();
+  syncPublicState();
+}
+
+function handleRoomOverseasTradeContribution(payload, sourceId) {
+  const tradeRoute = normalizeRoomOverseasTradeRoute(state.roomOverseasTradeRoute || state.overseasShared?.tradeRoute);
+  if (!tradeRoute || tradeRoute.id !== payload.tradeRouteId || !payload.contribution) return;
+  tradeRoute.contributions[sourceId] = { ...payload.contribution, id: sourceId };
+  state.roomOverseasTradeRoute = tradeRoute;
+  state.overseasShared.tradeRoute = tradeRoute;
+  showRoomOverseasTradeRoute(tradeRoute);
+  maybeFinalizeRoomOverseasTradeRoute();
+}
+
+function maybeFinalizeRoomOverseasTradeRoute() {
+  const tradeRoute = normalizeRoomOverseasTradeRoute(state.roomOverseasTradeRoute);
+  if (!tradeRoute || tradeRoute.hostId !== state.clientId || tradeRoute.resolved) return;
+  if (!tradeRoute.expectedIds.length || !tradeRoute.expectedIds.every((id) => tradeRoute.contributions[id])) return;
+  tradeRoute.resolved = true;
+  const count = tradeRoute.expectedIds.length;
+  const charts = Object.values(tradeRoute.contributions).filter((item) => item.kind === "chart").length;
+  const result = {
+    id: `${tradeRoute.id}-result`,
+    year: state.year,
+    participants: [...tradeRoute.expectedIds],
+    contributions: { ...tradeRoute.contributions },
+    stones: 360 + count * 100 + charts * 40,
+    renown: 12 + count * 5,
+    cargoBonus: charts >= Math.ceil(count / 2) ? 1 : 0,
+  };
+  sendRoomFeature("overseas_trade_result", { result });
+  applyRoomOverseasTradeResult(result);
+}
+
+function applyRoomOverseasTradeResult(result) {
+  if (!result?.id || state.appliedRoomOverseasResults[result.id]) return;
+  state.appliedRoomOverseasResults[result.id] = true;
+  const participated = result.participants?.includes(state.clientId);
+  if (participated) {
+    state.sect.stones += Number(result.stones || 0);
+    state.overseas.renown += Number(result.renown || 0);
+    state.overseas.cargo += Number(result.cargoBonus || 0);
+  }
+  state.overseasShared.tradeRoute = { ...result, resolved: true };
+  state.roomOverseasTradeRoute = null;
+  log(`联合商路完成，本宗获得灵石 +${result.stones}、海外声望 +${result.renown}${result.cargoBonus ? "、远洋货物 +1" : ""}。`, "good");
+  showModal({
+    kicker: "跨玩家联合商路",
+    title: "万岛商船团归港",
+    body: `<p>${Object.values(result.contributions || {}).map((item) => `${tradeEscape(item.name)}：${tradeEscape(item.label)}`).join("；")}</p><div class="reward-list"><span>灵石 +${result.stones}</span><span>海外声望 +${result.renown}</span>${result.cargoBonus ? "<span>远洋货物 +1</span>" : ""}</div>`,
+    actions: [{ label: "查收商路收益", handler: closeModal }],
+  });
+  syncPublicState();
+  render();
+}
+
+function openOverseasWorldBoss(boss) {
+  if (!boss || boss.defeated) return;
+  const roster = state.sect.disciples
+    .filter((d) => !d.overseasSealedUntil || d.overseasSealedUntil <= state.year)
+    .slice()
+    .sort((a, b) => overseasDisciplePower(b) - overseasDisciplePower(a));
+  const ranking = overseasBossContributionRows();
+  showModal({
+    kicker: "共享世界海怪",
+    title: `${boss.name}｜全房间共享血量`,
+    body: `
+      <div class="boss-panel">
+        <strong>${tradeEscape(boss.name)}</strong>
+        <div class="realtime-hp"><i style="width:${hpPct(boss.hp, boss.totalHp)}"></i></div>
+        <span>血量 ${Math.round(boss.hp)} / ${Math.round(boss.totalHp)} · 强度 ${Math.round(boss.power)}</span>
+      </div>
+      <p>每次挑战结算实际伤害。联机房间共享血量，最终奖励按伤害与补给贡献排名发放。</p>
+      <div class="adventure-roster">
+        ${roster.map((d, i) => `<label class="adventure-candidate ${d.core ? "is-core" : ""}">
+          <input class="overseas-team" type="checkbox" value="${d.id}" ${i < 3 ? "checked" : ""} />
+          <div><strong>${d.core ? "核心·" : ""}${tradeEscape(d.name)}</strong><span>${realms[d.realm]} · 远洋 ${Math.round(overseasDisciplePower(d))} · 体${d.hp}</span></div>
+        </label>`).join("")}
+      </div>
+      ${ranking.length ? `<div class="adventure-history">${ranking.slice(0, 6).map((row, index) => `<p>${index + 1}. ${tradeEscape(row.name)}：伤害 ${Math.round(row.damage || 0)}｜补给 ${Math.round(row.supply || 0)}</p>`).join("")}</div>` : ""}
+    `,
+    actions: [
+      { label: "单宗挑战", handler: () => startOverseasWorldBossRaid(boss), disabled: state.actionPoints < 1 || state.overseas.supplies < 2 },
+      ...(state.multiplayer && state.roomConnected ? [{ label: "创建联合讨伐", handler: () => createRoomOverseasLobby("boss", boss), disabled: state.actionPoints < 1 || state.overseas.supplies < 2 }] : []),
+      { label: "暂不挑战", handler: closeModal },
+    ],
+  });
+  bindOverseasTeamLimit(3);
+}
+
+function startOverseasWorldBossRaid(boss) {
+  const team = selectedOverseasTeamFromModal(3);
+  if (!team.length) {
+    flashFeedback("至少选择 1 名弟子。", "warn");
+    return;
+  }
+  if (state.overseas.supplies < 2 || !spendAction(1, "世界海怪讨伐")) return;
+  state.overseas.supplies -= 2;
+  closeModal();
+  const current = state.overseasShared.worldBoss || boss;
+  const monster = overseasMonsterFromPower(current.name, current.power, `${current.id}:${state.clientId}:${state.year}`, 3.8);
+  const battle = simulateTeamVsMonsterBattle(team, monster, { enemyPower: current.power, maxRounds: 16, noPowerJudge: true, monsterHp: current.hp, monsterHpMax: current.totalHp });
+  showRealtimeTeamBattleModal({
+    kicker: "共享海怪讨伐",
+    title: current.name,
+    battle,
+    teamLabel: state.sect.name,
+    enemyLabel: "世界海怪",
+    scores: { our: team.reduce((sum, d) => sum + overseasDisciplePower(d), 0), enemy: current.power },
+    onComplete: () => finishOverseasWorldBossRaid(current, team, battle, 2),
+  });
+}
+
+function finishOverseasWorldBossRaid(boss, team, battle, supply = 0) {
+  const current = state.overseasShared.worldBoss;
+  if (!current || current.id !== boss.id) return;
+  const damage = Math.max(1, Math.min(current.hp, Math.round(battle.totalDamage || Math.max(0, current.totalHp - battle.monster.hp))));
+  current.hp = Math.max(0, current.hp - damage);
+  current.defeated = current.hp <= 0;
+  recordOverseasBossContribution(state.clientId, state.sect.name, damage, supply);
+  state.overseasShared.bossDamageLog.unshift({ name: state.sect.name, damage, year: state.year });
+  state.overseasShared.bossDamageLog = state.overseasShared.bossDamageLog.slice(0, 12);
+  team.forEach((d) => {
+    d.exp += 20 + Math.floor(d.realm * 4);
+    d.status = current.defeated ? "镇海凯旋" : "浴血外海";
+    if (!current.defeated) d.hp = Math.max(18, d.hp - rand(6, 16));
+  });
+  const payload = { bossId: current.id, playerId: state.clientId, playerName: state.sect.name, damage, supply, hp: current.hp, totalHp: current.totalHp, defeated: current.defeated };
+  if (state.multiplayer && state.roomConnected) sendRoomFeature(current.defeated ? "overseas_boss_defeated" : "overseas_boss_damage", payload);
+  if (current.defeated) grantOverseasBossRankingReward(current);
+  else log(`${state.sect.name}对${current.name}造成 ${damage} 伤害，剩余血量 ${Math.round(current.hp)}。`, "warn");
+  syncSharedWorld();
+  syncPublicState();
+  render();
+}
+
+function grantOverseasBossRankingReward(boss) {
+  const rewardId = `${boss.id}-ranking-${state.clientId}`;
+  if (state.appliedRoomOverseasResults[rewardId]) return;
+  const ranking = overseasBossContributionRows();
+  const rank = ranking.findIndex((row) => row.id === state.clientId) + 1;
+  if (rank <= 0) return;
+  state.appliedRoomOverseasResults[rewardId] = true;
+  const row = ranking[rank - 1];
+  const stones = rank === 1 ? 1500 : rank === 2 ? 1050 : rank === 3 ? 760 : 480;
+  const prestige = rank === 1 ? 220 : rank === 2 ? 150 : 100;
+  state.sect.stones += stones;
+  state.sect.prestige += prestige;
+  state.sect.forgingMats += Math.max(1, 5 - rank);
+  state.sect.alchemyMats += Math.max(1, 4 - rank);
+  state.overseas.cargo += rank <= 3 ? 2 : 1;
+  if (rank === 1) addItem(pick(["voidMirror", "scaleArmor", "moonMethod", "abyssSeal"]), 1, 4);
+  log(`世界海怪${boss.name}被击败！本宗贡献排名第 ${rank}，伤害 ${Math.round(row.damage)}，获得 ${stones} 灵石、声望 +${prestige} 与海外材料。`, "good");
+  const rankingHtml = ranking.slice(0, 8).map((item, index) => `<p><strong>${index + 1}. ${tradeEscape(item.name)}</strong>：伤害 ${Math.round(item.damage || 0)}｜补给 ${Math.round(item.supply || 0)}</p>`).join("");
+  showModal({
+    kicker: "共享世界海怪",
+    title: `${tradeEscape(boss.name)}伏诛｜本宗第 ${rank} 名`,
+    body: `<div class="reward-list"><span>灵石 +${stones}</span><span>声望 +${prestige}</span><span>远洋货物 +${rank <= 3 ? 2 : 1}</span></div><div class="adventure-history">${rankingHtml}</div>`,
+    actions: [{ label: "领取贡献奖励", handler: closeModal }],
+  });
+}
+
+function openOverseasMonster(monster) {
+  discoverOverseasMonster(monster);
+  const roster = state.sect.disciples.filter((d) => !d.overseasSealedUntil || d.overseasSealedUntil <= state.year).slice().sort((a, b) => overseasDisciplePower(b) - overseasDisciplePower(a));
+  showModal({
+    kicker: "海怪讨伐",
+    title: `${monster.name}｜强度 ${Math.round(monster.value)}`,
+    body: `
+      <p>${tradeEscape(monster.text || "深海巨影拦住航线。")}</p>
+      <p>海怪战使用现有数值动画战斗。胜利可获得远洋货物、声望和材料，并降低深海污染。</p>
+      <div class="adventure-roster">
+        ${roster.map((d, i) => `<label class="adventure-candidate ${d.core ? "is-core" : ""}">
+          <input class="overseas-team" type="checkbox" value="${d.id}" ${i < 3 ? "checked" : ""} />
+          <div><strong>${d.core ? "核心·" : ""}${d.name}</strong><span>${realms[d.realm]} · 远洋 ${Math.round(overseasDisciplePower(d))} · 体${d.hp}</span></div>
+        </label>`).join("")}
+      </div>
+    `,
+    actions: [
+      { label: "开战", handler: () => startOverseasMonsterBattle(monster), disabled: state.actionPoints < 1 || (state.overseas.supplies || 0) < 1 },
+      { label: "暂不挑战", handler: closeModal },
+    ],
+  });
+  bindOverseasTeamLimit(3);
+}
+
+function startOverseasMonsterBattle(monster) {
+  const team = selectedOverseasTeamFromModal(3);
+  if (!team.length) {
+    flashFeedback("至少选择 1 名弟子。", "warn");
+    return;
+  }
+  if ((state.overseas.supplies || 0) < 1) {
+    flashFeedback("远洋补给不足。", "warn");
+    return;
+  }
+  if (!spendAction(1, "海怪讨伐")) return;
+  state.overseas.supplies -= 1;
+  const enemy = overseasMonsterFromPower(monster.name, monster.value, monster.id, 1.8);
+  const battle = simulateTeamVsMonsterBattle(team, enemy, { enemyPower: monster.value, maxRounds: 15 });
+  showRealtimeTeamBattleModal({
+    kicker: "海怪讨伐",
+    title: monster.name,
+    battle,
+    teamLabel: state.sect.name,
+    enemyLabel: "深海海怪",
+    scores: { our: team.reduce((sum, d) => sum + overseasDisciplePower(d), 0), enemy: monster.value },
+    onComplete: () => finishOverseasMonsterBattle(monster, team, battle),
+  });
+}
+
+function finishOverseasMonsterBattle(monster, team, battle) {
+  if (battle.won) {
+    const stones = Math.round(240 + monster.value * 0.18);
+    state.sect.stones += stones;
+    state.sect.prestige += 36;
+    state.overseas.cargo += 1 + (monster.value > 2600 ? 1 : 0);
+    state.overseas.renown += 18;
+    state.overseas.pollution = Math.max(0, state.overseas.pollution - 6);
+    if (Math.random() < 0.55) state.sect.forgingMats += 1;
+    if (Math.random() < 0.45) state.sect.alchemyMats += 1;
+    team.forEach((d) => { d.exp += 14 + Math.floor(monster.value / 460); d.status = "斩海怪"; });
+    state.overseas.monsters = state.overseas.monsters.filter((item) => item.id !== monster.id);
+    log(`海怪「${monster.name}」被击退，灵石 +${stones}，远洋货物增加，深海污染 -6。`, "good");
+  } else {
+    team.forEach((d) => { d.hp = Math.max(16, d.hp - rand(5, 14)); adjustMind(d, 6, "海怪讨伐失利"); });
+    state.overseas.pollution = clamp(state.overseas.pollution + 6, 0, 100);
+    log(`海怪「${monster.name}」未被击退，远洋队伍负伤，深海污染 +6。`, "warn");
+  }
+  render();
+}
+
 function frontierNodes() {
   ensureSectDefaults();
   if (!frontierUnlocked()) {
@@ -13109,7 +16822,12 @@ function switchMap(map) {
   } else if (map === "forbidden") {
     flashFeedback("已切换到上古禁地。");
   } else if (map === "overseas") {
-    showModal({ kicker: "海外仙洲", title: "暂未开放", body: `<p>海外地图暂时锁定，后续可扩展海贸、散仙岛、跨海远征与外域宗门。</p>` });
+    if (!overseasUnlocked()) {
+      showModal({ kicker: "海外仙洲", title: "试航条件不足", body: `<p>${overseasLockText()}</p>` });
+    } else {
+      refreshOverseasYear();
+      flashFeedback("已切换到海外仙洲。");
+    }
   }
   for (const btn of els.mapTabs?.querySelectorAll("button") || []) btn.classList.toggle("is-active", btn.dataset.map === state.currentMap);
   render();
@@ -13202,6 +16920,12 @@ function renderQuest() {
   } else if (frontierUnlocked() && state.currentMap === "central") {
     title = "中期解锁：边境";
     body = "你已满足边境门槛，可切换到边境妖域讨伐妖兽，获取元婴以上晋升材料。";
+  } else if (!state.multiplayer && overseasUnlocked() && state.currentMap !== "overseas" && (state.overseas?.portLevel || 0) < 1) {
+    title = "后期新图：海外仙洲";
+    body = "你已满足海外试航条件。切换到海外仙洲，先建设海图司和远洋舰队，再通过航线试航进入克苏鲁连续事件。";
+  } else if (state.currentMap === "overseas" && (state.overseas?.portLevel || 0) >= 1 && (state.overseas?.supplies || 0) <= 0) {
+    title = "远洋准备：补给不足";
+    body = "在本宗海港调拨远洋补给后，才能试航、进入克苏鲁事件或讨伐海怪。";
   }
   els.questTitle.textContent = title;
   els.questDetail.innerHTML = `<p>${body}</p>${goalMissionDashboard()}`;
@@ -13496,6 +17220,24 @@ const guidePages = [
     `,
   },
   {
+    title: "海外仙洲：第三至第五阶段",
+    body: `
+      <p><strong>海外仙洲现已解锁联机第四阶段。</strong>单机保留完整经营与克苏鲁主线；联机时个人港口、补给、货物和弟子独立保存，房间只同步联合玩法。</p>
+      <p><strong>联合远航：</strong>房主在航线选人界面创建船团，各宗分别选择弟子并支付行动点和补给，全员准备后进入同一场动画战斗，胜负和奖励统一结算。</p>
+      <p><strong>共享世界海怪：</strong>海怪拥有全房间共享血量，可单宗挑战或联合讨伐。伤害与补给贡献进入实时排行，击杀后按名次发放奖励。</p>
+      <p><strong>岛屿议会与联合商路：</strong>在港口召开公开投票，所有玩家可看到各宗选择和最终票数；联合商路要求每宗投入货物或海图，完成后按参与规模获得收益。</p>
+      <p><strong>开放条件</strong>满足任一即可：太初 8 年、拥有 2 名金丹弟子、或建设山门市集到 1 级。</p>
+      <p><strong>核心循环</strong>是建港、整备舰队、调拨补给、试航、遭遇克苏鲁连续事件或海怪战斗，最后把远洋货物和海图残片转化为灵石、声望、参悟与材料。</p>
+      <p><strong>克苏鲁事件池</strong>已扩展到 ${overseasEventTemplates.length} 种主题，每次继续推进 ${overseasEventSteps.length} 段选择。选择会累计三方路线、古神低语、污染与弟子异化。</p>
+      <p><strong>三方路线</strong>分别是沉钟寺、黑潮信众和鲛人海国。沉钟寺擅长净化，黑潮擅长禁忌力量，鲛人擅长契约、补给和贸易；主导路线会产生年度效果。</p>
+      <p><strong>弟子异化</strong>会提供潮下之眼、鳞骨新生、星渊梦行等强力词条，也会带来心魔、饥渴或失控。年度弹框可选择净化、封印、接纳或放逐。</p>
+      <p><strong>葬仙海沟</strong>需要港口 Lv.2 和足够线索才能进入，是 ${overseasTrenchSteps.length} 层连续远征，包含多场现有数值动画战斗和三方路线结局。</p>
+      <p><strong>第五阶段·外域仙洲</strong>需要港口 Lv.3、完成一次葬仙海沟、4 张海图、元婴弟子与 120 海外声望。每年限一次连续远征，五段选择与两场战斗会决定能否带回一条天外线索。</p>
+      <p><strong>覆海玄鲲</strong>在集齐三条不同线索后出现。最多五名弟子连续挑战翻海、吞星、归墟三相，中途失败便结束本年挑战，不能靠重复点击强刷。</p>
+      <p><strong>海外终局</strong>分为镇海仙宗、黑潮共主、外域飞升。每条路线都要求玄鲲伏诛，并继续积累对应势力影响、污染、异化、境界、海图或参悟；一个存档只能铸成一种结局。</p>
+    `,
+  },
+  {
     title: "推荐开局路线",
     body: `
       <p>第一年建议：选择山门后先看年度天命，再收一名合适弟子。</p>
@@ -13630,6 +17372,14 @@ const tutorialSteps = [
     title: "边境会在中期解锁",
     text: "拥有足够金丹弟子后可切到边境，挑战妖兽、巨兽和晋升材料副本。这里使用数值战斗动画。",
     condition: () => state.founded && frontierUnlocked(),
+  },
+  {
+    id: "overseas",
+    maxYear: 16,
+    selector: "#mapTabs",
+    title: "海外仙洲已可试航",
+    text: "先建港、备舰和补给，再试航触发克苏鲁连续事件。联机房间还能创建联合远航、共享海怪讨伐，并在港口参与岛屿议会和跨宗商路。",
+    condition: () => state.founded && overseasUnlocked(),
   },
   {
     id: "guide",
@@ -13820,8 +17570,10 @@ function openDiscipleDetailModal(discipleId) {
     btn.textContent = action.label;
     btn.disabled = Boolean(action.disabled);
     btn.addEventListener("click", () => runActionWithFeedback(action.label, () => {
-      closeModal();
       action.handler();
+      const discipleStillExists = state.sect?.disciples?.some((item) => item.id === d.id);
+      const detailStillOpen = Boolean(els.modalBody.querySelector("[data-disciple-modal-actions]"));
+      if (discipleStillExists && detailStillOpen) openDiscipleDetailModal(d.id);
     }));
     container.appendChild(btn);
   }
@@ -14091,7 +17843,64 @@ function renderTarget() {
   } else if (node.type === "forbiddenFloor") {
     els.targetDetail.textContent = node.current ? `当前正在第 ${node.floor} 层。继续在弹框中选择路线。` : node.cleared ? `第 ${node.floor} 层已通过。` : `第 ${node.floor} 层尚未抵达。`;
   } else if (node.type === "overseasLocked") {
-    els.targetDetail.textContent = "海外仙洲暂未开放。这个区域后续适合扩展海贸、散仙岛、跨海远征、外域宗门和全服事件。";
+    els.targetDetail.textContent = node.text || overseasLockText();
+    els.hint.textContent = "海外仙洲：试航条件不足";
+    addAction("查看要求", () => showModal({ kicker: "海外仙洲", title: "开放条件", body: `<p>${tradeEscape(node.text || overseasLockText())}</p>` }));
+  } else if (node.type === "overseasPort") {
+    const maxSupply = 6 + Number(state.overseas?.portLevel || 0) * 3;
+    els.targetDetail.textContent = `${node.name}。港口 Lv.${state.overseas?.portLevel || 0}，舰队 Lv.${state.overseas?.fleetLevel || 0}，补给 ${state.overseas?.supplies || 0}/${maxSupply}，远洋货物 ${state.overseas?.cargo || 0}，海图残片 ${state.overseas?.charts || 0}，深海污染 ${Math.round(state.overseas?.pollution || 0)}/100。建设港口后每年获得远洋税契和补给，货物可在此出售换灵石。`;
+    els.hint.textContent = `海外港口｜补给 ${state.overseas?.supplies || 0}/${maxSupply}｜污染 ${Math.round(state.overseas?.pollution || 0)}`;
+    addAction("管理港口", openOverseasPort, !state.founded);
+  } else if (node.type === "overseasIsland") {
+    const relation = Math.round(Number(node.relation || 0));
+    els.targetDetail.textContent = `${node.name}，海外岛屿势力。关系 ${relation}/100（${overseasIslandRelationLabel(relation)}），擅长产出 ${overseasIslandRewardName(node.specialty)}。${node.text} 可通过交易、递交海图、净化污染和岛屿委托逐步建立长期收益。`;
+    els.hint.textContent = `海外岛屿：${node.name}｜关系 ${relation}｜${overseasIslandRewardName(node.specialty)}`;
+    addAction("拜访岛屿", () => openOverseasIsland(node), !state.founded);
+  } else if (node.type === "overseasFaction") {
+    const faction = overseasFactionState(node.id);
+    els.targetDetail.textContent = `${node.name}，第三阶段三方路线势力。关系 ${Math.round(faction.relation)}，路线影响 ${Math.round(faction.influence)}。${node.text} 长期偏向会改变污染、异化和葬仙海沟结局。`;
+    els.hint.textContent = `${node.name}｜关系 ${Math.round(faction.relation)}｜路线 ${Math.round(faction.influence)}`;
+    addAction("进入势力据点", () => openOverseasFaction(node), !state.founded);
+  } else if (node.type === "overseasTrench") {
+    const cooldown = Math.max(0, Number(state.overseas.trenchCooldownUntil || 0) - state.year);
+    els.targetDetail.textContent = node.locked
+      ? `葬仙海沟尚未解锁。需要港口 Lv.2，并积累海沟线索、古神低语或完成更多克苏鲁事件。当前线索 ${state.overseas.trenchClues}/2。`
+      : `葬仙海沟是第三阶段连续远征，包含 ${overseasTrenchSteps.length} 层抉择、多场动画战斗和三方路线结局。当前危险 ${node.danger}，${cooldown ? `还需等待 ${cooldown} 年` : "可以进入"}。`;
+    els.hint.textContent = `葬仙海沟｜危险 ${node.danger}｜${node.locked ? "未解锁" : cooldown ? `冷却 ${cooldown} 年` : "可远征"}`;
+    addAction(node.locked ? "查看解锁条件" : "组织海沟远征", openOverseasTrench, !state.founded || (!node.locked && (state.actionPoints < 1 || cooldown > 0)));
+  } else if (node.type === "overseasOuterRealm") {
+    const req = overseasOuterRealmRequirements();
+    els.targetDetail.textContent = node.locked
+      ? `外域仙洲尚未贯通。${req.checks.filter((item) => !item.met).map((item) => item.label).join("、")}仍未完成。这里是第五阶段连续远征，每年限一次。`
+      : `${node.text} 当前天外线索 ${state.overseas.outerRealmClues.length}/3，本年${state.overseas.outerRealmLastYear === state.year ? "已远征" : "尚可远征"}。`;
+    els.hint.textContent = `外域仙洲｜线索 ${state.overseas.outerRealmClues.length}/3｜${node.locked ? "未贯通" : "可远征"}`;
+    addAction(node.locked ? "查看贯通条件" : "组织外域远征", () => openOverseasOuterRealm(node), !state.founded || (!node.locked && (state.actionPoints < 1 || state.overseas.supplies < 3)));
+    addAction("海外图鉴", openOverseasCompendium, !state.founded);
+  } else if (node.type === "overseasFinalBoss") {
+    els.targetDetail.textContent = node.defeated
+      ? `覆海玄鲲三相已灭，遗蜕悬在外域航门上方。三条海外终局已经开放，需继续完成各自的严苛条件。`
+      : `${node.text} 当前估算战略强度 ${Math.round(node.power)}，本年${state.overseas.xuanKunLastYear === state.year ? "已经挑战" : "尚可挑战"}。终战最多派五名弟子并消耗 4 补给。`;
+    els.hint.textContent = node.defeated ? "覆海玄鲲已镇杀｜海外终局开放" : `覆海玄鲲｜三相终战｜挑战 ${state.overseas.xuanKunAttempts} 次`;
+    addAction(node.defeated ? "查看海外终局" : "挑战覆海玄鲲", () => openOverseasFinalBoss(node), !state.founded || (!node.defeated && (state.actionPoints < 1 || state.overseas.supplies < 4)));
+    addAction("海外图鉴", openOverseasCompendium, !state.founded);
+  } else if (node.type === "overseasRoute") {
+    els.targetDetail.textContent = `${node.name}，风险 ${node.risk}，航线价值 ${node.value}，航标 Lv.${overseasBeaconLevel(node.id)}/3。${node.text} 试航会消耗补给与行动点，成功后获得货物、资源或触发克苏鲁连续事件。建设航标可长期降低该航线风险。`;
+    els.hint.textContent = `海外航线：${node.name}｜风险 ${node.risk}`;
+    addAction("试航", () => openOverseasRoute(node), !state.founded || state.actionPoints < 1 || (state.overseas?.supplies || 0) < 1);
+  } else if (node.type === "overseasEncounter") {
+    els.targetDetail.textContent = `${node.name}，危险 ${node.danger}，价值 ${node.value}。这是多阶段克苏鲁远洋事件，不会一次点击结束；选择会影响线索、污染、补给、货物、战斗和最终奖励。`;
+    els.hint.textContent = `克苏鲁事件：${node.name}｜危险 ${node.danger}`;
+    addAction("进入事件", () => openOverseasEncounter(node), !state.founded || state.actionPoints < 1 || (state.overseas?.supplies || 0) < 1);
+  } else if (node.type === "overseasWorldBoss") {
+    const ranking = overseasBossContributionRows();
+    const leaders = ranking.slice(0, 3).map((row, index) => `${index + 1}.${row.name} ${Math.round(row.damage || 0)}`).join("；") || "暂无挑战记录";
+    els.targetDetail.textContent = `${node.name}，共享血量 ${Math.round(node.hp)}/${Math.round(node.totalHp)}，强度 ${Math.round(node.power)}。所有联机玩家攻击同一血条，可单宗挑战或创建联合讨伐，最终按伤害与补给贡献排名。当前排行：${leaders}。`;
+    els.hint.textContent = `共享世界海怪：${node.name}｜剩余 ${Math.round(node.hp)}/${Math.round(node.totalHp)}`;
+    addAction("挑战共享海怪", () => openOverseasWorldBoss(node), !state.founded || state.actionPoints < 1 || (state.overseas?.supplies || 0) < 2 || node.defeated);
+  } else if (node.type === "overseasMonster") {
+    els.targetDetail.textContent = `${node.name}，强度 ${Math.round(node.value)}。${node.text} 派最多 3 名弟子讨伐，战斗使用现有数值动画模式；胜利可得货物、灵石、材料并降低深海污染。`;
+    els.hint.textContent = `海怪：${node.name}｜强度 ${Math.round(node.value)}`;
+    addAction("讨伐海怪", () => openOverseasMonster(node), !state.founded || state.actionPoints < 1 || (state.overseas?.supplies || 0) < 1);
   } else if (node.type === "site") {
     const profile = siteProfile(node);
     els.targetDetail.innerHTML = renderSiteDetail(node);
@@ -14206,6 +18015,36 @@ function renderMapActionBubble(node) {
   if (node.type === "secretRealm") {
     addInfo(`<strong>${node.name}</strong><span>分层秘境 · 危险 ${Math.round(node.danger || 0)} · 剩余 ${node.ttl || 1} 年</span><em>选择房间与处理方式，奖励已下调且会负伤</em>`);
   }
+  if (node.type === "overseasPort") {
+    addInfo(`<strong>${node.name}</strong><span>港口 Lv.${state.overseas?.portLevel || 0} · 舰队 Lv.${state.overseas?.fleetLevel || 0} · 补给 ${state.overseas?.supplies || 0}</span><em>经营、补给、出售远洋货物</em>`);
+  }
+  if (node.type === "overseasRoute") {
+    addInfo(`<strong>${node.name}</strong><span>海外航线 · 风险 ${node.risk} · 航标 Lv.${overseasBeaconLevel(node.id)} · 价值 ${node.value}</span><em>试航可触发远洋事件</em>`);
+  }
+  if (node.type === "overseasIsland") {
+    addInfo(`<strong>${node.name}</strong><span>岛屿势力 · 关系 ${Math.round(node.relation || 0)} · ${overseasIslandRewardName(node.specialty)}</span><em>交易、委托、污染治理</em>`);
+  }
+  if (node.type === "overseasFaction") {
+    addInfo(`<strong>${node.name}</strong><span>三方路线 · 关系 ${Math.round(node.relation || 0)} · 影响 ${Math.round(node.influence || 0)}</span><em>改变污染、异化与海沟结局</em>`);
+  }
+  if (node.type === "overseasTrench") {
+    addInfo(`<strong>${node.name}</strong><span>克苏鲁主线 · 危险 ${Math.round(node.danger || 0)} · ${node.locked ? "未解锁" : "连续远征"}</span><em>${overseasTrenchSteps.length} 层抉择与动画战斗</em>`);
+  }
+  if (node.type === "overseasOuterRealm") {
+    addInfo(`<strong>${node.name}</strong><span>第五阶段 · 天外线索 ${state.overseas.outerRealmClues.length}/3 · ${node.locked ? "未贯通" : "可远征"}</span><em>五段连续抉择、两场战斗、每年限一次</em>`);
+  }
+  if (node.type === "overseasFinalBoss") {
+    addInfo(`<strong>${node.name}</strong><span>${node.defeated ? "三相已灭 · 终局开放" : `终局首领 · 挑战 ${state.overseas.xuanKunAttempts} 次`}</span><em>${node.defeated ? "镇海、黑潮、飞升三条结局" : "翻海、吞星、归墟三相连续战斗"}</em>`);
+  }
+  if (node.type === "overseasEncounter") {
+    addInfo(`<strong>${node.name}</strong><span>克苏鲁事件 · 危险 ${node.danger}</span><em>连续 ${overseasEventSteps.length} 阶段选择与战斗</em>`);
+  }
+  if (node.type === "overseasMonster") {
+    addInfo(`<strong>${node.name}</strong><span>海怪 · 强度 ${Math.round(node.value)}</span><em>数值动画战斗</em>`);
+  }
+  if (node.type === "overseasWorldBoss") {
+    addInfo(`<strong>${node.name}</strong><span>共享世界海怪 · 血量 ${Math.round(node.hp)}/${Math.round(node.totalHp)}</span><em>单宗或联合讨伐 · 贡献排名</em>`);
+  }
   if (node.type === "remotePlayer") {
     addInfo(`
       <strong>${node.name}</strong>
@@ -14241,7 +18080,17 @@ function renderMapActionBubble(node) {
   if (node.type === "frontierPoint") add(node.owner === "player" ? "管理" : "扩张", () => node.owner === "player" ? openFrontierOutpost(node) : occupyFrontierPoint(node), node.owner !== "player" && state.actionPoints < 1);
   if (node.type === "frontierIncident") add("处理", () => openFrontierIncident(node), state.actionPoints < 1);
   if (node.type === "forbiddenGate") add("进入", openForbiddenGate, forbiddenAttemptInfo().left <= 0 || Boolean(state.forbiddenRun));
-  if (node.type === "overseasLocked") add("查看", () => showModal({ kicker: "海外仙洲", title: "暂未开放", body: `<p>海外地图暂时锁定，后续可做海贸与外域宗门。</p>` }));
+  if (node.type === "overseasLocked") add("查看", () => showModal({ kicker: "海外仙洲", title: "开放条件", body: `<p>${tradeEscape(node.text || overseasLockText())}</p>` }));
+  if (node.type === "overseasPort") add("港口", openOverseasPort);
+  if (node.type === "overseasRoute") add("试航", () => openOverseasRoute(node), state.actionPoints < 1 || (state.overseas?.supplies || 0) < 1);
+  if (node.type === "overseasIsland") add("拜访", () => openOverseasIsland(node));
+  if (node.type === "overseasFaction") add("进入", () => openOverseasFaction(node));
+  if (node.type === "overseasTrench") add(node.locked ? "条件" : "远征", openOverseasTrench, !node.locked && state.actionPoints < 1);
+  if (node.type === "overseasOuterRealm") add(node.locked ? "条件" : "外域远征", () => openOverseasOuterRealm(node), !node.locked && (state.actionPoints < 1 || state.overseas.supplies < 3));
+  if (node.type === "overseasFinalBoss") add(node.defeated ? "海外终局" : "三相终战", () => openOverseasFinalBoss(node), !node.defeated && (state.actionPoints < 1 || state.overseas.supplies < 4));
+  if (node.type === "overseasEncounter") add("进入", () => openOverseasEncounter(node), state.actionPoints < 1 || (state.overseas?.supplies || 0) < 1);
+  if (node.type === "overseasMonster") add("讨伐", () => openOverseasMonster(node), state.actionPoints < 1 || (state.overseas?.supplies || 0) < 1);
+  if (node.type === "overseasWorldBoss") add("共享讨伐", () => openOverseasWorldBoss(node), state.actionPoints < 1 || (state.overseas?.supplies || 0) < 2 || node.defeated);
   if (node.type === "rival") {
     add(node.alive === false ? "遗址" : "掠夺", () => battle(node, "raid"), node.alive === false || node.alliance || state.actionPoints < 1);
     add("抢徒", () => battle(node, "steal"), node.alive === false || node.alliance || state.actionPoints < 1);
@@ -14303,7 +18152,7 @@ function allNodes() {
   if (!state.founded) return state.sites;
   if (state.currentMap === "frontier") return frontierNodes();
   if (state.currentMap === "forbidden") return forbiddenNodes();
-  if (state.currentMap === "overseas") return [{ id: "overseas-lock", type: "overseasLocked", name: "海外仙洲", x: W * 0.5, y: H * 0.5 }];
+  if (state.currentMap === "overseas") return overseasNodes();
   return [
     ...(state.founded ? [{ ...state.sect, type: "player" }] : state.sites),
     ...(state.founded ? state.remotePlayers.filter((p) => p.founded).map((p) => ({ ...p, type: "remotePlayer" })) : []),
@@ -14319,18 +18168,30 @@ function mapNodePriority(node) {
   if (node.type === "site") return 2;
   if (node.type === "rival" || node.type === "remotePlayer") return 3;
   if (node.type === "frontierBoss") return 4;
+  if (node.type === "overseasMonster") return 4;
+  if (node.type === "overseasWorldBoss") return 3;
+  if (node.type === "overseasFinalBoss") return 2;
+  if (node.type === "overseasOuterRealm") return 4;
+  if (node.type === "overseasTrench") return 4;
   if (node.type === "resource" || node.type === "frontierPoint") return 5;
+  if (node.type === "overseasPort" || node.type === "overseasRoute" || node.type === "overseasIsland" || node.type === "overseasFaction") return 5;
   if (node.type === "secretRealm" || node.type === "event" || node.type === "frontierDungeon" || node.type === "frontierIncident") return 6;
+  if (node.type === "overseasEncounter") return 6;
   return 7;
 }
 
 function mapNodeRadius(node) {
-  if (node.type === "frontierBoss") return 58;
+  if (node.type === "overseasWorldBoss") return 64;
+  if (node.type === "overseasFinalBoss") return 70;
+  if (node.type === "overseasOuterRealm") return 60;
+  if (node.type === "frontierBoss" || node.type === "overseasMonster" || node.type === "overseasTrench") return 58;
   if (node.type === "player") return 50;
   if (node.type === "rival" || node.type === "remotePlayer") return 46;
   if (node.type === "site") return 36;
   if (node.type === "secretRealm") return 42;
   if (node.type === "resource" || node.type === "frontierPoint") return 40;
+  if (node.type === "overseasEncounter" || node.type === "overseasRoute" || node.type === "overseasIsland" || node.type === "overseasFaction") return 42;
+  if (node.type === "overseasPort") return 46;
   return 36;
 }
 
@@ -14451,7 +18312,7 @@ canvas.addEventListener("mousemove", (evt) => {
   els.tip.hidden = false;
   els.tip.style.left = `${evt.clientX - canvas.getBoundingClientRect().left + 14}px`;
   els.tip.style.top = `${evt.clientY - canvas.getBoundingClientRect().top + 14}px`;
-  els.tip.innerHTML = `<strong>${node.name}</strong><br>${node.type === "rival" || node.type === "remotePlayer" ? `战力 ${Math.round(node.power || 0)}` : node.type === "resource" ? `价值 ${node.value}` : node.type === "secretRealm" ? `危险 ${Math.round(node.danger || 0)} · 剩余 ${node.ttl || 1} 年` : node.type === "event" ? `剩余 ${node.ttl} 季` : node.type === "frontierIncident" ? `边境事件 · 剩余 ${node.ttl || 1} 年` : node.type === "frontierDungeon" ? `推荐战力 ${Math.round(node.value)}` : node.type === "frontierBoss" ? `血量 ${Math.round(node.hp || 0)}/${Math.round(node.totalHp || 1)}` : node.type === "forbiddenFloor" ? `第 ${node.floor} 层` : node.type === "forbiddenGate" ? "禁地入口" : "可选山门"}`;
+  els.tip.innerHTML = `<strong>${node.name}</strong><br>${node.type === "rival" || node.type === "remotePlayer" ? `战力 ${Math.round(node.power || 0)}` : node.type === "resource" ? `价值 ${node.value}` : node.type === "secretRealm" ? `危险 ${Math.round(node.danger || 0)} · 剩余 ${node.ttl || 1} 年` : node.type === "event" ? `剩余 ${node.ttl} 季` : node.type === "frontierIncident" ? `边境事件 · 剩余 ${node.ttl || 1} 年` : node.type === "frontierDungeon" ? `推荐战力 ${Math.round(node.value)}` : node.type === "frontierBoss" ? `血量 ${Math.round(node.hp || 0)}/${Math.round(node.totalHp || 1)}` : node.type === "overseasRoute" ? `航线风险 ${node.risk}` : node.type === "overseasEncounter" ? `克苏鲁事件 · 危险 ${node.danger}` : node.type === "overseasWorldBoss" ? `共享血量 ${Math.round(node.hp || 0)}/${Math.round(node.totalHp || 1)}` : node.type === "overseasMonster" ? `海怪强度 ${Math.round(node.value || 0)}` : node.type === "overseasFaction" ? `关系 ${Math.round(node.relation || 0)} · 路线 ${Math.round(node.influence || 0)}` : node.type === "overseasTrench" ? `葬仙海沟 · 危险 ${Math.round(node.danger || 0)}` : node.type === "overseasPort" ? `补给 ${state.overseas?.supplies || 0}` : node.type === "forbiddenFloor" ? `第 ${node.floor} 层` : node.type === "forbiddenGate" ? "禁地入口" : "可选山门"}`;
 });
 
 canvas.addEventListener("touchstart", (evt) => {

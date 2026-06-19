@@ -1376,6 +1376,72 @@ h1 {
   opacity: 0.46;
 }
 
+.event-art {
+  display: block;
+  width: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  border: 1px solid rgba(24, 32, 28, 0.14);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  box-shadow: 0 12px 28px rgba(24, 32, 28, 0.14);
+}
+
+.overseas-dashboard {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.overseas-dashboard div,
+.overseas-team-strip {
+  min-width: 0;
+  border: 1px solid rgba(47, 102, 144, 0.16);
+  border-radius: 7px;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(47, 102, 144, 0.12), transparent 38%),
+    rgba(255, 252, 244, 0.72);
+  padding: 9px;
+}
+
+.overseas-dashboard span,
+.overseas-team-strip span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.overseas-dashboard strong {
+  display: block;
+  margin-top: 3px;
+  color: #233a42;
+  font-size: 17px;
+}
+
+.overseas-team-strip {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.overseas-option-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.overseas-option-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, #2f6690, #7f4eaa);
+}
+
+.overseas-option-card button {
+  justify-self: end;
+}
+
 .tournament-table {
   display: grid;
   gap: 8px;
@@ -2728,6 +2794,21 @@ h1 {
     background: #ebe5d6;
   }
 
+  .modal-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 0 12px 12px;
+  }
+
+  .modal-actions button {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    white-space: normal;
+    line-height: 1.35;
+  }
+
   .start-screen {
     place-items: start center;
     min-height: 100dvh;
@@ -3019,6 +3100,14 @@ h1 {
 
   .battle-stage {
     height: 126px;
+  }
+
+  .event-art {
+    max-height: 210px;
+  }
+
+  .overseas-dashboard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .battle-breakdown {
@@ -5049,4 +5138,149 @@ input {
   color: #fff;
   font-size: 25px;
   line-height: 1;
+}
+
+.compendium-grid,
+.ending-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 10px 0 18px;
+}
+
+.compendium-card,
+.ending-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(74, 70, 55, 0.22);
+  border-radius: 8px;
+  background: rgba(250, 247, 235, 0.88);
+  box-shadow: 0 8px 22px rgba(46, 42, 32, 0.08);
+}
+
+.compendium-card {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-content: start;
+  gap: 6px 12px;
+  padding: 10px;
+}
+
+.compendium-card img {
+  grid-row: 1 / span 2;
+  width: 92px;
+  height: 76px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.compendium-card strong,
+.ending-card > strong {
+  color: #293b35;
+  font-size: 16px;
+}
+
+.compendium-card span,
+.ending-card p {
+  color: #655f50;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.compendium-card.is-locked {
+  filter: saturate(0.25);
+  opacity: 0.68;
+}
+
+.ending-card {
+  padding: 14px;
+}
+
+.ending-card.is-ready {
+  border-color: rgba(170, 118, 42, 0.62);
+  box-shadow: 0 10px 28px rgba(170, 118, 42, 0.15);
+}
+
+.ending-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  margin-top: 9px;
+  font-size: 12px;
+}
+
+.ending-progress span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ending-progress b {
+  color: #765324;
+}
+
+.ending-progress i {
+  grid-column: 1 / -1;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(55, 59, 50, 0.14);
+}
+
+.ending-progress em {
+  display: block;
+  height: 100%;
+  background: #aa762a;
+}
+
+.ending-claim {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.ending-finale,
+.voyage-result-stage {
+  display: grid;
+  gap: 7px;
+  padding: 18px;
+  border: 1px solid rgba(170, 118, 42, 0.36);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(37, 66, 69, 0.94), rgba(69, 49, 75, 0.94));
+  color: #fff8e3;
+}
+
+.ending-finale strong,
+.voyage-result-stage strong {
+  font-size: 22px;
+}
+
+.ending-finale p,
+.voyage-result-stage span {
+  margin: 0;
+  color: rgba(255, 248, 227, 0.86);
+  line-height: 1.6;
+}
+
+.voyage-result-stage.is-loss {
+  background: linear-gradient(135deg, rgba(66, 57, 54, 0.96), rgba(83, 47, 55, 0.95));
+}
+
+@media (max-width: 640px) {
+  .compendium-grid,
+  .ending-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compendium-card {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .compendium-card img {
+    width: 76px;
+    height: 68px;
+  }
+
+  .ending-finale strong,
+  .voyage-result-stage strong {
+    font-size: 18px;
+  }
 }

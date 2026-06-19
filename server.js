@@ -56,12 +56,31 @@ function broadcast(room, data, exceptId = "") {
 }
 
 function broadcastRoomState(room) {
-  broadcast(room, { type: "room_state", players: players(room) });
+  broadcast(room, { type: "room_state", players: players(room), hostId: room.hostId });
 }
 
 function refreshHost(room) {
   if (room.hostId && room.clients.has(room.hostId)) return;
   room.hostId = room.clients.keys().next().value || "";
+}
+
+function migrateOverseasFeatureHosts(room, previousHostId) {
+  if (!room.hostId || room.hostId === previousHostId) return;
+  const hostName = room.players.get(room.hostId)?.name || "联机宗门";
+  const features = [
+    [room.activeFeatures.overseasLobby, "lobby"],
+    [room.activeFeatures.overseasCouncil, "council"],
+    [room.activeFeatures.overseasTrade, "tradeRoute"],
+  ];
+  for (const [feature, payloadKey] of features) {
+    const data = feature?.payload?.[payloadKey];
+    if (!data || data.hostId !== previousHostId) continue;
+    data.hostId = room.hostId;
+    data.hostName = hostName;
+    feature.sourceId = "server";
+    feature.sourceName = "房间服务器";
+    broadcast(room, feature);
+  }
 }
 
 function cacheFeature(room, msg) {
@@ -121,6 +140,38 @@ function cacheFeature(room, msg) {
   if (action === "frontier_boss_lobby_start" || action === "frontier_boss_lobby_cancel") delete room.activeFeatures.bossLobby;
   if (action === "frontier_boss_spawn" || action === "frontier_boss_damage") room.activeFeatures.frontierBoss = msg;
   if (action === "frontier_boss_defeated" || action === "frontier_boss_expire") delete room.activeFeatures.frontierBoss;
+  if (action === "overseas_boss_spawn") room.activeFeatures.overseasBoss = msg;
+  if (["overseas_boss_damage", "overseas_boss_defeated"].includes(action) && room.activeFeatures.overseasBoss?.payload?.boss) {
+    const boss = room.activeFeatures.overseasBoss.payload.boss;
+    boss.hp = Math.max(0, Number(boss.hp || 0) - Math.max(0, Number(msg.payload?.damage || 0)));
+    boss.defeated = boss.hp <= 0;
+    msg.payload = { ...(msg.payload || {}), hp: boss.hp, totalHp: boss.totalHp, defeated: boss.defeated };
+  }
+  if (action === "overseas_boss_expire") delete room.activeFeatures.overseasBoss;
+  if (action === "overseas_lobby_open") room.activeFeatures.overseasLobby = msg;
+  if (action === "overseas_lobby_ready" && room.activeFeatures.overseasLobby?.payload?.lobby) {
+    const lobby = room.activeFeatures.overseasLobby.payload.lobby;
+    const participant = msg.payload?.participant;
+    if (participant?.id) {
+      lobby.participants = lobby.participants || {};
+      lobby.participants[participant.id] = participant;
+    }
+  }
+  if (action === "overseas_lobby_start" || action === "overseas_lobby_cancel") delete room.activeFeatures.overseasLobby;
+  if (action === "overseas_council_open") room.activeFeatures.overseasCouncil = msg;
+  if (action === "overseas_council_vote" && room.activeFeatures.overseasCouncil?.payload?.council) {
+    const council = room.activeFeatures.overseasCouncil.payload.council;
+    council.votes = council.votes || {};
+    council.votes[msg.sourceId] = msg.payload?.vote;
+  }
+  if (action === "overseas_council_result" || action === "overseas_council_cancel") delete room.activeFeatures.overseasCouncil;
+  if (action === "overseas_trade_open") room.activeFeatures.overseasTrade = msg;
+  if (action === "overseas_trade_contribute" && room.activeFeatures.overseasTrade?.payload?.tradeRoute) {
+    const tradeRoute = room.activeFeatures.overseasTrade.payload.tradeRoute;
+    tradeRoute.contributions = tradeRoute.contributions || {};
+    tradeRoute.contributions[msg.sourceId] = msg.payload?.contribution;
+  }
+  if (action === "overseas_trade_result" || action === "overseas_trade_cancel") delete room.activeFeatures.overseasTrade;
   if (action === "trade_request" && trade?.id) room.activeFeatures[`trade:${trade.id}`] = msg;
   if (["trade_accept", "trade_reject", "trade_cancel"].includes(action) && (trade?.id || msg.payload?.tradeId)) {
     delete room.activeFeatures[`trade:${trade?.id || msg.payload.tradeId}`];
@@ -162,7 +213,7 @@ function sendStatic(req, res) {
   const ext = path.extname(filePath).toLowerCase();
   const headers = {
     "content-type": mimeTypes[ext] || "application/octet-stream",
-    "cache-control": ext === ".html" ? "no-cache" : "public, max-age=31536000, immutable",
+    "cache-control": [".html", ".js", ".css"].includes(ext) ? "no-cache" : "public, max-age=31536000, immutable",
     "access-control-allow-origin": "*",
   };
   res.writeHead(200, headers);
@@ -263,6 +314,9 @@ wss.on("connection", (ws, req) => {
       const outgoing = { ...msg, sourceId: msg.sourceId || clientId };
       cacheFeature(room, outgoing);
       broadcast(room, outgoing, clientId);
+      if (["overseas_boss_damage", "overseas_boss_defeated"].includes(outgoing.action)) {
+        safeSend(ws, { ...outgoing, sourceId: "server", payload: { ...(outgoing.payload || {}), authoritativeOnly: true } });
+      }
       return;
     }
 
@@ -277,6 +331,7 @@ wss.on("connection", (ws, req) => {
     const player = room.players.get(clientId);
     if (player) room.players.set(clientId, { ...player, online: false, ready: false, activity: "离线" });
     refreshHost(room);
+    migrateOverseasFeatureHosts(room, clientId);
     broadcastRoomState(room);
   });
 });
