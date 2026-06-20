@@ -1442,6 +1442,198 @@ h1 {
   justify-self: end;
 }
 
+.ship-hero {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.72fr) minmax(0, 1.28fr);
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid rgba(55, 83, 74, 0.24);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(29, 65, 70, 0.95), rgba(61, 62, 53, 0.96)),
+    #263d3b;
+  color: #fff6dc;
+  box-shadow: 0 14px 30px rgba(25, 42, 39, 0.18);
+}
+
+.ship-hero p {
+  margin: 5px 0 8px;
+  color: rgba(255, 246, 220, 0.78);
+  line-height: 1.55;
+}
+
+.ship-hero span {
+  color: rgba(255, 246, 220, 0.88);
+  font-size: 12px;
+}
+
+.ship-silhouette {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 116px;
+  overflow: hidden;
+  border: 1px solid rgba(233, 206, 144, 0.28);
+  border-radius: 7px;
+  background:
+    radial-gradient(circle at 50% 80%, rgba(96, 166, 158, 0.3), transparent 42%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 10px),
+    rgba(5, 21, 23, 0.52);
+}
+
+.ship-silhouette::before {
+  content: "";
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  bottom: 27px;
+  height: 28px;
+  border-radius: 4px 4px 50% 50%;
+  background: #d2b877;
+  clip-path: polygon(0 0, 100% 0, 83% 100%, 18% 100%);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+}
+
+.ship-silhouette::after {
+  content: "";
+  position: absolute;
+  left: 49%;
+  top: 17px;
+  width: 3px;
+  height: 64px;
+  background: #c9aa67;
+  box-shadow: 15px 13px 0 -1px #c9aa67;
+}
+
+.ship-silhouette span {
+  position: relative;
+  z-index: 2;
+  margin-top: -20px;
+  color: rgba(255, 244, 204, 0.9);
+  font-family: serif;
+  font-size: 28px;
+  text-shadow: 0 3px 10px rgba(0, 0, 0, 0.55);
+}
+
+.ship-silhouette i {
+  position: absolute;
+  left: 8%;
+  bottom: 9px;
+  z-index: 3;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #b7483f, #e0b45c, #79b88f);
+  transition: width 0.25s ease;
+}
+
+.ship-name-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin: 10px 0 16px;
+}
+
+.ship-name-row input {
+  min-width: 0;
+  border: 1px solid rgba(38, 67, 58, 0.22);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 9px 10px;
+  color: #283a34;
+}
+
+.ship-policy-grid,
+.ship-module-grid,
+.ship-crew-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.ship-policy {
+  display: grid;
+  gap: 4px;
+  min-height: 76px;
+  align-content: start;
+  text-align: left;
+}
+
+.ship-policy span,
+.ship-module span,
+.ship-crew-grid span,
+.ship-crew-grid em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.45;
+}
+
+.ship-policy.is-active {
+  border-color: rgba(45, 112, 86, 0.65);
+  background: rgba(45, 112, 86, 0.13);
+  box-shadow: inset 3px 0 #477e67;
+}
+
+.ship-module,
+.ship-crew-grid article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(38, 67, 58, 0.15);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.ship-module > div,
+.ship-crew-grid article > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ship-module.is-installed {
+  border-color: rgba(168, 118, 43, 0.44);
+  background: rgba(218, 185, 112, 0.11);
+}
+
+.ship-module button,
+.ship-crew-grid button {
+  white-space: nowrap;
+}
+
+.ship-logbook {
+  max-height: 190px;
+  overflow: auto;
+  border: 1px solid rgba(38, 67, 58, 0.14);
+  border-radius: 7px;
+  background: rgba(248, 244, 231, 0.68);
+  padding: 6px 10px;
+}
+
+.ship-logbook p {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(38, 67, 58, 0.09);
+  color: #4d574f;
+  font-size: 12px;
+}
+
+.ship-logbook p:last-child {
+  border-bottom: 0;
+}
+
+.ship-logbook p.good strong {
+  color: #9a6727;
+}
+
 .tournament-table {
   display: grid;
   gap: 8px;
@@ -3273,8 +3465,7 @@ h1 {
   box-shadow: 0 8px 18px rgba(64, 39, 18, 0.2);
 }
 
-.auction-lot strong,
-.mission-board > strong {
+.auction-lot strong {
   display: block;
   margin-bottom: 4px;
 }
@@ -3314,9 +3505,79 @@ h1 {
 }
 
 .mission-board {
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(24, 32, 28, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 252, 244, 0.62);
+}
+
+.mission-board summary {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.mission-board summary::-webkit-details-marker {
+  display: none;
+}
+
+.mission-board summary::after {
+  content: "展开";
+  position: absolute;
+  right: 10px;
+  top: 11px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mission-board[open] summary::after {
+  content: "收起";
+}
+
+.mission-board summary > span:first-child {
+  display: grid;
+  gap: 2px;
+  padding-right: 42px;
+}
+
+.mission-board summary em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.mission-board.has-ready summary {
+  background: rgba(226, 244, 232, 0.62);
+}
+
+.mission-summary-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding-right: 42px;
+}
+
+.mission-summary-stats b {
+  border-radius: 4px;
+  background: rgba(24, 32, 28, 0.07);
+  padding: 3px 6px;
+  color: #46534c;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.mission-list {
   display: grid;
   gap: 8px;
-  margin-top: 12px;
+  padding: 0 8px 8px;
+  border-top: 1px solid rgba(24, 32, 28, 0.09);
 }
 
 .mission-card {
@@ -4645,6 +4906,14 @@ input {
     grid-template-columns: 1fr;
   }
 
+  .mission-board summary {
+    grid-template-columns: 1fr;
+  }
+
+  .mission-summary-stats {
+    padding-right: 42px;
+  }
+
   .forbidden-status,
   .advancement-slots {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5265,6 +5534,71 @@ input {
 }
 
 @media (max-width: 640px) {
+  .event-modal {
+    width: 100%;
+    max-height: calc(100dvh - 12px);
+    border-radius: 8px 8px 0 0;
+  }
+
+  .modal-head {
+    padding: 12px 12px 9px;
+  }
+
+  .modal-head h2 {
+    font-size: 17px;
+  }
+
+  .modal-body {
+    padding: 12px;
+  }
+
+  .market-numbers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .match-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    font-size: 12px;
+  }
+
+  .match-row > span,
+  .match-row > strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .goal-box,
+  .system-grid,
+  .tech-book {
+    min-width: 0;
+  }
+
+  .ship-hero,
+  .ship-policy-grid,
+  .ship-module-grid,
+  .ship-crew-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ship-silhouette {
+    min-height: 96px;
+  }
+
+  .ship-name-row {
+    grid-template-columns: 1fr;
+  }
+
+  .ship-name-row button,
+  .ship-module button,
+  .ship-crew-grid button {
+    width: 100%;
+  }
+
+  .ship-module,
+  .ship-crew-grid article {
+    grid-template-columns: 1fr;
+  }
+
   .compendium-grid,
   .ending-grid {
     grid-template-columns: 1fr;

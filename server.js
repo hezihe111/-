@@ -68,6 +68,8 @@ function migrateOverseasFeatureHosts(room, previousHostId) {
   if (!room.hostId || room.hostId === previousHostId) return;
   const hostName = room.players.get(room.hostId)?.name || "联机宗门";
   const features = [
+    [room.activeFeatures.adventureLobby, "lobby"],
+    [room.activeFeatures.bossLobby, "lobby"],
     [room.activeFeatures.overseasLobby, "lobby"],
     [room.activeFeatures.overseasCouncil, "council"],
     [room.activeFeatures.overseasTrade, "tradeRoute"],
@@ -93,7 +95,7 @@ function cacheFeature(room, msg) {
     const bid = msg.payload?.bid || {};
     auction.currentPrice = Number(bid.price || auction.currentPrice || 0);
     auction.leaderName = bid.leaderName || msg.sourceName || auction.leaderName || "";
-    auction.leaderId = msg.sourceId || auction.leaderId || "";
+    auction.leaderId = bid.leaderId || msg.sourceId || auction.leaderId || "";
     auction.round = Number(bid.round || auction.round || 1);
     auction.history = Array.isArray(auction.history) ? auction.history : [];
     auction.history.push({ id: msg.sourceId, name: auction.leaderName, price: auction.currentPrice });
@@ -138,7 +140,13 @@ function cacheFeature(room, msg) {
   if (action === "pvp_duel_result" || action === "pvp_duel_reject") delete room.activeFeatures.pvpDuel;
   if (action === "frontier_boss_lobby_open" || action === "frontier_boss_lobby_ready") room.activeFeatures.bossLobby = msg;
   if (action === "frontier_boss_lobby_start" || action === "frontier_boss_lobby_cancel") delete room.activeFeatures.bossLobby;
-  if (action === "frontier_boss_spawn" || action === "frontier_boss_damage") room.activeFeatures.frontierBoss = msg;
+  if (action === "frontier_boss_spawn") room.activeFeatures.frontierBoss = msg;
+  if (["frontier_boss_damage", "frontier_boss_defeated"].includes(action) && room.activeFeatures.frontierBoss?.payload?.boss) {
+    const boss = room.activeFeatures.frontierBoss.payload.boss;
+    boss.hp = Math.max(0, Number(boss.hp || 0) - Math.max(0, Number(msg.payload?.damage || 0)));
+    boss.defeated = boss.hp <= 0;
+    msg.payload = { ...(msg.payload || {}), hp: boss.hp, totalHp: boss.totalHp, defeated: boss.defeated };
+  }
   if (action === "frontier_boss_defeated" || action === "frontier_boss_expire") delete room.activeFeatures.frontierBoss;
   if (action === "overseas_boss_spawn") room.activeFeatures.overseasBoss = msg;
   if (["overseas_boss_damage", "overseas_boss_defeated"].includes(action) && room.activeFeatures.overseasBoss?.payload?.boss) {
@@ -267,6 +275,8 @@ wss.on("connection", (ws, req) => {
   const url = new URL(req.url || "/ws", `http://${req.headers.host || "localhost"}`);
   const room = roomFor(url.searchParams.get("room"));
   let clientId = "";
+  ws.isAlive = true;
+  ws.on("pong", () => { ws.isAlive = true; });
   room.updatedAt = Date.now();
 
   ws.on("message", (raw) => {
@@ -314,7 +324,7 @@ wss.on("connection", (ws, req) => {
       const outgoing = { ...msg, sourceId: msg.sourceId || clientId };
       cacheFeature(room, outgoing);
       broadcast(room, outgoing, clientId);
-      if (["overseas_boss_damage", "overseas_boss_defeated"].includes(outgoing.action)) {
+      if (["frontier_boss_damage", "frontier_boss_defeated", "overseas_boss_damage", "overseas_boss_defeated"].includes(outgoing.action)) {
         safeSend(ws, { ...outgoing, sourceId: "server", payload: { ...(outgoing.payload || {}), authoritativeOnly: true } });
       }
       return;
@@ -335,6 +345,18 @@ wss.on("connection", (ws, req) => {
     broadcastRoomState(room);
   });
 });
+
+const heartbeat = setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.isAlive === false) {
+      ws.terminate();
+      continue;
+    }
+    ws.isAlive = false;
+    ws.ping();
+  }
+}, 25000);
+heartbeat.unref();
 
 setInterval(() => {
   const now = Date.now();
