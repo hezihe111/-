@@ -14,6 +14,163 @@
   --disciple-card-frame: url("./assets/ui/disciple-card-frame-clean.webp");
 }
 
+.annual-strategy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.annual-strategy-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(91, 69, 42, 0.28);
+  border-left: 4px solid #426b62;
+  border-radius: 6px;
+  background: rgba(250, 247, 235, 0.82);
+}
+
+.annual-strategy-card > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.annual-strategy-card strong,
+.annual-strategy-card em,
+.annual-strategy-card span,
+.annual-strategy-card p {
+  overflow-wrap: anywhere;
+}
+
+.annual-strategy-card em {
+  color: #665c4c;
+  font-style: normal;
+  font-size: 12px;
+}
+
+.annual-strategy-card p {
+  margin: 7px 0 0;
+  font-size: 12px;
+}
+
+.annual-strategy-card p.good { color: #27634f; }
+.annual-strategy-card p.warn { color: #8a4536; }
+
+.annual-strategy-card > span {
+  display: block;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(91, 69, 42, 0.24);
+  color: #514839;
+  font-size: 12px;
+}
+
+.strategy-last-result,
+.annual-strategy-status {
+  margin-bottom: 10px;
+  padding: 10px 11px;
+  border: 1px solid rgba(75, 93, 72, 0.28);
+  border-radius: 6px;
+  background: rgba(236, 242, 228, 0.82);
+}
+
+.strategy-last-result {
+  display: grid;
+  gap: 4px;
+}
+
+.strategy-last-result.is-failed {
+  border-color: rgba(133, 68, 52, 0.32);
+  background: rgba(246, 231, 222, 0.84);
+}
+
+.annual-strategy-status > div:first-child {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 7px;
+}
+
+.annual-strategy-status em {
+  min-width: 0;
+  color: #655e50;
+  font-style: normal;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.annual-strategy-status p {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
+.strategy-tradeoff b {
+  display: inline-block;
+  min-width: 22px;
+  color: #27634f;
+}
+
+.strategy-tradeoff b:nth-of-type(2) { color: #8a4536; }
+
+.disciple-life-title {
+  margin: 12px 0 7px;
+  font-size: 14px;
+}
+
+.disciple-chronicle {
+  display: grid;
+  gap: 7px;
+}
+
+.disciple-chronicle article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  padding: 8px 9px;
+  border-left: 3px solid #4f7068;
+  background: rgba(245, 241, 226, 0.78);
+}
+
+.disciple-chronicle article.warn { border-left-color: #9b523d; }
+.disciple-chronicle article.good { border-left-color: #3f795b; }
+
+.disciple-chronicle span {
+  color: #746a59;
+  font-size: 11px;
+}
+
+.disciple-chronicle strong {
+  min-width: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.disciple-chronicle p {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .annual-strategy-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .annual-strategy-card {
+    padding: 10px;
+  }
+
+  .annual-strategy-card > div,
+  .annual-strategy-status > div:first-child {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

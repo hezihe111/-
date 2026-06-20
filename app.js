@@ -1064,6 +1064,69 @@ const sectRoutes = [
   { id: "oceanic", name: "海国舟宗", text: "更早经营海外港口，造船、补给与航标成本更低；陆上资源争夺收益略弱。", reward: { stones: 140, grain: 180, insight: 25 } },
 ];
 
+const annualStrategyCatalog = [
+  {
+    id: "cultivate",
+    name: "闭关育才",
+    summary: "集中资源培养核心弟子",
+    boon: "弟子修行 +22%，专精成长 +20%",
+    cost: "年度灵石收入 -15%，宗门战力 -8%",
+    commitment: "完成 2 次修行、参悟、炼制或心魔处置",
+    modifiers: { growth: 1.22, specialization: 1.2, income: 0.85, battle: 0.92, action: 0 },
+    rewards: { insight: 38, prestige: 16 },
+  },
+  {
+    id: "expand",
+    name: "开疆拓土",
+    summary: "主动争夺资源与边境据点",
+    boon: "进攻战力 +15%，争夺胜利额外获得声望",
+    cost: "开年粮草 -90，弟子修行 -12%",
+    commitment: "完成 2 次争夺、掠夺、讨伐或战争行动",
+    modifiers: { growth: 0.88, specialization: 1, income: 1, battle: 1.15, action: 0 },
+    rewards: { stones: 90, prestige: 42 },
+  },
+  {
+    id: "commerce",
+    name: "通商聚财",
+    summary: "押注市集、拍卖与货物流转",
+    boon: "年度灵石收入 +22%，市集交易收益 +12%",
+    cost: "宗门战力 -12%，声望 -8",
+    commitment: "完成 2 次市集、商队或拍卖相关操作",
+    modifiers: { growth: 1, specialization: 1, income: 1.22, battle: 0.88, trade: 0.12, action: 0 },
+    rewards: { stones: 150, prestige: 12 },
+  },
+  {
+    id: "fortify",
+    name: "固守山门",
+    summary: "经营阵法、据点与防线",
+    boon: "防守判定 +25%，开年护山大阵 +12",
+    cost: "年度行动点 -1，灵石收入 -8%",
+    commitment: "完成 2 次建设、阵法、驻守或反制行动",
+    modifiers: { growth: 1, specialization: 1, income: 0.92, battle: 1, defense: 1.25, action: -1 },
+    rewards: { arrayMats: 1, prestige: 28 },
+  },
+  {
+    id: "explore",
+    name: "寻幽探秘",
+    summary: "用更高风险换取机缘与秘境",
+    boon: "年度行动点 +1，额外生成 2 处高价值机缘",
+    cost: "探索弟子心魔风险提高，灵石收入 -10%",
+    commitment: "完成 2 次探索、秘境、试航或远征行动",
+    modifiers: { growth: 1, specialization: 1, income: 0.9, battle: 1, action: 1, exploreRisk: 4 },
+    rewards: { insight: 55, alchemyMats: 1 },
+  },
+  {
+    id: "diplomacy",
+    name: "合纵连横",
+    summary: "经营盟约、仙盟与诸宗关系",
+    boon: "开年改善诸宗关系，反制与结盟更稳定",
+    cost: "主动掠夺战力 -15%，年度灵石收入 -6%",
+    commitment: "完成 2 次结盟、情报、会议或斡旋行动",
+    modifiers: { growth: 1, specialization: 1, income: 0.94, battle: 0.85, diplomacy: 14, action: 0 },
+    rewards: { prestige: 48, insight: 24 },
+  },
+];
+
 const sectRouteAbilityCatalog = {
   orthodox: {
     name: "仙盟执礼",
@@ -1998,6 +2061,9 @@ const state = {
   recruitPool: [],
   yearlyBoon: null,
   pendingBoon: false,
+  annualStrategy: null,
+  pendingAnnualStrategy: false,
+  lastAnnualStrategyResult: null,
   worldEvent: null,
   nextWorldAdventureYear: 0,
   nextDiscipleEncounterYear: 0,
@@ -2158,7 +2224,9 @@ function cultivationPowerBonus(d) {
   const artifact = d.bondedArtifact ? Number(d.bondedArtifact.power || 0) + Number(d.bondedArtifact.level || 1) * 38 : 0;
   const mentor = d.mentorId ? 24 + Number(d.realm || 0) * 6 : 0;
   const conRealm = con?.id === "mortalFate" ? Number(d.realm || 0) * 45 : 0;
-  return Number(heart?.battle || 0) + Number(con?.battle || 0) + conRealm + specLevel * Number(spec?.battlePerLevel || 10) + titlePower + artifact + mentor + sectPositionPowerBonus(d) + Number(d.personalFame || 0) * 1.5;
+  const loyaltyPower = (Number(d.loyalty ?? 68) - 50) * 1.4;
+  const ambitionPower = Math.max(0, Number(d.ambition ?? 55) - 45) * 0.7;
+  return Number(heart?.battle || 0) + Number(con?.battle || 0) + conRealm + specLevel * Number(spec?.battlePerLevel || 10) + titlePower + artifact + mentor + sectPositionPowerBonus(d) + Number(d.personalFame || 0) * 1.5 + loyaltyPower + ambitionPower;
 }
 
 function sectPositionOf(d) {
@@ -2340,6 +2408,9 @@ function initWorld() {
   state.recruitPool = [];
   state.yearlyBoon = null;
   state.pendingBoon = false;
+  state.annualStrategy = null;
+  state.pendingAnnualStrategy = false;
+  state.lastAnnualStrategyResult = null;
   state.aiReports = [];
   state.market = createMarketState();
   state.marketTradesThisYear = 0;
@@ -2407,6 +2478,8 @@ function initWorld() {
     alive: true,
     grudges: 0,
     alliance: false,
+    personality: aiPersonalityCatalog[i % aiPersonalityCatalog.length].id,
+    memory: { hostility: 0, respect: 0, favor: 0, entries: [], lastPlayerAction: "尚无直接往来" },
   }));
   state.resources = [
     { id: "mine-1", type: "resource", kind: "mine", name: "紫纹灵石矿", x: 558, y: 184, value: 92, owner: null, yields: { stones: 92, forgingMats: 1 } },
@@ -2591,6 +2664,9 @@ function createDisciple(options = {}) {
     titles: [],
     personalFame: 0,
     lastPersonalEventYear: 0,
+    loyalty: rand(58, 82),
+    ambition: rand(30, 86),
+    lifeChronicle: [],
   };
   for (const t of ownedTraits) {
     for (const key of ["hp", "atk", "def", "speed", "grow", "luck", "charm", "temper"]) {
@@ -2929,11 +3005,13 @@ function foundSect(site) {
     },
     routeAbilityYear: 0,
     routeBuff: { battle: 0, trade: 0, recruit: 0, ttl: 0 },
+    annualStrategyHistory: [],
     buildingBranches: {},
   };
   applyNewGamePlusLegacy();
   state.selectedDiscipleId = state.sect.disciples[0]?.id || null;
   state.founded = true;
+  disciples.forEach((d) => recordDiscipleMemory(d, "开山元从", `随掌门在${site.name}立下${state.sect.name}，成为首代门人。`, "good", ["founding"]));
   state.selected = state.sect;
   generateAiIntents();
   startPlayerYear();
@@ -2956,7 +3034,8 @@ function startPlayerYear() {
   const buildingBonus = state.sect.buildings.commandHall + branchAction;
   const omenBonus = state.yearlyBoon?.key === "actionBonus" ? 1 : 0;
   const decadeBonus = Math.floor(Math.max(0, state.year - 1) / 10);
-  state.maxActionPoints = clamp(4 + prestigeBonus + buildingBonus + omenBonus + decadeBonus - disciplePressure, 3, 10);
+  const strategyAction = Math.round(annualStrategyModifier("action", 0));
+  state.maxActionPoints = clamp(4 + prestigeBonus + buildingBonus + omenBonus + decadeBonus + strategyAction - disciplePressure, 3, 10);
   state.actionPoints = state.maxActionPoints;
   state.recruitedThisYear = false;
   state.refreshedRecruitment = false;
@@ -2983,6 +3062,10 @@ function scheduleYearlyBoonRecovery(delay = 900) {
 function recoverMissingYearlyBoon(reason = "") {
   if (!state.founded || state.waitingForPlayers) return false;
   if (state.worldAdventure) return false;
+  if (state.yearlyBoon && (!state.annualStrategy || state.annualStrategy.year !== state.year) && !state.pendingAnnualStrategy) {
+    offerAnnualStrategy(true);
+    return true;
+  }
   if (state.yearlyBoon && state.actionPoints > 0) return false;
   if (state.pendingBoon && isYearlyBoonModalOpen()) return false;
   const modalBusy = els.eventModal && !els.eventModal.hidden;
@@ -3033,10 +3116,117 @@ function selectYearlyBoon(omen) {
   window.clearTimeout(yearlyBoonRecoveryTimer);
   state.yearlyBoon = omen;
   state.pendingBoon = false;
-  startPlayerYear();
   log(`本年天命：${omen.name}。${omen.text}`, "good");
+  offerAnnualStrategy(true);
+}
+
+function currentAnnualStrategy() {
+  return annualStrategyCatalog.find((item) => item.id === state.annualStrategy?.id) || null;
+}
+
+function annualStrategyModifier(key, fallback = 1) {
+  const strategy = currentAnnualStrategy();
+  const value = strategy?.modifiers?.[key];
+  return Number.isFinite(Number(value)) ? Number(value) : fallback;
+}
+
+function annualStrategyDefense(power) {
+  return Number(power || 0) * annualStrategyModifier("defense", 1);
+}
+
+function annualStrategyResultHtml() {
+  const result = state.lastAnnualStrategyResult;
+  if (!result) return "";
+  return `<div class="strategy-last-result ${result.success ? "is-success" : "is-failed"}"><strong>上年承诺：${result.success ? "兑现" : "落空"}</strong><span>${tradeEscape(result.text)}</span></div>`;
+}
+
+function offerAnnualStrategy(force = false) {
+  if (!state.founded || !state.yearlyBoon) return;
+  if (state.pendingAnnualStrategy && !force) return;
+  state.pendingAnnualStrategy = true;
+  showModal({
+    kicker: "年度战略",
+    title: `太初 ${state.year} 年宗门议策`,
+    body: `
+      ${annualStrategyResultHtml()}
+      <p>天命决定环境，战略决定本宗如何应对。每项战略都有明确收益与代价；本年完成两次对应行动即可兑现承诺，获得额外回报。</p>
+      <div class="annual-strategy-grid">
+        ${annualStrategyCatalog.map((strategy) => `<article class="annual-strategy-card">
+          <div><strong>${strategy.name}</strong><em>${strategy.summary}</em></div>
+          <p class="good">得：${strategy.boon}</p>
+          <p class="warn">舍：${strategy.cost}</p>
+          <span>年度承诺：${strategy.commitment}</span>
+        </article>`).join("")}
+      </div>
+    `,
+    actions: annualStrategyCatalog.map((strategy) => ({ label: strategy.name, handler: () => selectAnnualStrategy(strategy) })),
+    dismissible: false,
+  });
+}
+
+function selectAnnualStrategy(strategy) {
+  if (!strategy || !annualStrategyCatalog.includes(strategy)) return;
+  state.annualStrategy = { id: strategy.id, year: state.year, progress: 0, actions: [], settled: false };
+  state.pendingAnnualStrategy = false;
+  if (strategy.id === "expand") state.sect.grain = Math.max(0, state.sect.grain - 90);
+  if (strategy.id === "commerce") state.sect.prestige = Math.max(0, state.sect.prestige - 8);
+  if (strategy.id === "fortify") state.sect.barrier = clamp(state.sect.barrier + 12, 0, 100);
+  if (strategy.id === "diplomacy") {
+    state.sect.diplomacy.reputation += 6;
+    activeRivals().forEach((rival) => { rival.attitude = clamp(rival.attitude + 4, -100, 100); });
+  }
+  if (strategy.id === "explore") addOpportunityNodes(2, "annual-strategy");
+  startPlayerYear();
+  recordSectHistory("年度战略", `太初 ${state.year} 年选择「${strategy.name}」：${strategy.summary}。`, "info");
+  log(`年度战略：${strategy.name}。${strategy.boon}；代价：${strategy.cost}。`, "good");
   closeModal();
   render();
+}
+
+function recordAnnualStrategyAction(label = "") {
+  const active = state.annualStrategy;
+  if (!active || active.year !== state.year || active.settled) return;
+  const patterns = {
+    cultivate: /修行|参悟|闭关|心魔|炼丹|炼器|授课|法宝/,
+    expand: /争夺|掠夺|劫掠|抢夺|战争|扩张|讨伐|巨兽|海怪|终战/,
+    commerce: /交易|市集|商队|拍卖|货物|供给/,
+    fortify: /建设|阵法|驻守|加固|反制|运输线|修筑|修理/,
+    explore: /探索|机缘|秘境|侦察|游历|禁地|试航|远征|奇诡|航标/,
+    diplomacy: /盟约|结盟|外交|斡旋|会议|情报|反谍|路线行动|势力委托/,
+  };
+  if (!patterns[active.id]?.test(String(label))) return;
+  active.progress = clamp(Number(active.progress || 0) + 1, 0, 2);
+  active.actions = [...(active.actions || []), String(label)].slice(-4);
+  if (active.progress === 2) flashFeedback(`年度承诺已兑现：${currentAnnualStrategy()?.name || "宗门战略"}`, "good");
+}
+
+function grantAnnualStrategyRewards(rewards = {}) {
+  for (const [key, amount] of Object.entries(rewards)) {
+    if (key === "stones") state.sect.stones += amount;
+    else if (key === "grain") state.sect.grain += amount;
+    else if (key === "prestige") state.sect.prestige += amount;
+    else if (key === "insight") state.sect.insight += amount;
+    else if (key === "alchemyMats") state.sect.alchemyMats += amount;
+    else if (key === "forgingMats") state.sect.forgingMats += amount;
+    else if (key === "arrayMats") state.sect.arrayMats += amount;
+  }
+}
+
+function settleAnnualStrategy() {
+  const active = state.annualStrategy;
+  const strategy = currentAnnualStrategy();
+  if (!active || !strategy || active.settled || active.year !== state.year) return;
+  const success = Number(active.progress || 0) >= 2;
+  if (success) grantAnnualStrategyRewards(strategy.rewards);
+  else state.sect.prestige = Math.max(0, state.sect.prestige - 20);
+  active.settled = true;
+  const detail = success
+    ? `完成 ${active.progress}/2 次对应行动，获得战略回报。`
+    : `仅完成 ${active.progress}/2 次对应行动，宗门朝令夕改，声望 -20。`;
+  state.lastAnnualStrategyResult = { year: state.year, id: strategy.id, name: strategy.name, success, text: `${strategy.name}：${detail}` };
+  state.sect.annualStrategyHistory = [{ ...state.lastAnnualStrategyResult }, ...(state.sect.annualStrategyHistory || [])].slice(0, 16);
+  recordSectHistory("年度战略结算", state.lastAnnualStrategyResult.text, success ? "good" : "warn");
+  log(`年度战略结算：${state.lastAnnualStrategyResult.text}`, success ? "good" : "warn");
 }
 
 function recruitRealmRange() {
@@ -3079,6 +3269,10 @@ function spendAction(cost, label) {
     return false;
   }
   state.actionPoints -= cost;
+  const remainingAfterSpend = state.actionPoints;
+  queueMicrotask(() => {
+    if (state.actionPoints <= remainingAfterSpend) recordAnnualStrategyAction(label);
+  });
   return true;
 }
 
@@ -3100,7 +3294,7 @@ function sectStrategicPower() {
   const economy = Math.sqrt(Math.max(0, state.sect.stones)) * 18 + Math.sqrt(Math.max(0, state.sect.grain)) * 12;
   const raw = discipleCore + state.sect.barrier * 7 + state.sect.prestige * 0.35 + resourceHoldings + craftDepth + buildingDepth + daoDepth + arrayDepth + legacyDepth + economy;
   const buildingBattle = state.sect.buildingBranches?.trainingHall === "sword" ? 0.08 : 0;
-  return raw * (1 + Number(state.sect.routeBuff?.battle || 0) + buildingBattle);
+  return raw * (1 + Number(state.sect.routeBuff?.battle || 0) + buildingBattle) * annualStrategyModifier("battle", 1);
 }
 
 function formationPower() {
@@ -3421,6 +3615,17 @@ function ensureSectDefaults() {
   state.lastLeagueRewardYear = Number(state.lastLeagueRewardYear || 0);
   state.intelReports = Array.isArray(state.intelReports) ? state.intelReports : [];
   state.aiIntents = Array.isArray(state.aiIntents) ? state.aiIntents : [];
+  state.annualStrategy = state.annualStrategy && annualStrategyCatalog.some((item) => item.id === state.annualStrategy.id)
+    ? state.annualStrategy
+    : null;
+  if (state.annualStrategy) {
+    state.annualStrategy.year = Number(state.annualStrategy.year || state.year || 1);
+    state.annualStrategy.progress = clamp(Number(state.annualStrategy.progress || 0), 0, 2);
+    state.annualStrategy.actions = Array.isArray(state.annualStrategy.actions) ? state.annualStrategy.actions.slice(-4) : [];
+    state.annualStrategy.settled = Boolean(state.annualStrategy.settled);
+  }
+  state.pendingAnnualStrategy = false;
+  state.lastAnnualStrategyResult = state.lastAnnualStrategyResult || null;
   state.councilEdict = state.councilEdict || null;
   if (state.councilEdict) state.councilEdict.ttl = Number.isFinite(Number(state.councilEdict.ttl)) ? Number(state.councilEdict.ttl) : 1;
   state.lastAuctionYear = Number(state.lastAuctionYear || 0);
@@ -3446,6 +3651,7 @@ function ensureSectDefaults() {
   state.sect.routeAbilityYear = Number(state.sect.routeAbilityYear || 0);
   state.sect.routeBuff = state.sect.routeBuff && typeof state.sect.routeBuff === "object" ? state.sect.routeBuff : { battle: 0, trade: 0, recruit: 0, ttl: 0 };
   for (const key of ["battle", "trade", "recruit", "ttl"]) state.sect.routeBuff[key] = Number(state.sect.routeBuff[key] || 0);
+  state.sect.annualStrategyHistory = Array.isArray(state.sect.annualStrategyHistory) ? state.sect.annualStrategyHistory.slice(0, 16) : [];
   state.sect.buildingBranches = state.sect.buildingBranches && typeof state.sect.buildingBranches === "object" ? state.sect.buildingBranches : {};
   for (const key of Object.keys(buildingBranchCatalog)) {
     if (!buildingBranchCatalog[key].some((branch) => branch.id === state.sect.buildingBranches[key])) state.sect.buildingBranches[key] = "";
@@ -3496,6 +3702,7 @@ function ensureSectDefaults() {
     ensureDisciplePersonalQuest(d);
     d.traits = Array.isArray(d.traits) ? d.traits : [];
   }
+  for (let index = 0; index < (state.rivals || []).length; index += 1) normalizeRivalIdentity(state.rivals[index], index);
   for (const r of state.resources || []) {
     if (state.multiplayer && r.owner === "player") r.owner = playerResourceOwnerId();
     r.upgrades = r.upgrades || { outpost: 0, arrayEye: 0, extractor: 0, depot: 0 };
@@ -3632,6 +3839,9 @@ function normalizeDiscipleProgression(d) {
   d.titles = Array.isArray(d.titles) ? d.titles.filter((id) => catalogById(discipleTitleCatalog, id)) : [];
   d.personalFame = Number(d.personalFame || 0);
   d.lastPersonalEventYear = Number(d.lastPersonalEventYear || 0);
+  d.loyalty = clamp(Number(d.loyalty ?? 68), 0, 100);
+  d.ambition = clamp(Number(d.ambition ?? 55), 0, 100);
+  d.lifeChronicle = Array.isArray(d.lifeChronicle) ? d.lifeChronicle.slice(0, 18) : [];
   d.elementDamage = d.elementDamage || {};
   d.methods = Array.isArray(d.methods) ? d.methods : [];
   d.activeMethods = Array.isArray(d.activeMethods) ? d.activeMethods.slice(0, 5) : d.methods.slice(0, 5).map((method) => method.id);
@@ -6286,6 +6496,8 @@ function attemptTribulation(d, options = {}) {
     d.pillFatigue = Math.max(0, (d.pillFatigue || 0) - 2);
     d.status = "渡劫成功";
     state.sect.prestige += 20 + d.realm * 8;
+    d.loyalty = clamp(Number(d.loyalty ?? 68) + 3, 0, 100);
+    recordDiscipleMemory(d, "渡劫破境", `历经天雷晋升${realms[d.realm]}，成为宗门中坚。`, "good", ["tribulation", "breakthrough"]);
     log(`${d.name}渡劫成功，晋升${realms[d.realm]}。`, "good");
   } else {
     d.exp = rand(18, 48);
@@ -6294,6 +6506,7 @@ function attemptTribulation(d, options = {}) {
     d.pillFatigue = (d.pillFatigue || 0) + 2;
     d.status = "劫伤";
     adjustMind(d, 14 + d.realm * 2, "渡劫失败");
+    recordDiscipleMemory(d, "渡劫受挫", `冲击${realms[nextRealm]}失败，经脉受损并留下劫伤。`, "warn", ["tribulation", "failure"]);
     log(`${d.name}渡劫失败，遭受劫伤，修为跌回 ${d.exp}/100。`, "warn");
   }
   const report = { d, success, failRate };
@@ -6496,6 +6709,20 @@ function discipleBonds(d) {
   return state.sect.bonds.filter((bond) => bond.a === d.id || bond.b === d.id);
 }
 
+function recordDiscipleMemory(d, title, text, tone = "info", tags = []) {
+  if (!d) return;
+  d.lifeChronicle = Array.isArray(d.lifeChronicle) ? d.lifeChronicle : [];
+  const memory = { id: uid(), year: state.year, title, text, tone, tags: Array.isArray(tags) ? tags : [tags] };
+  d.lifeChronicle = [memory, ...d.lifeChronicle].slice(0, 18);
+  d.lastPersonalEventYear = state.year;
+}
+
+function discipleChronicleHtml(d, limit = 4) {
+  const entries = (d?.lifeChronicle || []).slice(0, limit);
+  if (!entries.length) return `<div class="disciple-chronicle empty">尚无足以写入传记的大事。</div>`;
+  return `<div class="disciple-chronicle">${entries.map((entry) => `<article class="${tradeEscape(entry.tone || "info")}"><span>太初 ${entry.year} 年</span><strong>${tradeEscape(entry.title)}</strong><p>${tradeEscape(entry.text)}</p></article>`).join("")}</div>`;
+}
+
 function bondLabel(bond) {
   const a = state.sect.disciples.find((d) => d.id === bond.a)?.name || "旧人";
   const b = state.sect.disciples.find((d) => d.id === bond.b)?.name || "旧人";
@@ -6521,7 +6748,8 @@ function discipleCultivationGrowth(d) {
   const conBoost = con?.id === "mortalFate" ? 0.08 + d.realm * 0.02 : con ? 0.04 : 0;
   const heartBoost = Number(heart?.growth || 0);
   const roomBoost = (state.sect?.buildings?.spiritArray || 0) * 0.035 + (state.sect?.buildings?.insightRoom || 0) * 0.02;
-  return 1 + heartBoost + mentorBoost + specBoost + conBoost + seclusion + roomBoost + (spec?.id === "alchemy" && heart?.id === "alchemy" ? 0.03 : 0);
+  const lifeDrive = (Number(d.loyalty ?? 68) - 50) / 650 + (Number(d.ambition ?? 55) - 50) / 900;
+  return 1 + heartBoost + mentorBoost + specBoost + conBoost + seclusion + roomBoost + lifeDrive + (spec?.id === "alchemy" && heart?.id === "alchemy" ? 0.03 : 0);
 }
 
 function gainSpecializationExp(d, amount, reason = "修行") {
@@ -6643,6 +6871,7 @@ function processDisciplePersonalQuestsYear() {
     if (!d.personalQuest.completed && progress.pct >= 100) {
       d.personalQuest.completed = true;
       d.status = "个人志向已成";
+      recordDiscipleMemory(d, "志向达成", `完成「${discipleAspirationCatalog[d.personalQuest.kind]?.name || "道途之志"}」，多年执念终于有了结果。`, "good", ["vow"]);
       log(`${d.name}完成个人志向「${discipleAspirationCatalog[d.personalQuest.kind]?.name || "道途之志"}」，可在养成面板领取传承。`, "good");
     }
   }
@@ -7047,6 +7276,95 @@ function shouldOpenDiscipleMajorDecision() {
   return state.year >= state.nextDiscipleEncounterYear;
 }
 
+function buildDiscipleLifeDecision(d) {
+  if (!d) return null;
+  if (Number(d.loyalty ?? 68) <= 28) {
+    return {
+      lifeEvent: true,
+      kind: "loyaltyCrisis",
+      title: "去留之夜",
+      text: `${d.name}收拾行囊站在山门前。过去的冷落、失败与未兑现承诺已积成去意；今夜的处置会决定其是否仍把宗门视作归处。`,
+      choices: [
+        { type: "retainDisciple", label: "补偿资源并诚谈", text: "消耗 180 灵石，大幅恢复忠诚并降低心魔。", disabled: state.sect.stones < 180 },
+        { type: "promiseSeat", label: "许诺核心席位", text: "设为核心弟子，恢复部分忠诚，但野心继续提高。" },
+        { type: "disciplineDefection", label: "以门规强留", text: "心性检定：成功压下去意，失败则忠诚进一步恶化。" },
+      ],
+    };
+  }
+  const others = state.sect.disciples.filter((item) => item.id !== d.id);
+  const mentor = mentorOf(d);
+  const hostile = activeRivals().filter((rival) => !rival.alliance).sort((a, b) => a.attitude - b.attitude)[0];
+  const kinds = ["family", "ambition"];
+  if (others.length) kinds.push("rescue");
+  if (mentor) kinds.push("mentorConflict");
+  if (hostile) kinds.push("enemyOffer");
+  const kind = pick(kinds);
+  if (kind === "rescue") {
+    const other = pick(others);
+    return {
+      lifeEvent: true,
+      kind,
+      title: "同门魂灯将熄",
+      text: `${other.name}在外巡山时陷入残阵，只来得及向${d.name}发出一道求援符。救人会承担伤势与资源代价，袖手旁观则可能留下多年裂痕。`,
+      choices: [
+        { type: "riskRescue", otherId: other.id, label: "亲身闯阵救人", text: "自身负伤，双方形成深厚羁绊与忠诚。" },
+        { type: "sendAid", otherId: other.id, label: "调动宗门接应", text: "消耗 120 灵石稳妥救援，宗门声望提高。", disabled: state.sect.stones < 120 },
+        { type: "abandonPeer", otherId: other.id, label: "保全大局撤回", text: "不付出资源，但双方忠诚与关系恶化。" },
+      ],
+    };
+  }
+  if (kind === "mentorConflict") {
+    return {
+      lifeEvent: true,
+      kind,
+      title: "师徒论道决裂",
+      text: `${d.name}与${mentor.name}因道途先后争执不下。此事若处理失当，师承会断；若压下分歧，也可能埋下更深的心结。`,
+      choices: [
+        { type: "honorMentor", mentorId: mentor.id, label: "命弟子遵从师训", text: "师承加深，弟子忠诚略降但专精提高。" },
+        { type: "supportDisciple", mentorId: mentor.id, label: "准许弟子另辟道路", text: "解除师承，弟子忠诚和野心提高，师父心境受损。" },
+        { type: "reconcileMentor", mentorId: mentor.id, label: "主持一场公开论道", text: "消耗 50 参悟，双方各退一步并形成更强传承。", disabled: state.sect.insight < 50 },
+      ],
+    };
+  }
+  if (kind === "enemyOffer") {
+    return {
+      lifeEvent: true,
+      kind,
+      title: "敌宗密函",
+      text: `${hostile.name}秘密许诺给${d.name}更高地位。烧毁密函最稳，反向窃取功法收益更高，而私留后路会迅速提升实力，却动摇忠诚。`,
+      choices: [
+        { type: "rejectRival", rivalId: hostile.id, label: "当众焚毁密函", text: "忠诚、声望提高，敌宗记恨。" },
+        { type: "stealRival", rivalId: hostile.id, label: "将计就计窃取秘法", text: "进行一次气运判定，成功大幅成长，失败则负伤并加深宿怨。" },
+        { type: "secretPact", rivalId: hostile.id, label: "私留一条退路", text: "立即获得修为与攻击，但忠诚下降并留下隐患。" },
+      ],
+    };
+  }
+  if (kind === "family") {
+    return {
+      lifeEvent: true,
+      kind,
+      title: "凡尘故族求援",
+      text: `${d.name}的故族遭逢灾年，族人跪在山门外求助。宗门可以救济、择人入门，或要求弟子斩断尘缘。`,
+      choices: [
+        { type: "supportClan", label: "赐下灵石赈济", text: "消耗 140 灵石，忠诚和声望大幅提高。", disabled: state.sect.stones < 140 },
+        { type: "inviteClan", label: "择有根骨者入外门", text: "消耗 100 粮草，增加一名候选弟子并提高羁绊。", disabled: state.sect.grain < 100 },
+        { type: "severMortal", label: "命其斩断尘缘", text: "不消耗资源，心性提高，但忠诚下降、心魔上涨。" },
+      ],
+    };
+  }
+  return {
+    lifeEvent: true,
+    kind: "ambition",
+    title: "真传席位之争",
+    text: `${d.name}认为自己的功绩足以列入核心，并在同门面前公开请命。满足野心会获得爆发成长，压制则可能换来服从或怨怼。`,
+    choices: [
+      { type: "grantSeat", label: "授予核心席位", text: "设为核心弟子，忠诚、名望提高，但其他核心弟子略感压力。" },
+      { type: "delayAmbition", label: "许诺完成志向后再议", text: "个人志向进度获得推动，野心转化为修行动力。" },
+      { type: "suppressAmbition", label: "以门规压下请命", text: "野心下降；高心性者会服从，低忠诚者可能滋生心魔。" },
+    ],
+  };
+}
+
 function buildDiscipleMajorDecision(d) {
   const kinds = ["specialization", "daoHeart"];
   if (!d.constitution) kinds.push("constitution");
@@ -7116,7 +7434,7 @@ function openDiscipleMajorDecision(afterClose = null) {
     afterClose?.();
     return;
   }
-  const decision = buildDiscipleMajorDecision(d);
+  const decision = Math.random() < 0.62 ? (buildDiscipleLifeDecision(d) || buildDiscipleMajorDecision(d)) : buildDiscipleMajorDecision(d);
   showModal({
     kicker: "弟子重大抉择",
     title: `${d.name} · ${decision.title}`,
@@ -7136,15 +7454,93 @@ function openDiscipleMajorDecision(afterClose = null) {
     actions: decision.choices.map((choice) => ({
       label: choice.label,
       handler: () => resolveDiscipleMajorDecision(d, decision, choice, afterClose),
+      disabled: Boolean(choice.disabled),
     })),
     dismissible: false,
   });
 }
 
+function resolveDiscipleLifeChoice(d, decision, choice) {
+  const other = state.sect.disciples.find((item) => item.id === choice.otherId);
+  const mentor = state.sect.disciples.find((item) => item.id === choice.mentorId);
+  const rival = activeRivals().find((item) => item.id === choice.rivalId);
+  let result = "这次选择改变了弟子今后的道路。";
+  let tone = "good";
+  if (choice.type === "riskRescue" && other) {
+    const hurt = rand(8, 18);
+    d.hp = Math.max(20, d.hp - hurt); d.loyalty = clamp(d.loyalty + 12, 0, 100); other.loyalty = clamp(other.loyalty + 10, 0, 100);
+    formBond(d, other, "生死之交");
+    recordDiscipleMemory(other, "残阵获救", `${d.name}亲身闯阵将其救回。`, "good", ["bond", "rescue"]);
+    result = `${d.name}负伤 ${hurt} 点救回${other.name}，二人结为生死之交。`;
+  } else if (choice.type === "sendAid" && other) {
+    state.sect.stones -= 120; state.sect.prestige += 24; d.loyalty = clamp(d.loyalty + 7, 0, 100); other.loyalty = clamp(other.loyalty + 8, 0, 100);
+    formBond(d, other, "同修");
+    recordDiscipleMemory(other, "宗门接应", `宗门因${d.name}请命调动人手，将其平安救回。`, "good", ["bond"]);
+    result = `宗门耗费 120 灵石救回${other.name}，声望 +24。`;
+  } else if (choice.type === "abandonPeer" && other) {
+    d.loyalty = clamp(d.loyalty - 9, 0, 100); d.ambition = clamp(d.ambition + 8, 0, 100); other.loyalty = clamp(other.loyalty - 16, 0, 100); adjustMind(other, 12, "被同门放弃");
+    formBond(d, other, "竞争"); tone = "warn";
+    recordDiscipleMemory(other, "残阵独返", `${d.name}选择撤回，自己带伤逃出生天。`, "warn", ["grudge"]);
+    result = `${other.name}独自逃回，从此与${d.name}形成竞争，双方忠诚下降。`;
+  } else if (choice.type === "retainDisciple") {
+    state.sect.stones -= 180; d.loyalty = clamp(d.loyalty + 30, 0, 100); d.mind = Math.max(0, Number(d.mind || 0) - 12); result = `${d.name}接受宗门补偿与坦诚挽留，忠诚 +30，心魔下降。`;
+  } else if (choice.type === "promiseSeat") {
+    d.core = true; d.loyalty = clamp(d.loyalty + 18, 0, 100); d.ambition = clamp(d.ambition + 12, 0, 100); result = `${d.name}因核心席位暂时留下，忠诚恢复，但对地位的野心更强。`;
+  } else if (choice.type === "disciplineDefection") {
+    const obey = d.temper + rand(1, 100) >= 108;
+    if (obey) { d.loyalty = clamp(d.loyalty + 10, 0, 100); d.ambition = clamp(d.ambition - 8, 0, 100); result = `${d.name}接受门规约束，暂时压下去意。`; }
+    else { d.loyalty = clamp(d.loyalty - 12, 0, 100); adjustMind(d, 14, "被门规强留"); d.status = "貌合神离"; tone = "warn"; result = `${d.name}表面留下，实际忠诚继续下降，心魔加深。`; }
+  } else if (choice.type === "honorMentor" && mentor) {
+    d.loyalty = clamp(d.loyalty - 4, 0, 100); mentor.loyalty = clamp(mentor.loyalty + 6, 0, 100); gainSpecializationExp(d, 38, "遵从师训"); formBond(d, mentor, "师徒");
+    result = `${d.name}暂时服从师训，专精提高，但心中仍有不甘。`;
+  } else if (choice.type === "supportDisciple" && mentor) {
+    d.mentorId = ""; d.loyalty = clamp(d.loyalty + 10, 0, 100); d.ambition = clamp(d.ambition + 10, 0, 100); adjustMind(mentor, 7, "师徒离道"); tone = "warn";
+    recordDiscipleMemory(mentor, "师承断裂", `${d.name}获准离开师门，独立问道。`, "warn", ["mentor"]);
+    result = `${d.name}解除与${mentor.name}的师承，选择独行问道。`;
+  } else if (choice.type === "reconcileMentor" && mentor) {
+    state.sect.insight -= 50; d.loyalty = clamp(d.loyalty + 8, 0, 100); mentor.loyalty = clamp(mentor.loyalty + 5, 0, 100); gainSpecializationExp(d, 24, "公开论道"); formBond(d, mentor, "师徒");
+    result = `公开论道耗费 50 参悟，${d.name}与${mentor.name}互证所学，师承更稳。`;
+  } else if (choice.type === "rejectRival" && rival) {
+    d.loyalty = clamp(d.loyalty + 14, 0, 100); d.personalFame += 8; state.sect.prestige += 18; rememberRival(rival, "humiliation", `${d.name}当众焚毁招揽密函`, 10);
+    result = `${d.name}当众焚毁${rival.name}密函，忠诚与宗门声望提高。`;
+  } else if (choice.type === "stealRival" && rival) {
+    const success = d.luck + d.charm + rand(1, 100) >= 105 + Number(rival.foundation || 0) * 0.08;
+    if (success) { d.exp += 28; d.atk += 4; d.personalFame += 8; result = `${d.name}反向窃得${rival.name}秘法，修为、攻击与名望提高。`; }
+    else { d.hp = Math.max(20, d.hp - rand(8, 18)); adjustMind(d, 8, "敌宗识破"); tone = "warn"; result = `${d.name}被${rival.name}识破，负伤撤回并留下心魔。`; }
+    rememberRival(rival, "humiliation", `${d.name}借密函反向刺探`, success ? 14 : 8);
+  } else if (choice.type === "secretPact" && rival) {
+    d.exp += 22; d.atk += 3; d.loyalty = clamp(d.loyalty - 20, 0, 100); d.ambition = clamp(d.ambition + 10, 0, 100); state.sect.diplomacy.infamy += 4; tone = "warn";
+    rememberRival(rival, "favor", `与${d.name}留下秘密退路`, 8);
+    result = `${d.name}借敌宗资源迅速成长，但忠诚 -20，宗门恶名提高。`;
+  } else if (choice.type === "supportClan") {
+    state.sect.stones -= 140; state.sect.prestige += 22; d.loyalty = clamp(d.loyalty + 18, 0, 100); result = `故族获赈，${d.name}忠诚 +18，宗门声望 +22。`;
+  } else if (choice.type === "inviteClan") {
+    state.sect.grain -= 100; const kin = createDisciple({ minRealm: 0, maxRealm: 0, expMax: 35 }); kin.kinshipId = d.id; state.recruitPool.push(kin); d.loyalty = clamp(d.loyalty + 10, 0, 100); result = `${kin.name}作为${d.name}故族进入候选名册；若收入门下，二人将形成同族羁绊。`;
+  } else if (choice.type === "severMortal") {
+    d.temper += 4; d.loyalty = clamp(d.loyalty - 10, 0, 100); adjustMind(d, 8, "斩断尘缘"); tone = "warn"; result = `${d.name}斩断尘缘，心性提高，但忠诚下降并滋生心魔。`;
+  } else if (choice.type === "grantSeat") {
+    d.core = true; d.loyalty = clamp(d.loyalty + 16, 0, 100); d.personalFame += 8;
+    state.sect.disciples.filter((item) => item.id !== d.id && item.core).forEach((item) => { item.ambition = clamp(item.ambition + 3, 0, 100); });
+    result = `${d.name}获授核心席位，忠诚与名望提高，其他核心弟子的竞争心略升。`;
+  } else if (choice.type === "delayAmbition") {
+    d.exp += 18; d.ambition = clamp(d.ambition + 5, 0, 100); d.loyalty = clamp(d.loyalty + 4, 0, 100); result = `${d.name}接受考验，将席位野心转化为修行动力。`;
+  } else if (choice.type === "suppressAmbition") {
+    const obey = d.temper + d.loyalty >= 120; d.ambition = clamp(d.ambition - 16, 0, 100);
+    if (obey) { d.loyalty = clamp(d.loyalty + 3, 0, 100); result = `${d.name}接受门规裁断，野心收敛，忠诚略升。`; }
+    else { d.loyalty = clamp(d.loyalty - 12, 0, 100); adjustMind(d, 10, "席位受挫"); tone = "warn"; result = `${d.name}表面服从，实际忠诚下降并滋生心魔。`; }
+  }
+  recordDiscipleMemory(d, decision.title, result, tone, [decision.kind]);
+  return { result, tone };
+}
+
 function resolveDiscipleMajorDecision(d, decision, choice, afterClose = null) {
   let result = "";
   let tone = "good";
-  if (choice.type === "specialization") {
+  if (decision.lifeEvent) {
+    const life = resolveDiscipleLifeChoice(d, decision, choice);
+    result = life.result;
+    tone = life.tone;
+  } else if (choice.type === "specialization") {
     const before = specializationOf(d)?.name || "旧法";
     const spec = catalogById(specializationCatalog, choice.target);
     d.specialization = spec.id;
@@ -7203,6 +7599,7 @@ function resolveDiscipleMajorDecision(d, decision, choice, afterClose = null) {
     d.status = "独行问道";
     result = `${d.name}解除师承，选择独行问道，心性与个人声望永久提升。`;
   }
+  if (!decision.lifeEvent) recordDiscipleMemory(d, decision.title, result, tone, [decision.kind]);
   d.lastPersonalEventYear = state.year;
   state.lastDiscipleEncounterYear = state.year;
   state.nextDiscipleEncounterYear = state.year + rand(2, 5);
@@ -7813,11 +8210,11 @@ function tradeBonusMultiplier() {
   const omen = state.yearlyBoon?.key === "marketBonus" ? 0.08 : 0;
   const edict = state.councilEdict?.key === "trade" ? 0.05 : 0;
   const branch = state.sect.buildingBranches?.market === "exchange" ? 0.08 : 0;
-  return 1 + Math.min(0.58, traders.length * 0.1 + elderBonus("market") + omen + edict + Number(state.sect.routeBuff?.trade || 0) + branch);
+  return 1 + Math.min(0.7, traders.length * 0.1 + elderBonus("market") + omen + edict + Number(state.sect.routeBuff?.trade || 0) + branch + annualStrategyModifier("trade", 0));
 }
 
 function stoneIncomeMultiplier() {
-  return tradeBonusMultiplier();
+  return tradeBonusMultiplier() * annualStrategyModifier("income", 1);
 }
 
 function updateMarketPrices() {
@@ -8587,6 +8984,7 @@ function marketBuy(id, qty = 1) {
   state.sect.marketPortfolio[id] = slot;
   data.playerFlow = Number(data.playerFlow || 0) + qty;
   state.marketTradesThisYear += 1;
+  recordAnnualStrategyAction("市集交易");
   log(`市集买入 ${marketGoods.find((g) => g.id === id)?.name} x${qty}，总成本 ${totalCost} 灵石。本批买入只计 1 笔交易。`, "good");
   if (state.multiplayer && state.roomConnected) sendNet("player_event", { text: `${state.sect.name}在共享市集中买入${marketGoods.find((g) => g.id === id)?.name} x${qty}。`, tone: "good" });
   if (state.multiplayer && state.roomConnected) sendRoomFeature("market_trade", { id, flow: qty });
@@ -8610,6 +9008,7 @@ function marketSell(id, qty = 1) {
   if (slot.qty <= 0) delete state.sect.marketPortfolio[id];
   data.playerFlow = Number(data.playerFlow || 0) - qty;
   state.marketTradesThisYear += 1;
+  recordAnnualStrategyAction("市集交易");
   log(`市集卖出 ${marketGoods.find((g) => g.id === id)?.name} x${qty}，回笼 ${gain} 灵石，${profit >= 0 ? "盈利" : "亏损"} ${Math.abs(profit)}。本批卖出只计 1 笔交易。`, profit >= 0 ? "good" : "warn");
   if (state.multiplayer && state.roomConnected) sendNet("player_event", { text: `${state.sect.name}在共享市集中卖出${marketGoods.find((g) => g.id === id)?.name} x${qty}。`, tone: profit >= 0 ? "good" : "warn" });
   if (state.multiplayer && state.roomConnected) sendRoomFeature("market_trade", { id, flow: -qty });
@@ -8799,6 +9198,7 @@ function submitMultiplayerTurn() {
 }
 
 function resolveYearAdvance() {
+  settleAnnualStrategy();
   state.tick += 1;
   state.year += 1;
   state.seasonIndex = 0;
@@ -8850,8 +9250,8 @@ function resolveYearAdvance() {
     const fatiguePenalty = Math.min(12, (d.pillFatigue || 0) * 2);
     processDiscipleSeclusionYear(d);
     const baseGrowth = 5 + state.sect.aura / 26 + d.grow / 13 + d.aptitude / 52 + springBoost / 85 + state.sect.buildings.trainingHall * 2 + state.sect.buildings.spiritArray * 2 + Math.floor(elderBonus("train") / 3) - fatiguePenalty - Math.floor((d.mind || 0) / 18);
-    d.exp += Math.round(baseGrowth * discipleCultivationGrowth(d) * foundingCultivationMultiplier());
-    gainSpecializationExp(d, 5 + d.realm * 2 + Math.floor((d.activeMethods?.length || 0) * 1.5), "年度修行");
+    d.exp += Math.round(baseGrowth * discipleCultivationGrowth(d) * foundingCultivationMultiplier() * annualStrategyModifier("growth", 1));
+    gainSpecializationExp(d, Math.round((5 + d.realm * 2 + Math.floor((d.activeMethods?.length || 0) * 1.5)) * annualStrategyModifier("specialization", 1)), "年度修行");
     refreshDiscipleTitles(d);
     if (d.exp >= 100 && d.realm < realms.length - 1) {
       const report = maybeAutoTribulation(d, { deferModal: true });
@@ -8904,9 +9304,10 @@ function showAiReportModal(afterClose = null) {
       ${reports.slice(0, 8).map((report) => `
         <article class="ai-report-card">
           <div class="ai-report-head">
-            <strong>${report.sect}</strong>
+            <strong>${report.sect}${report.personality ? ` · ${report.personality}` : ""}</strong>
             <span>战力 ${report.power} · 底蕴 ${report.foundation} · 关系 ${report.attitude}</span>
           </div>
+          ${report.motive ? `<p>来年判断：${tradeEscape(report.motive)}</p>` : ""}
           ${report.items.map((item) => `<p class="${item.tone}">${item.text}</p>`).join("")}
         </article>
       `).join("")}
@@ -10589,6 +10990,58 @@ function activeRivals() {
   return state.rivals.filter((r) => r.alive !== false);
 }
 
+const aiPersonalityCatalog = [
+  { id: "conqueror", name: "霸主型", motto: "强者应当占据最好的灵脉。", weights: { cultivate: 10, recruit: 8, raidResource: 30, sabotage: 8, diplomacy: 3, coalition: 18 } },
+  { id: "merchant", name: "商盟型", motto: "能用灵石解决的战争不必流血。", weights: { cultivate: 12, recruit: 12, raidResource: 10, sabotage: 5, diplomacy: 32, coalition: 4 } },
+  { id: "schemer", name: "权谋型", motto: "正面胜负从来不是唯一胜负。", weights: { cultivate: 8, recruit: 10, raidResource: 12, sabotage: 32, diplomacy: 14, coalition: 20 } },
+  { id: "guardian", name: "守成型", motto: "谁越过山门界碑，谁就是死敌。", weights: { cultivate: 30, recruit: 18, raidResource: 6, sabotage: 8, diplomacy: 15, coalition: 10 } },
+  { id: "seeker", name: "求道型", motto: "宗门兴衰，终究要落在弟子道途上。", weights: { cultivate: 34, recruit: 28, raidResource: 5, sabotage: 3, diplomacy: 12, coalition: 5 } },
+];
+
+function aiPersonalityOf(rival) {
+  return aiPersonalityCatalog.find((item) => item.id === rival?.personality) || aiPersonalityCatalog[0];
+}
+
+function normalizeRivalIdentity(rival, index = 0) {
+  if (!rival) return;
+  rival.personality = aiPersonalityCatalog.some((item) => item.id === rival.personality)
+    ? rival.personality
+    : aiPersonalityCatalog[stableHash(`${rival.id || rival.name}:${index}`) % aiPersonalityCatalog.length].id;
+  rival.memory = rival.memory && typeof rival.memory === "object" ? rival.memory : {};
+  rival.memory.hostility = clamp(Number(rival.memory.hostility || 0), 0, 100);
+  rival.memory.respect = clamp(Number(rival.memory.respect || 0), 0, 100);
+  rival.memory.favor = clamp(Number(rival.memory.favor || 0), 0, 100);
+  rival.memory.entries = Array.isArray(rival.memory.entries) ? rival.memory.entries.slice(0, 10) : [];
+  rival.memory.lastPlayerAction = rival.memory.lastPlayerAction || "尚无直接往来";
+}
+
+function rememberRival(rival, kind, detail, amount = 5) {
+  if (!rival) return;
+  normalizeRivalIdentity(rival, state.rivals.indexOf(rival));
+  const key = kind === "favor" ? "favor" : kind === "respect" ? "respect" : "hostility";
+  rival.memory[key] = clamp(Number(rival.memory[key] || 0) + amount, 0, 100);
+  rival.memory.lastPlayerAction = detail;
+  rival.memory.entries = [{ year: state.year, kind, detail }, ...(rival.memory.entries || [])].slice(0, 10);
+}
+
+function decayRivalMemory(rival) {
+  normalizeRivalIdentity(rival, state.rivals.indexOf(rival));
+  rival.memory.hostility = Math.max(0, rival.memory.hostility - (rival.alliance ? 4 : 1));
+  rival.memory.favor = Math.max(0, rival.memory.favor - 1);
+  rival.memory.respect = Math.max(0, rival.memory.respect - 0.5);
+}
+
+function weightedIntent(weights) {
+  const entries = Object.entries(weights).filter(([, weight]) => Number(weight) > 0);
+  const total = entries.reduce((sum, [, weight]) => sum + Number(weight), 0);
+  let roll = Math.random() * Math.max(1, total);
+  for (const [type, weight] of entries) {
+    roll -= Number(weight);
+    if (roll <= 0) return type;
+  }
+  return entries[0]?.[0] || "cultivate";
+}
+
 const aiIntentCatalog = {
   cultivate: { name: "闭关整军", tone: "info", text: "集中底蕴提升战力。", counter: "以情报误导其灵脉调度" },
   recruit: { name: "广开山门", tone: "info", text: "招揽新弟子并补充门人。", counter: "提高本宗声望截流人才" },
@@ -10606,12 +11059,20 @@ function aiIntentFor(rivalOrId) {
 function chooseAiIntent(rival) {
   const playerPower = sectPower();
   const owned = state.resources.filter(isPlayerResource);
-  let type = "cultivate";
-  if (rival.attitude < -45 && playerPower > rival.power * 1.35) type = "coalition";
-  else if (rival.attitude < -22 && owned.length && rival.power > playerPower * 0.68) type = Math.random() < 0.58 ? "raidResource" : "sabotage";
-  else if (rival.attitude > 24) type = "diplomacy";
-  else if (rival.disciples < 6 + Math.floor(state.year / 5)) type = "recruit";
-  else type = Math.random() < 0.62 ? "cultivate" : "recruit";
+  normalizeRivalIdentity(rival, state.rivals.indexOf(rival));
+  const personality = aiPersonalityOf(rival);
+  const memory = rival.memory;
+  const weights = { ...personality.weights };
+  const powerRatio = playerPower / Math.max(1, rivalStrategicPower(rival));
+  weights.coalition += Math.max(0, powerRatio - 1.05) * 28 + memory.hostility * 0.34;
+  weights.raidResource += Math.max(0, -rival.attitude) * 0.34 + memory.hostility * 0.24;
+  weights.sabotage += Math.max(0, -rival.attitude) * 0.28 + memory.hostility * 0.3;
+  weights.diplomacy += Math.max(0, rival.attitude) * 0.45 + memory.favor * 0.65;
+  weights.cultivate += Math.max(0, powerRatio - 0.9) * 20 + memory.respect * 0.25;
+  if (rival.disciples < 6 + Math.floor(state.year / 5)) weights.recruit += 28;
+  if (!owned.length || rival.alliance) { weights.raidResource = 0; weights.sabotage = 0; }
+  if (rival.alliance) { weights.coalition = 0; weights.diplomacy += 30; }
+  const type = weightedIntent(weights);
   const target = type === "raidResource" || type === "sabotage"
     ? owned.slice().sort((a, b) => b.value + resourceUpgradeLevel(b, "extractor") * 25 - (a.value + resourceUpgradeLevel(a, "extractor") * 25))[0]
     : null;
@@ -10621,6 +11082,7 @@ function chooseAiIntent(rival) {
     year: state.year,
     targetId: target?.id || "",
     targetName: target?.name || "",
+    reason: `${personality.name}；${memory.lastPlayerAction}${memory.hostility >= 35 ? "；旧怨很深" : memory.favor >= 28 ? "；仍记得本宗善意" : memory.respect >= 30 ? "；对本宗实力保持敬畏" : ""}`,
     countered: false,
     counterType: "",
   };
@@ -10636,7 +11098,8 @@ function aiIntentText(rival, revealTarget = false) {
   if (!intent) return "动向未明";
   const data = aiIntentCatalog[intent.type] || aiIntentCatalog.cultivate;
   const target = revealTarget && intent.targetName ? `，目标：${intent.targetName}` : "";
-  return `${data.name}${target}${intent.countered ? "（已布置反制）" : ""}`;
+  const reason = revealTarget && intent.reason ? `；研判：${intent.reason}` : "";
+  return `${data.name}${target}${reason}${intent.countered ? "（已布置反制）" : ""}`;
 }
 
 function executeAiIntent(rival, report) {
@@ -10647,6 +11110,7 @@ function executeAiIntent(rival, report) {
     rival.power += intent.type === "cultivate" ? rand(18, 42) : rand(4, 18);
     if (intent.counterType === "mislead") rival.attitude -= 4;
     report.push({ tone: "good", text: `预告行动「${data.name}」遭本宗反制，主要收益被压低。` });
+    rememberRival(rival, "humiliation", `年度计划「${data.name}」被本宗反制`, 5);
     return true;
   }
   if (intent.type === "cultivate") {
@@ -10662,10 +11126,12 @@ function executeAiIntent(rival, report) {
     rival.attitude += rand(7, 15);
     rival.foundation = clamp(Number(rival.foundation || 0) + 12, 0, 520);
     report.push({ tone: "good", text: "按预告纵横交游，关系与宗门底蕴提高。" });
+    rememberRival(rival, "favor", "与本宗维持外交往来", 3);
   } else if (intent.type === "coalition") {
     rival.grudges = Number(rival.grudges || 0) + 2;
     rival.power += rand(35, 90);
     report.push({ tone: "danger", text: "按预告串联诸宗，合围压力继续上升。" });
+    rememberRival(rival, "humiliation", "因旧怨推动诸宗合围", 3);
   } else {
     const target = state.resources.find((r) => r.id === intent.targetId && isPlayerResource(r));
     if (!target) {
@@ -10673,8 +11139,9 @@ function executeAiIntent(rival, report) {
       return true;
     }
     const attack = rivalStrategicPower(rival, target) * (intent.type === "raidResource" ? 0.5 : 0.32) + rand(80, 240);
-    const defense = resourceGarrisonPower(target) + sectPower() * 0.16 + state.sect.buildings.scoutTower * 80 + rand(60, 220);
+    const defense = annualStrategyDefense(resourceGarrisonPower(target) + sectPower() * 0.16 + state.sect.buildings.scoutTower * 80 + rand(60, 220));
     if (attack > defense) {
+      rememberRival(rival, "humiliation", `突破本宗对${target.name}的防守`, 2);
       if (intent.type === "raidResource") {
         target.owner = rival.id;
         target.garrisonId = null;
@@ -10689,6 +11156,7 @@ function executeAiIntent(rival, report) {
         report.push({ tone: "danger", text: `按预告暗袭${target.name}，灵石 -${loss}，产出中断一年。` });
       }
     } else {
+      rememberRival(rival, "respect", `${data.name}被本宗守军击退`, 8);
       report.push({ tone: "good", text: `预告行动「${data.name}」被${target.name}守军击退。` });
     }
   }
@@ -10700,7 +11168,7 @@ function openAiIntentBoard() {
   showModal({
     kicker: "诸宗意图",
     title: `太初 ${state.year} 年行动预告`,
-    body: `<p>这些是各宗在本年结束时最可能执行的主行动。观星楼 Lv.2 或影网 30 可看清具体目标。</p><div class="ai-report-list">${activeRivals().map((r) => { const intent = aiIntentFor(r); const data = aiIntentCatalog[intent?.type] || aiIntentCatalog.cultivate; return `<article class="ai-report-card"><div class="ai-report-head"><strong>${tradeEscape(r.name)}</strong><span>${data.name}</span></div><p class="${data.tone}">${data.text}${revealTarget && intent?.targetName ? ` 目标：${tradeEscape(intent.targetName)}。` : ""}</p><button class="intent-counter" data-id="${r.id}" ${intent?.countered ? "disabled" : ""}>${intent?.countered ? "已反制" : "制定反制"}</button></article>`; }).join("")}</div>`,
+    body: `<p>这些是各宗在本年结束时最可能执行的主行动。宗门性格长期不变；观星楼 Lv.2 或影网 30 可看清具体目标与决策动机。</p><div class="ai-report-list">${activeRivals().map((r) => { const intent = aiIntentFor(r); const data = aiIntentCatalog[intent?.type] || aiIntentCatalog.cultivate; const personality = aiPersonalityOf(r); return `<article class="ai-report-card"><div class="ai-report-head"><strong>${tradeEscape(r.name)} · ${personality.name}</strong><span>${data.name}</span></div><p>${tradeEscape(personality.motto)}</p><p class="${data.tone}">${data.text}${revealTarget && intent?.targetName ? ` 目标：${tradeEscape(intent.targetName)}。` : ""}${revealTarget && intent?.reason ? ` 动机：${tradeEscape(intent.reason)}。` : ""}</p><button class="intent-counter" data-id="${r.id}" ${intent?.countered ? "disabled" : ""}>${intent?.countered ? "已反制" : "制定反制"}</button></article>`; }).join("")}</div>`,
     actions: [{ label: "收起", handler: closeModal }],
   });
   for (const button of els.modalBody.querySelectorAll(".intent-counter")) button.addEventListener("click", () => openAiIntentCounter(button.dataset.id));
@@ -10740,6 +11208,7 @@ function runAiTurns() {
   if (!state.aiIntents?.length) generateAiIntents();
   state.aiReports = [];
   for (const r of activeRivals()) {
+    decayRivalMemory(r);
     const report = [];
     const era = 1 + Math.min(0.72, state.year * 0.045);
     const playerPower = sectPower();
@@ -10845,6 +11314,8 @@ function runAiTurns() {
       ];
       state.aiReports.push({
         sect: r.name,
+        personality: aiPersonalityOf(r).name,
+        motive: aiIntentFor(r)?.reason || r.memory?.lastPlayerAction || "按宗门利益行事",
         attitude: r.attitude,
         power: Math.round(r.power),
         foundation: Math.round(r.foundation || 0),
@@ -10870,7 +11341,7 @@ function maybeAiResourceSabotage(rival, report) {
     .sort((a, b) => b.score - a.score)[0]?.resource;
   if (!target) return;
   const attack = rivalStrategicPower(rival, target) * 0.32 + (rival.grudges || 0) * 30 + rand(70, 260);
-  const defense = resourceGarrisonPower(target) + sectPower() * 0.14 + state.sect.buildings.scoutTower * 90 + rand(60, 260);
+  const defense = annualStrategyDefense(resourceGarrisonPower(target) + sectPower() * 0.14 + state.sect.buildings.scoutTower * 90 + rand(60, 260));
   if (attack > defense) {
     target.disruptedUntil = Math.max(Number(target.disruptedUntil || 0), state.year + 1);
     const upgradeKeys = resourceUpgradeCatalog.map((u) => u.key).filter((key) => resourceUpgradeLevel(target, key) > 0);
@@ -10910,7 +11381,7 @@ function maybeCoalitionAttack() {
   if (!pressure || Math.random() > 0.38) return;
   const attackers = hostile.slice(0, rand(2, Math.min(3, hostile.length)));
   const attack = attackers.reduce((sum, r) => sum + r.power * 0.55 + (r.grudges || 0) * 35, 0) + rand(80, 240);
-  const defense = sectPower() + state.sect.barrier * 8 + (state.sect.mountainFormation?.power || 0) * 0.75 + rand(0, 260);
+  const defense = annualStrategyDefense(sectPower() + state.sect.barrier * 8 + (state.sect.mountainFormation?.power || 0) * 0.75 + rand(0, 260));
   if (attack > defense) {
     const lostStones = Math.min(state.sect.stones, rand(160, 360));
     state.sect.stones -= lostStones;
@@ -10963,7 +11434,7 @@ function randomEvent() {
 function rivalHarass() {
   const hostile = activeRivals().filter((r) => r.attitude < 10).sort((a, b) => dist(a, state.sect) - dist(b, state.sect))[0];
   if (!hostile) return;
-  const defense = sectPower() + state.sect.barrier * 6 + (state.sect.mountainFormation?.power || 0) * 0.65 + rand(0, 160);
+  const defense = annualStrategyDefense(sectPower() + state.sect.barrier * 6 + (state.sect.mountainFormation?.power || 0) * 0.65 + rand(0, 160));
   const attack = hostile.power + rand(0, 220);
   if (attack > defense) {
     const lost = Math.min(state.sect.stones, rand(90, 180));
@@ -11007,6 +11478,12 @@ function recruit(discipleId) {
   if (!spendAction(1, "开山收徒")) return;
   state.sect.stones -= 80;
   state.sect.disciples.push(d);
+  recordDiscipleMemory(d, "拜入山门", `${d.name}在太初 ${state.year} 年正式拜入${state.sect.name}。`, "good", ["join"]);
+  if (d.kinshipId) {
+    const kin = state.sect.disciples.find((item) => item.id === d.kinshipId);
+    if (kin) formBond(d, kin, "同族");
+    delete d.kinshipId;
+  }
   state.recruitedThisYear = true;
   state.recruitPool = state.recruitPool.filter((item) => item.id !== discipleId);
   log(`${d.name}拜入山门，携带词条「${d.traits.map((t) => `${t.name}:${t.note}`).join("、")}」。`, "good");
@@ -11598,6 +12075,9 @@ function resolveBattle(target, mode, tactic, discipleId = null) {
 
 function applyRivalBattleOutcome(target, mode, tactic, d, duel, our, enemy) {
   if (duel.won) {
+    d.loyalty = clamp(Number(d.loyalty ?? 68) + 2, 0, 100);
+    recordDiscipleMemory(d, "宗门斗法得胜", `代表本宗击败${target.name}驻守弟子，威名渐起。`, "good", ["battle", target.id]);
+    rememberRival(target, "humiliation", `${d.name}在宗门斗法中取胜`, mode === "steal" ? 14 : 9);
     if (d.nemesisSectId === target.id) {
       d.nemesisVictories = Number(d.nemesisVictories || 0) + 1;
       log(`${d.name}亲手击败宿敌宗门${target.name}，个人志向取得关键进展。`, "good");
@@ -11606,6 +12086,7 @@ function applyRivalBattleOutcome(target, mode, tactic, d, duel, our, enemy) {
     const gain = Math.min(target.stones || 500, Math.round(rand(110, 260) * gainScale));
     state.sect.stones += gain;
     state.sect.prestige += mode === "tournament" ? 80 : 34;
+    if (state.annualStrategy?.id === "expand" && state.annualStrategy.year === state.year) state.sect.prestige += 12;
     target.stones = Math.max(0, (target.stones || 0) - gain);
     target.attitude = (target.attitude || 0) - 18;
     target.grudges = (target.grudges || 0) + 1;
@@ -11615,6 +12096,8 @@ function applyRivalBattleOutcome(target, mode, tactic, d, duel, our, enemy) {
     if (mode === "steal" && Math.random() > 0.45) {
       const d = createDisciple({ minRealm: 0, maxRealm: clamp(Math.floor((target.alchemy + target.forging) / 5), 1, 4), expMax: 80 });
       state.sect.disciples.push(d);
+      d.loyalty = 42;
+      recordDiscipleMemory(d, "转投山门", `在${target.name}败退后转投${state.sect.name}，旧宗经历仍影响其忠诚。`, "warn", ["defection", target.id]);
       const text = `本宗压过${target.name}，${d.name}转投山门，并带来 ${gain} 灵石。`;
       log(text, "good");
       showBattleModal(target, true, text, { our, enemy });
@@ -11625,6 +12108,8 @@ function applyRivalBattleOutcome(target, mode, tactic, d, duel, our, enemy) {
     }
     if (target.foundation <= 18) log(`${target.name}外围底蕴已被掠夺殆尽；若要灭宗，需发动多阶段宗门战争。`, "warn");
   } else {
+    recordDiscipleMemory(d, "宗门斗法失利", `挑战${target.name}失败，负伤撤回山门。`, "warn", ["battle", "failure", target.id]);
+    rememberRival(target, "respect", `${d.name}虽败仍战至最后`, tactic === "guard" ? 6 : 3);
     const lostScale = tactic === "guard" ? 0.55 : tactic === "assault" ? 1.25 : 1;
     const lost = Math.min(state.sect.stones, Math.round(rand(70, 180) * lostScale));
     state.sect.stones -= lost;
@@ -11853,10 +12338,12 @@ function applyResourceContestOutcome(resource, holder, d, duel, our, enemyPower)
     resource.supplyStatus = "supplied";
     resource.disruptedUntil = 0;
     state.sect.prestige += 18;
+    if (state.annualStrategy?.id === "expand" && state.annualStrategy.year === state.year) state.sect.prestige += 14;
     if (holder && !holder.humanOwner) {
       holder.attitude -= 18;
       holder.foundation = Math.max(0, (holder.foundation || 100) - Math.round(resource.value / 10));
       holder.power = Math.max(60, holder.power - rand(18, 48));
+      rememberRival(holder, "humiliation", `本宗夺走${resource.name}`, 13);
     }
     const detail = holder
       ? `${d.name}击败${holder.name}驻守弟子，夺下${resource.name}${counterattack ? "，完成限时反攻" : ""}，守方底蕴受损。`
@@ -11875,6 +12362,7 @@ function applyResourceContestOutcome(resource, holder, d, duel, our, enemyPower)
     if (holder && !holder.humanOwner) {
       holder.attitude -= 8;
       holder.power += rand(12, 28);
+      rememberRival(holder, "respect", `守住${resource.name}并击退本宗`, 7);
     }
     adjustMind(d, 5, "资源争夺失利");
     d.hp = Math.max(18, d.hp - rand(3, 9));
@@ -13411,7 +13899,7 @@ function choiceScore(d, test) {
   };
   const pathBoost = daoLevelFor("wander") * 9 + daoLevelFor("sword") * 3;
   const exploreBoost = (state.yearlyBoon?.key === "exploreBonus" ? 16 : 0) + (state.yearlyBoon?.key === "riskReward" ? 10 : 0) + state.sect.buildings.scoutTower * 8 + pathBoost;
-  return (map[test] || 35) + d.realm * 12 + exploreBoost + rand(1, 100);
+  return (map[test] || 35) + d.realm * 12 + exploreBoost + rand(1, 100) - annualStrategyModifier("exploreRisk", 0);
 }
 
 function resolveOpportunityChoice(event, card, choice, d) {
@@ -13775,10 +14263,12 @@ function ally(target) {
     target.attitude = 70;
     state.sect.prestige += 20;
     diplomacy.reputation += 8;
+    rememberRival(target, "favor", "本宗主动缔结盟约", 24);
     log(`本宗与${target.name}缔结盟约，可降低被袭扰概率。`, "good");
   } else {
     target.attitude -= 12;
     diplomacy.infamy += 2;
+    rememberRival(target, "respect", "拒绝本宗提出的盟约", 3);
     log(`${target.name}拒绝盟约，暗中戒备本宗。`, "warn");
   }
   state.sect.diplomacy = diplomacy;
@@ -13986,12 +14476,14 @@ function sabotageRival(target) {
     target.foundation = Math.max(0, (target.foundation || 100) - rand(12, 28));
     target.attitude -= 10;
     state.sect.diplomacy.infamy += 6;
+    rememberRival(target, "humiliation", `${d.name}破坏宗门底蕴`, 16);
     log(`${d.name}暗线破坏成功，${target.name}战力 -${loss}，底蕴受损。`, "good");
   } else {
     target.attitude -= 20;
     target.grudges = (target.grudges || 0) + 2;
     state.sect.diplomacy.infamy += 10;
     d.hp = Math.max(24, d.hp - rand(8, 18));
+    rememberRival(target, "humiliation", `抓获本宗暗线${d.name}`, 22);
     log(`${d.name}暗线暴露，${target.name}记下一笔血仇，弟子负伤撤回。`, "warn");
   }
   render();
@@ -18932,6 +19424,8 @@ function tickSectRouteBuff() {
 
 function goalMissionDashboard() {
   const route = sectRoutes.find((item) => item.id === state.selectedRoute);
+  const strategy = currentAnnualStrategy();
+  const strategyProgress = state.annualStrategy?.year === state.year ? Number(state.annualStrategy.progress || 0) : 0;
   const goal = victoryGoals.find((item) => item.id === state.victoryGoal);
   const goalProgress = goal ? victoryGoalProgress(goal.id) : { pct: 0, text: "尚未选择" };
   const goalClaimed = goal && state.completedVictoryGoals.includes(goal.id);
@@ -18951,6 +19445,12 @@ function goalMissionDashboard() {
     </article>`;
   }).join("");
   return `
+    ${strategy ? `<div class="annual-strategy-status">
+      <div><span>本年战略</span><strong>${strategy.name}</strong><em>${strategy.summary}</em></div>
+      <div class="goal-progress"><i style="width:${strategyProgress * 50}%"></i></div>
+      <p>年度承诺 ${strategyProgress}/2：${strategy.commitment}</p>
+      <p class="strategy-tradeoff"><b>得</b>${strategy.boon}<br><b>舍</b>${strategy.cost}</p>
+    </div>` : ""}
     <div class="goal-box">
       <div><span>宗门路线</span><strong>${route?.name || "未定"}</strong></div>
       <div><span>终局目标</span><strong>${goal?.name || "未定"}</strong></div>
@@ -19236,6 +19736,7 @@ const guidePages = [
       <p><strong>弟子养成入口</strong>在弟子详情的“弟子养成”按钮中。这里管理闭关、游历、职位、本命法宝和突破试炼；重大路线不能主动修改。</p>
       <p><strong>道心</strong>是弟子的长期性格路线，会影响年度修行、战斗倾向与心魔风险。它只能在随机重大抉择事件中改变。</p>
       <p><strong>重大抉择事件</strong>会在随机年份从本宗现有弟子中抽取一人，触发专精转修、道心变化、体质觉醒或师承抉择。选择不可撤销且不消耗行动点。</p>
+      <p><strong>弟子人生</strong>记录忠诚、野心与关键经历。救援同门、处理故族、敌宗招揽、师徒冲突和核心席位都会写入个人传记，并长期影响成长与战力；低忠诚弟子还可能触发去留危机。</p>
       <p><strong>专精</strong>决定弟子的培养定位：剑修、体修、丹修、器修、阵修、毒修、雷修、阴阳修。专精可正常成长，但转修只能由重大抉择事件完成。</p>
       <p><strong>路线唯一入口</strong>专精、道心、特殊体质与师承不能在养成面板主动修改，只能通过弟子重大抉择事件改变；新弟子入门时的初始路线不受影响。</p>
       <p><strong>闭关</strong>可选择修为、功法或问心方向。闭关会持续若干年自动结算收益，适合中后期培养核心弟子。</p>
@@ -19254,7 +19755,8 @@ const guidePages = [
   {
     title: "回合：年份与行动点",
     body: `
-      <p>游戏按年份推进。每年先选择年度天命，再分配有限行动点。</p>
+      <p>游戏按年份推进。每年先选择随机年度天命，再选择一项主动年度战略，之后分配有限行动点。</p>
+      <p><strong>年度战略</strong>有明确收益和代价，并要求本年完成两次对应行动。兑现承诺可获额外回报，朝令夕改会损失声望。</p>
       <p>常见行动包括：收徒、争夺资源、探索机缘、炼丹炼器、建设宗门、参悟功法、掠夺或结盟。</p>
       <p>行动点不能无限使用。议事殿、声望和部分天命会提高行动点，弟子过多会带来管理压力。</p>
       <p>行动点用完后点击“进入下一年”，AI 宗门会结算自己的行动，并弹出年度战报。</p>
@@ -19310,7 +19812,8 @@ const guidePages = [
   {
     title: "AI 宗门：发展、争夺与灭门",
     body: `
-      <p>AI 宗门会每年行动：修炼、招弟子、提升炼丹炼器、占领资源、结交或挑衅。</p>
+      <p>AI 宗门会每年行动：修炼、招弟子、提升炼丹炼器、占领资源、结交或挑衅。每个宗门拥有固定的霸主、商盟、权谋、守成或求道性格。</p>
+      <p>AI 会长期记住本宗的掠夺、结盟、羞辱与援助，并积累敌意、敬畏和善意。性格、记忆与当前实力共同决定它下一年的计划。</p>
       <p>进入下一年后会弹出 AI 年度行动战报，显示它们做了什么，以及对你有什么直接影响。</p>
       <p>如果你过强，敌对 AI 可能组成联军袭扰你。</p>
       <p>观星楼和影网可以看见 AI 本年意图，并用设防、误导或斡旋进行反制。反制要消耗行动点，但能把被动挨打变成提前博弈。</p>
@@ -19691,6 +20194,8 @@ function renderDiscipleDetail() {
       <span><b>速度属性</b>${d.speed}</span>
       <span><b>阵道等级</b>Lv.${d.arrayLevel || 0}</span>
       <span><b>心魔值</b>${d.mind || 0} / 100</span>
+      <span><b>宗门忠诚</b>${Math.round(d.loyalty ?? 68)} / 100</span>
+      <span><b>道途野心</b>${Math.round(d.ambition ?? 55)} / 100</span>
       <span><b>年龄 / 寿元</b>${d.age || 18} / ${d.lifespan || discipleLifeExpectancy(d)}</span>
       <span><b>当前委派</b>${tradeEscape(delegationTasks.find((task) => task.id === d.assignment)?.name || "无")}</span>
       <span class="is-wide"><b>弟子词条</b>${tradeEscape(traitText)}</span>
@@ -19719,6 +20224,7 @@ function renderDiscipleDetail() {
     return data ? `${data.name}${method ? `(${Math.round(method.proficiency || 0)})` : ""}` : "";
   }).filter(Boolean);
   els.discipleDetail.insertAdjacentHTML("beforeend", `<p>携带功法：${activeMethods.length ? activeMethods.join(" → ") : "暂无"}。</p>`);
+  els.discipleDetail.insertAdjacentHTML("beforeend", `<h3 class="disciple-life-title">人生纪事</h3>${discipleChronicleHtml(d, 4)}`);
   bindDisciplePortraitPreview(els.discipleDetail, d);
   renderEquipmentSlots(d);
   for (const action of discipleActionSpecs(d)) addActionTo(els.discipleActions, action.label, action.handler, action.disabled);
@@ -20138,7 +20644,9 @@ function renderTarget() {
     const revealIntent = state.sect.buildings.scoutTower >= 2 || Number(state.sect.spyNetwork || 0) >= 30;
     const campaign = state.wars?.[node.id];
     const warText = campaign ? `战争进度 ${campaign.phase}/${warCampaignStages.length}（${warCampaignStages[campaign.phase]?.name || "山门已破"}）。` : "尚未发动攻山战争。";
-    els.targetDetail.textContent = `AI 宗门。战力 ${Math.round(node.power)}，弟子 ${node.disciples}，灵石 ${Math.round(node.stones)}，底蕴 ${Math.round(node.foundation || 0)}，炼丹 ${node.alchemy || 0}，炼器 ${node.forging || 0}，阵法 ${node.array || 0}，关系 ${node.attitude}，宿怨 ${node.grudges || 0}。本年意图：${aiIntentText(node, revealIntent)}。${node.alliance ? "当前为盟友。" : `掠夺只能削弱外围，灭宗必须完成四阶段战争。${warText}`}`;
+    const personality = aiPersonalityOf(node);
+    const memory = node.memory || { hostility: 0, respect: 0, favor: 0, lastPlayerAction: "尚无直接往来" };
+    els.targetDetail.textContent = `AI 宗门 · ${personality.name}。${personality.motto} 战力 ${Math.round(node.power)}，弟子 ${node.disciples}，灵石 ${Math.round(node.stones)}，底蕴 ${Math.round(node.foundation || 0)}，炼丹 ${node.alchemy || 0}，炼器 ${node.forging || 0}，阵法 ${node.array || 0}，关系 ${node.attitude}，宿怨 ${node.grudges || 0}。记忆：敌意 ${Math.round(memory.hostility || 0)} / 敬畏 ${Math.round(memory.respect || 0)} / 善意 ${Math.round(memory.favor || 0)}，最近往来：${memory.lastPlayerAction || "无"}。本年意图：${aiIntentText(node, revealIntent)}。${node.alliance ? "当前为盟友。" : `掠夺只能削弱外围，灭宗必须完成四阶段战争。${warText}`}`;
     addAction("研判并反制", () => openAiIntentCounter(node.id), !aiIntentFor(node) || aiIntentFor(node)?.countered || state.actionPoints < 1);
     addAction("资源掠夺", () => battle(node, "raid"), !state.founded || node.alliance || state.actionPoints < 1);
     addAction("抢夺弟子", () => battle(node, "steal"), !state.founded || node.alliance || state.actionPoints < 1);
@@ -20361,7 +20869,8 @@ function render() {
 
 function updateButtons() {
   const disabled = !state.founded;
-  const waiting = state.waitingForPlayers || Boolean(state.roomBlockedByForbidden);
+  const strategyPending = state.founded && (!state.yearlyBoon || !state.annualStrategy || state.annualStrategy.year !== state.year);
+  const waiting = state.waitingForPlayers || Boolean(state.roomBlockedByForbidden) || strategyPending;
   els.nextYearBtn.disabled = disabled || waiting;
   els.recruitBtn.disabled = disabled || waiting;
   els.raidBtn.disabled = disabled || waiting || state.actionPoints < 1;
